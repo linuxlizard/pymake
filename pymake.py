@@ -20,7 +20,7 @@ import pyparsing
 from pyparsing import Word, alphas, alphanums, nums, Optional, ZeroOrMore,\
                       Literal, Group, And, LineEnd, Or, ParseException,\
                       Optional,White,restOfLine, Suppress, printables,\
-                      OneOrMore
+                      OneOrMore, oneOf
 
 #reserved_words = ( "ifdef", "ifndef", "endif", "else", "ifeq", "ifneq" )
 
@@ -30,9 +30,9 @@ from pyparsing import Word, alphas, alphanums, nums, Optional, ZeroOrMore,\
 # FIXME - added '$(){}' to the exclude list but GNU Make accepts them.
 exclude_chars=":#=$(){}"+White().DEFAULT_WHITE_CHARS
 identifier = Word(printables,excludeChars=exclude_chars)("identifier")
+identifier_onechar = Word(printables,max=1,excludeChars=exclude_chars)("identifier_one")
 
-valid_identifier_char = "".join( [ c for c in printables if c not in exclude_chars ] ) 
-print(valid_identifier_char)
+print(dir(identifier))
 
 # Rules
 colon = Literal(":")("literal")
@@ -52,19 +52,21 @@ bang_equal = Literal("!=")("literal")
 #
 # Support $$
 
-single_char_var = "$" + One
-
-variable_ref = Or( ("$(" + identifier + ")", "${" + identifier + "}", "$"+valid_identifier_char) )
+variable_ref =  (  ("$(" + identifier + ")")("var$()")  \
+                 | ("${" + identifier + "}")("var${}")  \
+                 | ("$"  + identifier_onechar)("var$$") \
+                ) ("variable_ref") 
 
 # discard any leading whitespace, preserve all trailing whitespace
 assignment_rhs = Suppress(ZeroOrMore(White())) + restOfLine + LineEnd()
-assignment = identifier + ( equal | question_equal | colon_equal \
+assignment = (identifier | variable_ref) + ( equal | question_equal | colon_equal \
                             | colon_colon_equal | plus_equal | bang_equal ) +\
                             Optional( assignment_rhs )
+assignment = assignment.setResultsName("assignment")
 
 target = OneOrMore( identifier | variable_ref )
 
-prerequsites = ZeroOrMore( identifier("prerequisite") ).setResultsName("prerequisite_list")
+prerequsites = ZeroOrMore( identifier("prerequisite") | variable_ref ).setResultsName("prerequisite_list")
 
 rule = target("target") + colon + prerequsites + LineEnd()
 
@@ -114,8 +116,15 @@ class ParseTest(object):
         self.report()
         return self.tokens
 
-    def __call__(self,test_str):
-        return self.run(test_str)
+    def __call__(self,test_str,validate=()):
+        result = self.run(test_str)
+        if validate : 
+            if set(result.tokens)!=set(validate) :
+                print(result.dump())
+                assert 0
+            assert len(result.tokens)==len(validate)
+
+        return result
 
 class ParseFailTest(ParseTest):
     # a parse that should fail
@@ -157,12 +166,15 @@ def test():
     test_identifier("foo*bar")
     test_identifier("foo_bar")
     test_identifier("@")
-    test_identifier("@")
+    test_identifier("!")
     test_identifier("_")
     # the following are LEGAL but can't parse yet
     # yeah, these are going to be tough
 #    test_identifier("$$")   
 #    test_identifier("_()")
+    fail_test_identifier = ParseFailTest(identifier)
+    fail_test_identifier("$") # should fail
+    fail_test_identifier("(") # should fail
 
     ########## 
     print( "test variable refereneces")
@@ -171,10 +183,16 @@ def test():
     test_variable_ref("${CC}")  
     test_variable_ref("${ CC }")  
     test_variable_ref("$x")
+    test_variable_ref("$@")
+    # FIXME this should work but doesn't!
+#    test_variable_ref("$$")
     # these should fail
     fail_test_variable_ref = ParseFailTest(variable_ref)
     fail_test_variable_ref("$(patsubst %.c,%.o,x.c.c bar.c)")  
     fail_test_variable_ref("$(var :pattern =replacement )")
+    fail_test_variable_ref("$(") # this should fail
+    fail_test_variable_ref("$)") # this should fail
+    fail_test_variable_ref("$ ")
 
     ########## 
     print("test assignment")
@@ -206,6 +224,7 @@ def test():
     test_assign("BAR=$($(FOO))")
     test_assign("BAR=$($($(FOO)))")
     test_assign(" host-type := $(shell arch)")
+    test_assign("$(BAR)=foo)",("$(BAR)","=","foo"))
 #    return
 
     ########## 
@@ -218,7 +237,8 @@ def test():
     test_rule("a:b c d e f g h i j k l m n o p q r s t u v w x y z")
     test_rule("a42 : b_43")
     test_rule("a42 : b_43")
-    test_rule("$(objects) : defs.h")
+    test_rule("$(objects) : $(source)", ("$objects",":","$(source)") )
+    test_rule("$(objects) : defs.h", ("$objects",":","defs.h") )
     test_rule("kbd.o command.o files.o : command.h")
 
 
