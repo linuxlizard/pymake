@@ -6,6 +6,12 @@
 #
 # davep 09-sep-2014
 
+import sys
+
+# require Python 3.x for best Unicode handling
+if sys.version_info.major < 3:
+    raise Exception("Requires Python 3.x")
+
 whitespace = set( ' \t\r\n' )
 
 class ParseError(Exception):
@@ -156,6 +162,8 @@ def test():
         ("$$",      ("$$",)),
         ("$(CC)",   ("$(","CC",")")),
         ("$( CC )", ("$("," CC ", ")")),
+        ("$(CC$$)",   ("$(","CC","$$", ")")),
+        ("$(CC$(LD))",   ("$(","CC","$(","LD",")",")")),
         ("${CC}",   ("${","CC","}")),
         ("$@",      ("$", "@",)),
         ("$<",      ("$", "<",)),
