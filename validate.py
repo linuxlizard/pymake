@@ -38,7 +38,16 @@ def validate(infile):
                 print("fail rhs=^",z[1],"$")
             assert z[0]==z[1], (line,msg)
 
+def usage():
+    print("validate test makefile output",file=sys.stderr)
+    print("usage: {0} [file [file...] | -".format(sys.argv[0]), file=sys.stderr )
+    print(" - : read from stdin",file=sys.stderr)
+
 def main(): 
+    if len(sys.argv)==1:
+        usage()
+        sys.exit()
+
     for f in sys.argv[1:]:
         if f =="-" :
             validate(sys.stdin)
