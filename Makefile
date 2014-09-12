@@ -149,6 +149,12 @@ $(info = semicolon=$;)
 !=bang
 $(info = bang=$(!))
 $(info = bang=$!)
+rparen=)
+$(info = $(rparen)=$(rparen))
+lparen=(
+# I can't figure out how to put a literal ( or ) in $(info)
+$(info = $(lparen)=$(lparen))
+$(info = $(lparen)$(rparen)=$(lparen)$(rparen))
 
 # Unicode? Sure!
 ಠ_ಠ=I disapprove of this message.
