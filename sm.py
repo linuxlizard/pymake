@@ -14,6 +14,113 @@ if sys.version_info.major < 3:
 
 whitespace = set( ' \t\r\n' )
 
+assignment = {"=","?=",":=","::=","+=","!="}
+
+# 4.8 Special Built-In Target Names
+built_in_targets = {
+        ".PHONY",
+        ".SUFFIXES",
+        ".DEFAULT",
+        ".PRECIOUS",
+        ".INTERMEDIATE",
+        ".SECONDARY",
+        ".SECONDEXPANSION",
+        ".DELETE_ON_ERROR",
+        ".IGNORE",
+        ".LOW_RESOLUTION_TIME",
+        ".SILENT",
+        ".EXPORT_ALL_VARIABLES",
+        ".NOTPARALLEL",
+        ".ONESHELL",
+        ".POSIX",
+    }
+
+# Stuff from Appendix A.
+directive = { 
+              "define", "enddef", "undefine",
+              "ifdef", "ifndef", "else", "endif", 
+              "include", "-include", "sinclude",
+              "override", "export", "unexport",
+              "private",
+              "vpath", 
+            }
+functions = { 
+                "subst",
+                "patsubst",
+                "strip",
+                "findstring",
+                "filter",
+                "filter-out",
+                "sort",
+                "word",
+                "words",
+                "wordlist",
+                "firstword",
+                "lastword",
+                "dir",
+                "notdir",
+                "suffix",
+                "basename",
+                "addsuffix",
+                "addprefix",
+                "join",
+                "wildcard",
+                "realpath",
+                "absname",
+                "error",
+                "warning",
+                "shell",
+                "origin",
+                "flavor",
+                "foreach",
+                "if",
+                "or",
+                "and",
+                "call",
+                "eval",
+                "file",
+                "value",
+            }
+automatic_variables = {
+                "@",
+                "%",
+                "<",
+                "?",
+                "^",
+                "+",
+                "*",
+                "@D",
+                "@F",
+                "*D",
+                "*F",
+                "%D",
+                "%F",
+                "<D",
+                "<F",
+                "^D",
+                "^F",
+                "+D",
+                "+F",
+                "?D",
+                "?F",
+            }
+builtin_variables = {
+                "MAKEFILES",
+                "VPATH",
+                "SHELL",
+                "MAKESHELL",
+                "MAKE",
+                "MAKE_VERSION",
+                "MAKE_HOST",
+                "MAKELEVEL",
+                "MAKEFLAGS",
+                "GNUMAKEFLAGS",
+                "MAKECMDGOALS",
+                "CURDIR",
+                "SUFFIXES",
+                ".LIBPATTEREN",
+            }
+
 class ParseError(Exception):
     pass
 
@@ -79,6 +186,8 @@ def parse_variable_ref(string):
         if state==state_start:
             if c=='$':
                 state=state_dollar
+            else :
+                raise ParseError()
         elif state==state_dollar:
             # looking for '(' or '$' or some char
             if c=='(' or c=='{':
@@ -88,7 +197,6 @@ def parse_variable_ref(string):
             elif c=='$':
                 # literal "$$"
                 yield Token("$$")
-                return 
             elif not c in whitespace :
                 # single letter variable, e.g., $@ $x $_ etc.
                 token += c
@@ -175,9 +283,11 @@ def expression_test():
 
     expression_tests = ( 
         # string    result
-        ("$$",      ("$$",)),
-        ("$$$$$$",      ("$$$$$$",)),
+        ("$($$)",      ("$(","$$",")",)),
+        ("$($$$$$$)",      ("$(","$$$$$$",")",)),
         ("$(CC)",   ("$(","CC",")")),
+        ("$( )",   ("$("," ",")")),
+        ("$(    )",   ("$(","    ",")")),
         ("$( CC )", ("$("," CC ", ")")),
         ("$(CC$$)",   ("$(","CC$$", ")")),
         ("$(CC$(LD))",   ("$(","CC","$(","LD",")","",")")),
@@ -185,9 +295,9 @@ def expression_test():
         ("$@",      ("$", "@",)),
         ("$<",      ("$", "<",)),
         ("$F",      ("$","F",)),
-        ("$Ff",      ("$","F","f",)),
-        ("$F$f",      ("$","F","$","f",)),
-        ("$$$F$f",      ("$$","$","F","$","f",)),
+#        ("$Ff",      ("$","F","f",)),
+#        ("$F$f",      ("$","F","$","f",)),
+#        ("$F$f$",      ("$$","$","F","$","f","$$",)),
         ("$($($(FOO)))",    ("$(","","$(","","$(","FOO",")","",")","",")")),
         ("$($($(FOO)a)b)c", ("$(","","$(","","$(","FOO",")","a",")","b",")")),
         ("$(a$(b$(FOO)a)b)c", ("$(","a","$(","b","$(","FOO",")","a",")","b",")")),
@@ -228,8 +338,13 @@ def expression_test():
     # this should fail
 #    print( "var={0}".format(parse_variable_ref(ScannerIterator("$(CC"))) )
 
+def rules_test():
+    pass
+
 def test():
-    expression_test()
+#    expression_test()
+    rules_test()
+    pass
 
 def main():
     import sys
