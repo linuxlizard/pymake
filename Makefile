@@ -91,6 +91,15 @@ $(info = dollar dollar=$($$))
 \=backslash
 $(info = backslash=$\)
 
+\$$=dollar
+$(info = dollar=$(\$$))
+\$$=\dollar
+$(info = \dollar=$(\$$))
+\\$$=\\dollar
+$(info = \\dollar=$(\\$$))
+$$=dollar
+$(info = dollar=$($$))
+
 # trying to create a variable named '='
 #===
 #$= = equal
@@ -169,6 +178,11 @@ foo\t bar=baz
 $(info = baz=$(foo\t bar))
 hello there all you rabbits=hello there all you rabbits
 $(info = hello there all you rabbits=$(hello there all you rabbits))
+# leading/trailing spaces on LHS are trimmed
+    Hello there all you rabbits     =hello there all you rabbits spaces here->      
+$(info = hello there all you rabbits spaces here->      =$(Hello there all you rabbits))
+    Hello There all you rabbits     $$=hello there all you rabbits spaces here->      
+$(info = hello there all you rabbits spaces here->      =$(Hello There all you rabbits     $$))
 
 # equal signs are valid string chars in RHS
 foo=baz=bar
@@ -257,7 +271,4 @@ all: foo
 foo:
 	@touch bar
 	@echo = 1+1=$(WAT)
-
-clean:
-	$(RM bar)
 
