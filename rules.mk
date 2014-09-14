@@ -44,10 +44,40 @@ $$$$ : ; @echo $@
 # make -f rules.mk ! --> !
 ! : ; @echo $@
 
+# prerequisite with embedded spaces
+# make -f rules.mk "I have spaces" -> I have spaces
+I\ have\ spaces : ; @echo $@
+# make -f rules.mk "I have three spaces" -> I   have   three   spaces
+I\ \ \ have\ \ \ three\ \ \ spaces : ; @echo $@
+# make -f rules.mk "I have trailing spaces" -> I have trailing spaces   
+I\ have\ \trailing\ spaces\ \ \ : ; @echo $@
+
+# prereqs with escaped :
+# make -f rules.mk "I have a :" --> I have a :
+I\ have\ a\ \: : ; @echo $@
+# make -f rules.mk -n "I have a ;" --> echo I have a ;
+I\ have\ a\ \; : ; @echo $@
+
+# make CC=gcc LD=ld OBJ=hello.o -f rules.mk Igcchaveldembeddedhello.ovarref -> IGCChaveLDembeddedHELLO.Ovarref
+I$(CC)have$(LD)embedded$(OBJ)varref : ; @echo $(subst hello.o,HELLO.O,$(subst ld,LD,$(subst gcc,GCC,$@)))
+
+# TODO still trying to figure out how to hit this rule
+$$=42
+I$$have$($$)embedded$($$)dollars : ; @echo $@
+
+# make -f rules.mk 'I have42embedded42dollars' --> I have 42embedded42dollars
+# make -f rules.mk 'I@@@@@@ have42embedded42dollars' --> I@@@@@@have 42embedded42dollars
+$$=42
+I%have$($$)embedded$($$)dollars : ; @echo $@
+
+# make -f rules.mk 'I have embeddedqpercents' --> I have embeddedqpercents
+# make -f rules.mk -r 'I have embeddedqqqqqqqqqpercents' --> I have embeddedqqqqqqqqqpercents
+I\ have\ embedded%percents : ; @echo $@
 
 # make -f rules.mk @ --> :
 @:;@:
 
+# TODO I have no idea WTF this is
 .:;@.
 
 # make -f rules.mk -n backslash --> echo \ 
