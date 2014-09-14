@@ -140,27 +140,24 @@ class Token(object):
 def comment(string):
     state_start = 1
     state_eat_comment = 2
-    state_escape = 3
 
     state = state_start
+
+    # this could definitely be faster (method in ScannerIterator to eat until EOL?)
     for c in string : 
 #        print("c={0} state={1}".format(c,state))
         if state==state_start:
             if c=='#':
                 state = state_eat_comment
-            elif c=='\\':
-                yield c
-                state = state_escape
             else:
-                yield c
+                # shouldn't be here unless comment
+                raise ParseError()
         elif state==state_eat_comment:
+            # comments finish at end of line
+            # FIXME handle \r\n,\n\r,\r and other weird line endings
             if c=='\n' :
-                yield c
-                state = state_start
+                return
             # otherwise char is eaten
-        elif state==state_escape:
-            yield c
-            state = state_start
         else:
             assert 0, state
 
@@ -170,11 +167,104 @@ def eatwhite(string):
         if not c in whitespace:
             yield c
 
-def parse_variable_ref(string):
+def tokenize_rule(string):
+    state_start = 1
+    state_in_word = 2
+    state_dollar = 3
+    state_backslash = 4
+
+    state = state_start
+    token = ""
+
+    # a \x of these chars replaced by literal x
+    backslashable = set("% :,")
+
+    for c in string : 
+        print("r c={0} state={1} token=\"{2}\"".format(c,state,token))
+        if state==state_start:
+            if c in whitespace : 
+                # eat whitespace
+                pass
+            elif c==':':
+                yield Token(":") 
+                return
+            else :
+                # whatever it is, push it back so can tokenize it
+                string.pushback()
+                state = state_in_word
+
+        elif state==state_in_word:
+            if c=='\\':
+                state = state_backslash
+
+            elif c in whitespace :
+                # end of word
+                yield Token(token)
+                # restart token
+                token = ""
+                state = state_start
+
+            elif c=='$':
+                state = state_dollar
+
+            elif c=='#':
+                # eat the comment 
+                for t in comments(string):
+                    yield t
+
+            elif c==':':
+                # end of target(s)
+                
+                # strip trailing whitespace
+                yield Token(token.rstrip())
+
+                yield Token(":")
+
+                # just return for now
+                # TODO tokenize prerequisites
+                return
+
+            else :
+                token += c
+
+        elif state==state_dollar :
+            if c=='$':
+                # literal $
+                token += "$"
+            else:
+                # return token so far
+                yield Token(token)
+                # restart token
+                token = ""
+
+                # jump to variable_ref tokenizer
+                string.pushback()
+                string.pushback()
+
+                # jump to var_ref tokenizer
+                for t in tokenize_variable_ref(string):
+                    yield t
+            state=state_in_word
+
+        elif state==state_backslash :
+            if c in backslashable : 
+                token += c
+            else :
+                # literal '\' + somechar
+                token += '\\'
+                token += c
+            state = state_in_word
+
+        else:
+            assert 0,state
+
+    # don't raise error; just return assuming rest of string is happy 
+
+def tokenize_variable_ref(string):
     
     state_start = 1
     state_dollar = 2
-    state_parsing = 3
+    state_in_var_ref = 3
 
     state = state_start
     token = ""
@@ -182,7 +272,7 @@ def parse_variable_ref(string):
 #    print( "state={0}".format(state))
 
     for c in string : 
-#        print("c={0} state={1}".format(c,state))
+        print("v c={0} state={1}".format(c,state))
         if state==state_start:
             if c=='$':
                 state=state_dollar
@@ -192,7 +282,7 @@ def parse_variable_ref(string):
             # looking for '(' or '$' or some char
             if c=='(' or c=='{':
                 opener = c
-                state = state_parsing
+                state = state_in_var_ref
                 yield Token("$"+c)
             elif c=='$':
                 # literal "$$"
@@ -203,7 +293,7 @@ def parse_variable_ref(string):
                 yield Token("$")
                 yield Token(token)
                 return 
-        elif state==state_parsing:
+        elif state==state_in_var_ref:
             if c==')' or c=='}':
                 # TODO make sure to match the open/close chars
                 yield Token(token)
@@ -224,10 +314,10 @@ def parse_variable_ref(string):
                     # push the '$' back onto the scanner
                     string.pushback()
                     # recurse into this scanner again
-                    for t in parse_variable_ref(string):
+                    for t in tokenize_variable_ref(string):
                         yield t
                     # python 3.3 and above
-                    #yield from parse_variable_ref(string)
+                    #yield from tokenize_variable_ref(string)
             else:
                 token += c
 
@@ -278,10 +368,22 @@ def parse(infilename):
 #    for c in comment(s):
 #        print(c,end="")
 
+def run_tests_list(tests_list,tokenizer):
+    for test in tests_list :
+        print("test={0}".format(test))
+        s,result = test
+        print("s={0}".format(s))
+        my_iter = ScannerIterator(s)
+        tokens = [ t for t in tokenizer(my_iter)] 
+        print( "tokens={0}".format("|".join([t.string for t in tokens])) )
 
-def expression_test():
+        for v in zip(tokens,result):
+#            print("\"{0}\" \"{1}\"".format(v[0].string,v[1]))
+            assert  v[0].string==v[1], v
 
-    expression_tests = ( 
+def variable_ref_test():
+
+    tests_list = ( 
         # string    result
         ("$($$)",      ("$(","$$",")",)),
         ("$($$$$$$)",      ("$(","$$$$$$",")",)),
@@ -323,26 +425,53 @@ def expression_test():
         ("$(info = # foo#foo foo#foo foo#foo ###=# foo#foo foo#foo foo#foo ###)",
           ("$(","info = # foo#foo foo#foo foo#foo ###=# foo#foo foo#foo foo#foo ###",")")),
     )
-    for test in expression_tests :
+    for test in tests_list :
         print("test={0}".format(test))
         s,result = test
         print("s={0}".format(s))
         my_iter = ScannerIterator(s)
-        tokens = [ t for t in parse_variable_ref(my_iter)] 
-        print( "tokens={0}".format("||".join([t.string for t in tokens])) )
+        tokens = [ t for t in tokenize_variable_ref(my_iter)] 
+        print( "tokens={0}".format("|".join([t.string for t in tokens])) )
 
         for v in zip(tokens,result):
 #            assert  v[0]==v[1], v
             assert  v[0].string==v[1], v
 
     # this should fail
-#    print( "var={0}".format(parse_variable_ref(ScannerIterator("$(CC"))) )
+#    print( "var={0}".format(tokenize_variable_ref(ScannerIterator("$(CC"))) )
 
 def rules_test():
-    pass
+    rules_tests = ( 
+        ( "all:",       ("all",":") ),
+        ( "all:foo",    ("all",":","foo")),
+        ( "   all :   foo    ", ("all",":","foo")),
+        ( "the quick brown fox jumped over lazy dogs : ; ", ("the", "quick", "brown", "fox","jumped","over","lazy","dogs",":", ";", )),
+        ( '"foo" : ; ',     ('"foo"',":",";")),
+        ('"foo qqq baz" : ;',   ('"foo',"qqq",'baz"',":",";")),
+        (r'\foo : ; ',  (r'\foo', ':', ';')),
+        (r'foo\  : ; ', (r'foo ',':', ';',)),
+        ('@:;@:',       ('@',':',';','@:',)),
+        ('I\ have\ spaces : ; @echo $@',    ('I have spaces',':',';','@echo $@',)),
+        ('I\ \ \ have\ \ \ three\ \ \ spaces : ; @echo $@', ('I   have   three   spaces',':', ';', '@echo $@' )),
+        ('I$(CC)have$(LD)embedded$(OBJ)varref : ; @echo $(subst hello.o,HELLO.O,$(subst ld,LD,$(subst gcc,GCC,$@)))',
+            ( 'I', '$(', 'CC', ')', 'have', '$(', 'LD',')','embedded','$(','OBJ',')','varref',':',';','@echo $(subst hello.o,HELLO.O,$(subst ld,LD,$(subst gcc,GCC,$@)))',)),
+        ('$(filter %.o,$(files)): %.o: %.c',    
+                    ( '', '$(','filter %.o,',
+                            '$(','files',')','',
+                       ')','',
+                          ':','%.o',':','%.c',)),
+    )
+    run_tests_list( rules_tests, tokenize_rule )
+#    for test in rules_tests : 
+#        print("test={0}".format(test))
+#        s = test
+#        my_iter = ScannerIterator(s)
+#
+#        tokens = [ t for t in tokenize_rule(my_iter) ]
+#        print( "tokens={0}".format("|".join([t.string for t in tokens])) )
 
 def test():
-#    expression_test()
+#    variable_ref_test()
     rules_test()
     pass
 
