@@ -68,12 +68,50 @@ $(a) : ; @b=a ; echo $$$$$$$a is $a
 # this parses. No idea how to hit it. :: rules are special in GNU Make
 : : ; @echo regular $@
 
+# This parses. Don't know what it means.
+: 
+
+# 
 export IAM=GROOT
 override IAM=GROOT
 
 .PHONY : clean
 clean:
-	$(RM bar)
+	$(RM bar colon2 colon3 colon4)
+
+# 4.2 Types of Prerequisites 
+# "Order-only prerequisites can be specified by placing a pipe symbol (|) in
+# the prerequisites list: any prerequisites to the left of the pipe symbol are
+# normal; any prerequisites to the right are order-only:"
+OBJDIR := objdir
+OBJS := $(addprefix $(OBJDIR)/,foo.o bar.o baz.o)
+$(OBJS): | $(OBJDIR)
+$(OBJS2): foo | $(OBJDIR)
+
+$(OBJDIR):
+	mkdir $(OBJDIR)
+
+# 4.11 Static Pattern Rules
+$(filter %.o,$(files)): %.o: %.c
+	$(CC) -c $(CFLAGS) $< -o $@
+
+# "‘%’ characters in pattern rules can be quoted with preceding backslashes (‘\’)."
+#the\%weird\\%pattern\\ : target-pattern% : prereq-pattern%
+#abc% : abcd% : %xyz
+
+# 4.12 Double-Colon Rules
+# https://stackoverflow.com/questions/7891097/what-are-double-colon-rules-in-a-makefile-for
+double-colon1 :: colon2
+	@touch double-colon1-colon2
+double-colon1 :: colon3
+	@touch double-colon1-colon3
+double-colon1 :: colon4
+	@touch double-colon1-colon4
+
+colon2:;@touch colon2
+#colon2:;@touch colon2-b
+colon3:;@touch colon3
+colon4:;@touch colon4
 
 # 6.21 Target-Specific Variable Values
 prog : CFLAGS = -g
