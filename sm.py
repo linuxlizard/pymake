@@ -14,7 +14,8 @@ if sys.version_info.major < 3:
 
 whitespace = set( ' \t\r\n' )
 
-assignment = {"=","?=",":=","::=","+=","!="}
+assignment_operators = {"=","?=",":=","::=","+=","!="}
+rule_operators = { ":", "::" }
 
 # 4.8 Special Built-In Target Names
 built_in_targets = {
@@ -167,16 +168,29 @@ def eatwhite(string):
         if not c in whitespace:
             yield c
 
-def tokenize_rule(string):
+def tokenize_statement_LHS(string):
+    # formerly tokenize_rule()
+
     state_start = 1
     state_in_word = 2
     state_dollar = 3
     state_backslash = 4
+    state_colon = 5
+    state_colon_colon = 6
 
     state = state_start
     token = ""
 
+    # Before can disambiguate assignment vs rule, must parse forward enough to
+    # find the operator. Otherwise, the LHS between assignment and rule are
+    # identical.
+    #
+    # assignment ::= LHS assignment_operator RHS
+    # rule       ::= LHS rule_operator RHS
+    #
+
     # a \x of these chars replaced by literal x
+    # XXX in both rule and assignment LHS?
     backslashable = set("% :,")
 
     for c in string : 
@@ -186,8 +200,7 @@ def tokenize_rule(string):
                 # eat whitespace
                 pass
             elif c==':':
-                yield Token(":") 
-                return
+                state = state_colon
             else :
                 # whatever it is, push it back so can tokenize it
                 string.pushback()
@@ -214,16 +227,9 @@ def tokenize_rule(string):
 
             elif c==':':
                 # end of target(s)
-                
                 # strip trailing whitespace
                 yield Token(token.rstrip())
-
-                yield Token(":")
-
-                # just return for now
-                # TODO tokenize prerequisites
-                return
-
+                state = state_colon
             else :
                 token += c
 
@@ -255,8 +261,42 @@ def tokenize_rule(string):
                 token += c
             state = state_in_word
 
+        elif state==state_colon :
+            # end of target(s) is either a single ':' or double colon '::'
+            if c==':':
+                # double colon
+                state = state_colon_colon
+            elif c=='=':
+                # :=
+                yield Token(":=")
+            else:
+                # Single ':' followed by something. Whatever it was, put it back!
+                string.pushback()
+                yield Token(":")
+                # successfully found LHS 
+                return
+        elif state==state_colon_colon :
+            # preceeding chars are "::"
+            if c=='=':
+                # ::= 
+                yield Token("::=")
+            else:
+                string.pushback()
+                yield Token("::")
+            # successfully found LHS 
+            return
         else:
             assert 0,state
+
+    print("end of string! state={0}".format(state))
+
+    # hit end of string; what was our final state?
+    if state==state_colon:
+        # ":"
+        yield Token(":")
+    elif state==state_colon_colon:
+        # "::"
+        yield Token("::")
 
     # don't raise error; just return assuming rest of string is happy 
 
@@ -377,8 +417,10 @@ def run_tests_list(tests_list,tokenizer):
         tokens = [ t for t in tokenizer(my_iter)] 
         print( "tokens={0}".format("|".join([t.string for t in tokens])) )
 
+        assert len(tokens)==len(result), (len(tokens),len(result))
+
         for v in zip(tokens,result):
-#            print("\"{0}\" \"{1}\"".format(v[0].string,v[1]))
+            print("\"{0}\" \"{1}\"".format(v[0].string,v[1]))
             assert  v[0].string==v[1], v
 
 def variable_ref_test():
@@ -454,12 +496,24 @@ def rules_test():
         ('I\ have\ spaces : ; @echo $@',    ('I have spaces',':',';','@echo $@',)),
         ('I\ \ \ have\ \ \ three\ \ \ spaces : ; @echo $@', ('I   have   three   spaces',':', ';', '@echo $@' )),
         ('I$(CC)have$(LD)embedded$(OBJ)varref : ; @echo $(subst hello.o,HELLO.O,$(subst ld,LD,$(subst gcc,GCC,$@)))',
-            ( 'I', '$(', 'CC', ')', 'have', '$(', 'LD',')','embedded','$(','OBJ',')','varref',':',';','@echo $(subst hello.o,HELLO.O,$(subst ld,LD,$(subst gcc,GCC,$@)))',)),
+            ( 'I', '$(', 'CC', ')', 'have', '$(', 'LD',')','embedded','$(','OBJ',')','varref',':',';',
+              '@echo $(subst hello.o,HELLO.O,$(subst ld,LD,$(subst gcc,GCC,$@)))',)
+        ),
         ('$(filter %.o,$(files)): %.o: %.c',    
                     ( '', '$(','filter %.o,',
                             '$(','files',')','',
                        ')','',
                           ':','%.o',':','%.c',)),
+        ('aa$(filter %.o,bb$(files)cc)dd: %.o: %.c',    
+                    ( 'aa', '$(','filter %.o,bb',
+                            '$(','files',')','cc',
+                       ')','dd',
+                          ':','%.o',':','%.c',)),
+        ("double-colon1 :: colon2", ("double-colon1","::","colon2")),
+        ( "%.tab.c %.tab.h: %.y", ("%.tab.c","%.tab.h",":","%.y")),
+        ("foo2:   # hello there; is this comment ignored?",("foo2",":")),
+        ("$(shell echo target $$$$) : $(shell echo prereq $$$$)",
+            ("","$(","shell echo target $$$$",")","",":","$(shell echo prereq $$$$)",),)
     )
     run_tests_list( rules_tests, tokenize_rule )
 #    for test in rules_tests : 
@@ -470,9 +524,29 @@ def rules_test():
 #        tokens = [ t for t in tokenize_rule(my_iter) ]
 #        print( "tokens={0}".format("|".join([t.string for t in tokens])) )
 
+def statement_test():
+    rules_tests = ( 
+        # rule LHS
+        ( "all:",    ("all",":")),
+        ( "all::",    ("all","::",)),
+        # assignment LHS
+        ( "all=foo",    ("all","=","foo")),
+        ( "all:=foo",    ("all",":=",)),
+        ( "all::=foo",    ("all","::=",)),
+        ( "all?=foo",    ("all","?=",)),
+        ( "all+=foo",    ("all","+=",)),
+        ( "$(all)+=foo",    ("","$(","all",")","+=",)),
+        ( "qq$(all)+=foo",    ("qq","$(","all",")","+=",)),
+        ( "qq$(all)qq+=foo",    ("qq","$(","all",")","qq","+=",)),
+
+        ( "override all=foo",    ("override","all","=","foo")),
+    )
+    run_tests_list( rules_tests, tokenize_statement_LHS )
+
 def test():
 #    variable_ref_test()
-    rules_test()
+#    rules_test()
+    statement_test()
     pass
 
 def main():
