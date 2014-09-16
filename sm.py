@@ -190,7 +190,7 @@ def tokenize_statement_LHS(string):
     #
 
     # a \x of these chars replaced by literal x
-    # XXX in both rule and assignment LHS?
+    # XXX in both rule and assignment LHS? O_o
     backslashable = set("% :,")
 
     for c in string : 
@@ -210,12 +210,14 @@ def tokenize_statement_LHS(string):
             if c=='\\':
                 state = state_backslash
 
-            elif c in whitespace :
-                # end of word
-                yield Token(token)
-                # restart token
-                token = ""
-                state = state_start
+            # whitespace in LHS of assignment is significant
+            # whitespace in LHS of rule is ignored
+#            elif c in whitespace :
+#                # end of word
+#                yield Token(token)
+#                # restart token
+#                token = ""
+#                state = state_start
 
             elif c=='$':
                 state = state_dollar
@@ -226,10 +228,29 @@ def tokenize_statement_LHS(string):
                     yield t
 
             elif c==':':
-                # end of target(s)
+                # end of LHS (don't know if rule or assignment yet)
                 # strip trailing whitespace
                 yield Token(token.rstrip())
                 state = state_colon
+
+            elif c in set("?+!"):
+                print("maybe assignment")
+                # maybe assignment ?= += !=
+                if string.lookahead()=='=':
+                    string.next()
+                    yield Token(token.rstrip())
+                    yield Token(c+'=')
+                    return
+                else:
+                    token += c
+
+            elif c=='=':
+                # definitely an assignment 
+                # strip trailing whitespace
+                yield Token(token.rstrip())
+                yield Token("=")
+                return
+                
             else :
                 token += c
 
@@ -262,13 +283,16 @@ def tokenize_statement_LHS(string):
             state = state_in_word
 
         elif state==state_colon :
-            # end of target(s) is either a single ':' or double colon '::'
+            # assignment end of LHS is := or ::= 
+            # rule's end of target(s) is either a single ':' or double colon '::'
             if c==':':
                 # double colon
                 state = state_colon_colon
             elif c=='=':
                 # :=
                 yield Token(":=")
+                # end of RHS
+                return
             else:
                 # Single ':' followed by something. Whatever it was, put it back!
                 string.pushback()
@@ -530,15 +554,21 @@ def statement_test():
         ( "all:",    ("all",":")),
         ( "all::",    ("all","::",)),
         # assignment LHS
-        ( "all=foo",    ("all","=","foo")),
-        ( "all:=foo",    ("all",":=",)),
+        ( "all=foo",    ("all","=",)),
+        ( "    all  =",    ("all","=")),
+        ( "all:=",    ("all",":=",)),
         ( "all::=foo",    ("all","::=",)),
         ( "all?=foo",    ("all","?=",)),
         ( "all+=foo",    ("all","+=",)),
-        ( "$(all)+=foo",    ("","$(","all",")","+=",)),
-        ( "qq$(all)+=foo",    ("qq","$(","all",")","+=",)),
+        ( "$(all)+=foo",    ("","$(","all",")","","+=",)),
+        ( "qq$(all)+=foo",    ("qq","$(","all",")","","+=",)),
         ( "qq$(all)qq+=foo",    ("qq","$(","all",")","qq","+=",)),
 
+        # kind of ambiguous
+        ( "this is a test = ", ("this is a test","=",) ),
+        ( "this is a test : ", ("this","is","a","test",":",) ),
+
+        # yadda yadda yadda
         ( "override all=foo",    ("override","all","=","foo")),
     )
     run_tests_list( rules_tests, tokenize_statement_LHS )
