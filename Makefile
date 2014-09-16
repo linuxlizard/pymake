@@ -259,6 +259,11 @@ $(info = this is silly=$(CC$(LD)))
 CC$$=cc dollar dollar
 $(info = cc dollar dollar=$(CC$$))
 
+#$(info $(shell echo $$$$))
+
+# What happens with naked function calls (not info/error)?
+# Fails. "missing separator"  So info and error are special
+#$(shell echo this is a naked function call)
 
 ifeq (0,${MAKELEVEL})
      whoami    := $(shell whoami)
@@ -266,9 +271,32 @@ ifeq (0,${MAKELEVEL})
      MAKE := ${MAKE} host-type=${host-type} whoami=${whoami}
 endif
 
+# "export" 5.7.2 Communicating Variables to a Sub-make
+export IAM=GROOT
+$(info = GROOT=$(IAM))
+
+# "override" 6.7 The Override Directive
+override IAM2=GROOT2
+$(info = GROOT2=$(IAM2))
+
+# "private" 6.3 Suppressing Inheritance ; but only seems to apply to static pattern rules
+private IAM3=GROOT3
+$(info = GROOT3=$(private IAM3))
+
+# How closely to rules and assignments match? | and : are used in order-only
+# prerequisites and static pattern rules (respectively). How closely can I
+# tokenize rule and assignment? Also assignment can be part of a target specific variable
+bar=|
+$(info = |=|)
+
 all: foo
+
+bar1 : |
+bar2 :: |
 
 foo:
 	@touch bar
 	@echo = 1+1=$(WAT)
+
+$(shell echo target $$$$) : $(shell echo prereq $$$$)
 
