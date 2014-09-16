@@ -234,8 +234,8 @@ def tokenize_statement_LHS(string):
                 state = state_colon
 
             elif c in set("?+!"):
-                print("maybe assignment")
                 # maybe assignment ?= += !=
+                # cheat and peakahead
                 if string.lookahead()=='=':
                     string.next()
                     yield Token(token.rstrip())
@@ -565,8 +565,13 @@ def statement_test():
         ( "qq$(all)qq+=foo",    ("qq","$(","all",")","qq","+=",)),
 
         # kind of ambiguous
-        ( "this is a test = ", ("this is a test","=",) ),
-        ( "this is a test : ", ("this","is","a","test",":",) ),
+        ( "this is a test = ",           ("this is a test","=",) ),
+        ( "  this   is   a   test   = ", ("this   is   a   test","=",) ),
+        ( "this $(is) $a $test = ",      ("this ","$(","is",")"," ","$","a"," ","$","t","est","=",) ),
+        ( "this $(  is  ) $a $test = ",  ("this ","$(","  is  ",")"," ","$","a"," ","$","t","est","=",) ),
+        ( "this is a test : ",           ("this","is","a","test",":",) ),
+        ( "  this   is   a   test   : ", ("this", "is","a","test",":",) ),
+        ( "this $(is) $a $test : ",      ("this ","$(","is",")"," ","$","a"," ","$","t","est","=",) ),
 
         # yadda yadda yadda
         ( "override all=foo",    ("override","all","=","foo")),
