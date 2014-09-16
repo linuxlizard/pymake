@@ -9,6 +9,9 @@ all: foo
 foo:
 	@touch bar
 
+foo2:   # hello there; is this comment ignored?
+	@touch bar2
+
 # whitespace in rules is different
 the quick brown fox jumped over lazy dogs : ; @echo $@
 
@@ -100,10 +103,6 @@ $(a) : ; @b=a ; echo $$$$$$$a is $a
 
 # This parses. Don't know what it means.
 : 
-
-# 
-export IAM=GROOT
-override IAM=GROOT
 
 .PHONY : clean
 clean:
