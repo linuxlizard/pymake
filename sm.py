@@ -168,7 +168,23 @@ def eatwhite(string):
         if not c in whitespace:
             yield c
 
-def tokenize_statement_LHS(string):
+def tokenize_assignment_or_rule(string):
+
+    string.push_state()
+    tokens = [ t for t in tokenize_statement_LHS(string) ]
+
+    statement_type = "rule" if tokens[-1].string in rule_operators else "assign" 
+
+    print( "last_token={0} ∴ statement is a {1}".format(tokens[-1],statement_type))
+    if tokens[-1].string in rule_operators :
+        print("re-run as rule")
+        string.pop_state()
+        # re-tokenize as a rule (backtrack)
+        tokens = [ t for t in tokenize_statement_LHS(string,whitespace) ]
+
+    return tokens
+
+def tokenize_statement_LHS(string,lhs_whitespace=""):
     # formerly tokenize_rule()
 
     state_start = 1
@@ -196,6 +212,7 @@ def tokenize_statement_LHS(string):
     for c in string : 
         print("r c={0} state={1} token=\"{2}\"".format(c,state,token))
         if state==state_start:
+            # always eat whitespace while in the starting state
             if c in whitespace : 
                 # eat whitespace
                 pass
@@ -212,12 +229,12 @@ def tokenize_statement_LHS(string):
 
             # whitespace in LHS of assignment is significant
             # whitespace in LHS of rule is ignored
-#            elif c in whitespace :
-#                # end of word
-#                yield Token(token)
-#                # restart token
-#                token = ""
-#                state = state_start
+            elif c in lhs_whitespace :
+                # end of word
+                yield Token(token)
+                # restart token
+                token = ""
+                state = state_start
 
             elif c=='$':
                 state = state_dollar
@@ -265,6 +282,7 @@ def tokenize_statement_LHS(string):
                 token = ""
 
                 # jump to variable_ref tokenizer
+                # restore "$" + "(" in the string
                 string.pushback()
                 string.pushback()
 
@@ -393,6 +411,7 @@ class ScannerIterator(object):
         self.string = string
         self.idx = 0
         self.max_idx = len(self.string)
+        self.state_stack = []
 
     def __iter__(self):
         return self
@@ -416,6 +435,12 @@ class ScannerIterator(object):
         if self.idx <= 0 :
             raise StopIteration
         self.idx -= 1
+
+    def push_state(self):
+        self.state_stack.append(self.idx)
+
+    def pop_state(self):
+        self.idx = self.state_stack.pop()
 
 def parse(infilename):
     infile = open(infilename)
@@ -567,16 +592,24 @@ def statement_test():
         # kind of ambiguous
         ( "this is a test = ",           ("this is a test","=",) ),
         ( "  this   is   a   test   = ", ("this   is   a   test","=",) ),
-        ( "this $(is) $a $test = ",      ("this ","$(","is",")"," ","$","a"," ","$","t","est","=",) ),
+        ( "this$(is) $a $test = ",      ("this ","$(","is",")"," ","$","a"," ","$","t","est","=",) ),
         ( "this $(  is  ) $a $test = ",  ("this ","$(","  is  ",")"," ","$","a"," ","$","t","est","=",) ),
+        ( "this$(is)$a$(test) : ",       ("this","$(","is",")","","$","a","","$(","test",")","",":",) ),
         ( "this is a test : ",           ("this","is","a","test",":",) ),
         ( "  this   is   a   test   : ", ("this", "is","a","test",":",) ),
-        ( "this $(is) $a $test : ",      ("this ","$(","is",")"," ","$","a"," ","$","t","est","=",) ),
+        ( "this $(is) $a $test : ",      ("this","$(","is",")","","$","a","","$","t","est","=",) ),
 
         # yadda yadda yadda
         ( "override all=foo",    ("override","all","=","foo")),
     )
-    run_tests_list( rules_tests, tokenize_statement_LHS )
+
+#    for test in rules_tests : 
+#        s,result = test
+#        my_iter = ScannerIterator(s)
+#        tokens = tokenize_assignment_or_rule(my_iter)
+#        print( "tokens={0}".format("|".join([t.string for t in tokens])) )
+
+    run_tests_list( rules_tests, tokenize_assignment_or_rule)
 
 def test():
 #    variable_ref_test()
