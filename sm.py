@@ -131,15 +131,15 @@ class NestedTooDeep(Exception):
 # tinkering with a class for tokens
 #def Token(s): return s
 
-class Token(object):
-    def __init__(self,s):
-        self.string = s
-
-    def __str__(self):
-        return self.string
-
-    def __repr__(self):
-        return self.string
+#class Token(object):
+#    def __init__(self,s):
+#        self.string = s
+#
+#    def __str__(self):
+#        return self.string
+#
+#    def __repr__(self):
+#        return self.string
 
 class Symbol(object):
     pass
@@ -152,8 +152,35 @@ class Literal(Symbol):
     def __str__(self):
         return "Literal({0})".format(self.string)
 
+class Operator(Symbol):
+    def __init__(self,string):
+        self.string=string
+
+class AssignOp(Operator):
+    def __str__(self):
+        return "AssignOp({0})".format(self.string)
+    
+class RuleOp(Operator):
+    def __str__(self):
+        return "RuleOp({0})".format(self.string)
+    
 class Expression(Symbol):
-    pass
+    def __init__(self, token_list ):
+        self.token_list = token_list
+
+        # sanity check
+        for t in self.token_list :
+            assert isinstance(t,Symbol), (type(t),t)
+
+    def __str__(self):
+        s = "Expression("
+        for t in self.token_list :
+            s += str(t)
+        s += ")"
+        return s
+
+    def __getitem__(self,idx):
+        return self.token_list[idx]
 
 class VarRef(Expression):
     # A variable reference found in the token stream. Save as a nested set of
@@ -166,26 +193,21 @@ class VarRef(Expression):
     # $(abc$(def)$(ghi$(jkl)))  ->  VarExp(abc,VarExp(def),VarExp(ghi,VarExp(jkl)),)
     # $(abc$(def)xyz)           ->  VarExp(abc,VarRef(def),Literal(xyz),)
     # $(info this is a varref)  ->  VarExp(info this is a varref)
-    def __init__(self, token_list ):
-        self.token_list = token_list
-
-        # sanity check
-#        print("token_list={0}".format(self.token_list))
-        for t in self.token_list :
-#            print("t={0} {1}".format(str(t),type(t)) )
-            assert isinstance(t,Symbol), (type(t),t)
+#    def __init__(self, token_list ):
+#        self.token_list = token_list
+#
+#        # sanity check
+##        print("token_list={0}".format(self.token_list))
+#        for t in self.token_list :
+##            print("t={0} {1}".format(str(t),type(t)) )
+#            assert isinstance(t,Symbol), (type(t),t)
 
     def __str__(self):
         s = "VarRef("
         for t in self.token_list :
             s += str(t)
         s += ")"
-
         return s
-        
-
-class Assign(Expression):
-    pass
 
 def comment(string):
     state_start = 1
@@ -217,180 +239,6 @@ def eatwhite(string):
         if not c in whitespace:
             yield c
 
-def tokenize_assignment_or_rule(string):
-
-    string.push_state()
-    tokens = [ t for t in tokenize_statement_LHS(string) ]
-
-    statement_type = "rule" if tokens[-1].string in rule_operators else "assign" 
-
-    print( "last_token={0} ∴ statement is a {1}".format(tokens[-1],statement_type))
-    if tokens[-1].string in rule_operators :
-        print("re-run as rule")
-        string.pop_state()
-        # re-tokenize as a rule (backtrack)
-        tokens = [ t for t in tokenize_statement_LHS(string,whitespace) ]
-
-    return tokens
-
-def tokenize_statement_LHS(string,separators=""):
-    # formerly tokenize_rule()
-
-    state_start = 1
-    state_in_word = 2
-    state_dollar = 3
-    state_backslash = 4
-    state_colon = 5
-    state_colon_colon = 6
-
-    state = state_start
-    token = ""
-
-    # Before can disambiguate assignment vs rule, must parse forward enough to
-    # find the operator. Otherwise, the LHS between assignment and rule are
-    # identical.
-    #
-    # assignment ::= LHS assignment_operator RHS
-    # rule       ::= LHS rule_operator RHS
-    #
-
-    # a \x of these chars replaced by literal x
-    # XXX in both rule and assignment LHS? O_o
-    backslashable = set("% :,")
-
-    for c in string : 
-        print("r c={0} state={1} token=\"{2}\"".format(c,state,token))
-        if state==state_start:
-            # always eat whitespace while in the starting state
-            if c in whitespace : 
-                # eat whitespace
-                pass
-            elif c==':':
-                state = state_colon
-            else :
-                # whatever it is, push it back so can tokenize it
-                string.pushback()
-                state = state_in_word
-
-        elif state==state_in_word:
-            if c=='\\':
-                state = state_backslash
-
-            # whitespace in LHS of assignment is significant
-            # whitespace in LHS of rule is ignored
-            elif c in separators :
-                # end of word
-                yield Token(token)
-                # restart token
-                token = ""
-                state = state_start
-
-            elif c=='$':
-                state = state_dollar
-
-            elif c=='#':
-                # eat the comment 
-                for t in comments(string):
-                    yield t
-
-            elif c==':':
-                # end of LHS (don't know if rule or assignment yet)
-                # strip trailing whitespace
-                yield Token(token.rstrip())
-                state = state_colon
-
-            elif c in set("?+!"):
-                # maybe assignment ?= += !=
-                # cheat and peakahead
-                if string.lookahead()=='=':
-                    string.next()
-                    yield Token(token.rstrip())
-                    yield Token(c+'=')
-                    return
-                else:
-                    token += c
-
-            elif c=='=':
-                # definitely an assignment 
-                # strip trailing whitespace
-                yield Token(token.rstrip())
-                yield Token("=")
-                return
-                
-            else :
-                token += c
-
-        elif state==state_dollar :
-            if c=='$':
-                # literal $
-                token += "$"
-            else:
-                # return token so far
-                yield Token(token)
-                # restart token
-                token = ""
-
-                # jump to variable_ref tokenizer
-                # restore "$" + "(" in the string
-                string.pushback()
-                string.pushback()
-
-                # jump to var_ref tokenizer
-                for t in tokenize_variable_ref(string):
-                    yield t
-            state=state_in_word
-
-        elif state==state_backslash :
-            if c in backslashable : 
-                token += c
-            else :
-                # literal '\' + somechar
-                token += '\\'
-                token += c
-            state = state_in_word
-
-        elif state==state_colon :
-            # assignment end of LHS is := or ::= 
-            # rule's end of target(s) is either a single ':' or double colon '::'
-            if c==':':
-                # double colon
-                state = state_colon_colon
-            elif c=='=':
-                # :=
-                yield Token(":=")
-                # end of RHS
-                return
-            else:
-                # Single ':' followed by something. Whatever it was, put it back!
-                string.pushback()
-                yield Token(":")
-                # successfully found LHS 
-                return
-        elif state==state_colon_colon :
-            # preceeding chars are "::"
-            if c=='=':
-                # ::= 
-                yield Token("::=")
-            else:
-                string.pushback()
-                yield Token("::")
-            # successfully found LHS 
-            return
-        else:
-            assert 0,state
-
-    print("end of string! state={0}".format(state))
-
-    # hit end of string; what was our final state?
-    if state==state_colon:
-        # ":"
-        yield Token(":")
-    elif state==state_colon_colon:
-        # "::"
-        yield Token("::")
-
-    # don't raise error; just return assuming rest of string is happy 
-
 depth = 0
 def depth_reset():
     # reset the depth (used when testing the depth checker)
@@ -412,6 +260,193 @@ def depth_checker(func):
         return ret
 
     return check_depth
+
+@depth_checker
+def tokenize_assignment_or_rule(string):
+
+    string.push_state()
+    tokens = tokenize_statement_LHS(string)
+#    print( "tokens={0}".format(str(tokens)) )
+    
+    assert isinstance(tokens,Expression),(type(tokens),tokens)
+
+    statement_type = "rule" if tokens[-1].string in rule_operators else "assign" 
+
+    print( "last_token={0} ∴ statement is a {1}".format(tokens[-1],statement_type))
+    if tokens[-1].string in rule_operators :
+        print("re-run as rule")
+        string.pop_state()
+        # re-tokenize as a rule (backtrack)
+        tokens = tokenize_statement_LHS(string,whitespace)
+
+    return tokens
+
+@depth_checker
+def tokenize_statement_LHS(string,separators=""):
+    # formerly tokenize_rule()
+
+    state_start = 1
+    state_in_word = 2
+    state_dollar = 3
+    state_backslash = 4
+    state_colon = 5
+    state_colon_colon = 6
+
+    state = state_start
+    token = ""
+
+    token_list = []
+
+    # Before can disambiguate assignment vs rule, must parse forward enough to
+    # find the operator. Otherwise, the LHS between assignment and rule are
+    # identical.
+    #
+    # assignment ::= LHS assignment_operator RHS
+    # rule       ::= LHS rule_operator RHS
+    #
+
+    # a \x of these chars replaced by literal x
+    # XXX in both rule and assignment LHS? O_o
+    backslashable = set("% :,")
+
+    for c in string : 
+#        print("r c={0} state={1} token=\"{2}\"".format(c,state,token))
+        if state==state_start:
+            # always eat whitespace while in the starting state
+            if c in whitespace : 
+                # eat whitespace
+                pass
+            elif c==':':
+                state = state_colon
+            else :
+                # whatever it is, push it back so can tokenize it
+                string.pushback()
+                state = state_in_word
+
+        elif state==state_in_word:
+            if c=='\\':
+                state = state_backslash
+
+            # whitespace in LHS of assignment is significant
+            # whitespace in LHS of rule is ignored
+            elif c in separators :
+                # end of word
+                token_list.append( Literal(token) )
+
+                # restart token
+                token = ""
+
+                # jump back to start searching for next symbol
+                state = state_start
+
+            elif c=='$':
+                state = state_dollar
+
+            elif c=='#':
+                # eat the comment 
+                string.pushback()
+                comment(string)
+
+            elif c==':':
+                # end of LHS (don't know if rule or assignment yet)
+                # strip trailing whitespace
+                token_list.append( Literal(token.rstrip()) )
+                state = state_colon
+
+            elif c in set("?+!"):
+                # maybe assignment ?= += !=
+                # cheat and peakahead
+                if string.lookahead()=='=':
+                    string.next()
+                    token_list.append(Literal(token.rstrip()))
+                    token_list.append(AssignOp(c+'='))
+                    return Expression(token_list)
+                else:
+                    token += c
+
+            elif c=='=':
+                # definitely an assignment 
+                # strip trailing whitespace
+                token_list.append(Literal(token.rstrip()))
+                token_list.append(AssignOp("="))
+                return Expression(token_list)
+                
+            else :
+                token += c
+
+        elif state==state_dollar :
+            if c=='$':
+                # literal $
+                token += "$"
+            else:
+                # save token so far; note no rstrip()!
+                token_list.append(Literal(token))
+                # restart token
+                token = ""
+
+                # jump to variable_ref tokenizer
+                # restore "$" + "(" in the string
+                string.pushback()
+                string.pushback()
+
+                # jump to var_ref tokenizer
+                token_list.append( tokenize_variable_ref(string) )
+
+            state=state_in_word
+
+        elif state==state_backslash :
+            if c in backslashable : 
+                token += c
+            else :
+                # literal '\' + somechar
+                token += '\\'
+                token += c
+            state = state_in_word
+
+        elif state==state_colon :
+            # assignment end of LHS is := or ::= 
+            # rule's end of target(s) is either a single ':' or double colon '::'
+            if c==':':
+                # double colon
+                state = state_colon_colon
+            elif c=='=':
+                # :=
+                token_list.append( AssignOp(":=") )
+                # end of RHS
+                return Expression(token_list)
+            else:
+                # Single ':' followed by something. Whatever it was, put it back!
+                string.pushback()
+                token_list.append( RuleOp(":") )
+                # successfully found LHS 
+                return Expression(token_list)
+        elif state==state_colon_colon :
+            # preceeding chars are "::"
+            if c=='=':
+                # ::= 
+                token_list.append( AssignOp("::=") )
+            else:
+                string.pushback()
+                token_list.append( RuleOp("::") )
+
+            # successfully found LHS 
+            return Expression(token_list)
+        else:
+            assert 0,state
+
+    print("end of string! state={0}".format(state))
+
+    # hit end of string; what was our final state?
+    if state==state_colon:
+        # ":"
+        token_list.append( RuleOp(":") )
+        return Expression(token_list)
+    elif state==state_colon_colon:
+        # "::"
+        token_list.append( RuleOp("::") )
+        return Expression(token_list)
+
+    # don't raise error; just return assuming rest of string is happy 
 
 @depth_checker
 def tokenize_variable_ref(string):
@@ -465,7 +500,7 @@ def tokenize_variable_ref(string):
                 # if lone $$ token, preserve the $$ in the current token string
                 # otherwise, recurse into parsing a $() expression
                 if string.lookahead()=='$':
-                    token += "$$"
+                    token += "$"
                     string.next()
                 else:
                     # save token so far
@@ -612,48 +647,6 @@ def variable_ref_test():
     # this should fail
 #    print( "var={0}".format(tokenize_variable_ref(ScannerIterator("$(CC"))) )
 
-def rules_test():
-    rules_tests = ( 
-        ( "all:",       ("all",":") ),
-        ( "all:foo",    ("all",":","foo")),
-        ( "   all :   foo    ", ("all",":","foo")),
-        ( "the quick brown fox jumped over lazy dogs : ; ", ("the", "quick", "brown", "fox","jumped","over","lazy","dogs",":", ";", )),
-        ( '"foo" : ; ',     ('"foo"',":",";")),
-        ('"foo qqq baz" : ;',   ('"foo',"qqq",'baz"',":",";")),
-        (r'\foo : ; ',  (r'\foo', ':', ';')),
-        (r'foo\  : ; ', (r'foo ',':', ';',)),
-        ('@:;@:',       ('@',':',';','@:',)),
-        ('I\ have\ spaces : ; @echo $@',    ('I have spaces',':',';','@echo $@',)),
-        ('I\ \ \ have\ \ \ three\ \ \ spaces : ; @echo $@', ('I   have   three   spaces',':', ';', '@echo $@' )),
-        ('I$(CC)have$(LD)embedded$(OBJ)varref : ; @echo $(subst hello.o,HELLO.O,$(subst ld,LD,$(subst gcc,GCC,$@)))',
-            ( 'I', '$(', 'CC', ')', 'have', '$(', 'LD',')','embedded','$(','OBJ',')','varref',':',';',
-              '@echo $(subst hello.o,HELLO.O,$(subst ld,LD,$(subst gcc,GCC,$@)))',)
-        ),
-        ('$(filter %.o,$(files)): %.o: %.c',    
-                    ( '', '$(','filter %.o,',
-                            '$(','files',')','',
-                       ')','',
-                          ':','%.o',':','%.c',)),
-        ('aa$(filter %.o,bb$(files)cc)dd: %.o: %.c',    
-                    ( 'aa', '$(','filter %.o,bb',
-                            '$(','files',')','cc',
-                       ')','dd',
-                          ':','%.o',':','%.c',)),
-        ("double-colon1 :: colon2", ("double-colon1","::","colon2")),
-        ( "%.tab.c %.tab.h: %.y", ("%.tab.c","%.tab.h",":","%.y")),
-        ("foo2:   # hello there; is this comment ignored?",("foo2",":")),
-        ("$(shell echo target $$$$) : $(shell echo prereq $$$$)",
-            ("","$(","shell echo target $$$$",")","",":","$(shell echo prereq $$$$)",),)
-    )
-    run_tests_list( rules_tests, tokenize_rule )
-#    for test in rules_tests : 
-#        print("test={0}".format(test))
-#        s = test
-#        my_iter = ScannerIterator(s)
-#
-#        tokens = [ t for t in tokenize_rule(my_iter) ]
-#        print( "tokens={0}".format("|".join([t.string for t in tokens])) )
-
 def statement_test():
     rules_tests = ( 
         # rule LHS
@@ -682,21 +675,60 @@ def statement_test():
 
         # yadda yadda yadda
         ( "override all=foo",    ("override","all","=","foo")),
-    )
 
+        ( "all:",       ("all",":") ),
+        ( "all:foo",    ("all",":","foo")),
+        ( "   all :   foo    ", ("all",":","foo")),
+        ( "the quick brown fox jumped over lazy dogs : ; ", 
+            ("the", "quick", "brown", "fox","jumped","over","lazy","dogs",":", ";", )),
+        ( '"foo" : ; ',     ('"foo"',":",";")),
+        ('"foo qqq baz" : ;',   ('"foo',"qqq",'baz"',":",";")),
+        (r'\foo : ; ',  (r'\foo', ':', ';')),
+        (r'foo\  : ; ', (r'foo ',':', ';',)),
+        ('@:;@:',       ('@',':',';','@:',)),
+        ('I\ have\ spaces : ; @echo $@',    ('I have spaces',':',';','@echo $@',)),
+        ('I\ \ \ have\ \ \ three\ \ \ spaces : ; @echo $@', ('I   have   three   spaces',':', ';', '@echo $@' )),
+        ('I$(CC)have$(LD)embedded$(OBJ)varref : ; @echo $(subst hello.o,HELLO.O,$(subst ld,LD,$(subst gcc,GCC,$@)))',
+            ( 'I', '$(', 'CC', ')', 'have', '$(', 'LD',')','embedded','$(','OBJ',')','varref',':',';',
+              '@echo $(subst hello.o,HELLO.O,$(subst ld,LD,$(subst gcc,GCC,$@)))',)
+        ),
+        ('$(filter %.o,$(files)): %.o: %.c',    
+                    ( '', '$(','filter %.o,',
+                            '$(','files',')','',
+                       ')','',
+                          ':','%.o',':','%.c',)),
+        ('aa$(filter %.o,bb$(files)cc)dd: %.o: %.c',    
+                    ( 'aa', '$(','filter %.o,bb',
+                            '$(','files',')','cc',
+                       ')','dd',
+                          ':','%.o',':','%.c',)),
+        ("double-colon1 :: colon2", ("double-colon1","::","colon2")),
+        ( "%.tab.c %.tab.h: %.y", ("%.tab.c","%.tab.h",":","%.y")),
+        ("foo2:   # hello there; is this comment ignored?",("foo2",":")),
+        ("$(shell echo target $$$$) : $(shell echo prereq $$$$)",
+            ("","$(","shell echo target $$$$",")","",":","$(shell echo prereq $$$$)",),)
+    )
 #    for test in rules_tests : 
 #        s,result = test
 #        my_iter = ScannerIterator(s)
 #        tokens = tokenize_assignment_or_rule(my_iter)
 #        print( "tokens={0}".format("|".join([t.string for t in tokens])) )
 
-    run_tests_list( rules_tests, tokenize_assignment_or_rule)
+    for test in rules_tests : 
+        s,v = test
+        print("test={0}".format(s))
+        my_iter = ScannerIterator(s)
+
+        tokens = tokenize_assignment_or_rule(my_iter)
+        print( "tokens={0}".format(str(tokens)) )
+        print("\n")
+#    run_tests_list( rules_tests, tokenize_assignment_or_rule)
 
 @depth_checker
 def recurse(foo,bar,baz):
     recurse(foo+1,bar+1,baz+1)
 
-def test():
+def internal_tests():
     assert isinstance(VarRef([]),Symbol)
 
     # $($(qq))
@@ -711,9 +743,10 @@ def test():
         assert 0
     assert depth==0
 
-    variable_ref_test()
-#    rules_test()
-#    statement_test()
+def test():
+#    internal_tests()
+#    variable_ref_test()
+    statement_test()
 
 def main():
     import sys
