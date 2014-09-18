@@ -125,6 +125,9 @@ builtin_variables = {
 class ParseError(Exception):
     pass
 
+class NestedTooDeep(Exception):
+    pass
+
 # tinkering with a class for tokens
 #def Token(s): return s
 
@@ -137,6 +140,52 @@ class Token(object):
 
     def __repr__(self):
         return self.string
+
+class Symbol(object):
+    pass
+
+class Literal(Symbol):
+    # A literal found in the token stream. Store as a string.
+    def __init__(self,string):
+        self.string = string
+
+    def __str__(self):
+        return "Literal({0})".format(self.string)
+
+class Expression(Symbol):
+    pass
+
+class VarRef(Expression):
+    # A variable reference found in the token stream. Save as a nested set of
+    # tuples representing a tree. 
+    # $a            ->  VarExp(a)
+    # $(abc)        ->  VarExp(abc,)
+    # $(abc$(def))  ->  VarExp(abc,VarExp(def),)
+    # $(abc$(def)$(ghi))  ->  VarExp(abc,VarExp(def),)
+    # $(abc$(def)$(ghi))  ->  VarExp(abc,VarExp(def),VarExp(ghi),)
+    # $(abc$(def)$(ghi$(jkl)))  ->  VarExp(abc,VarExp(def),VarExp(ghi,VarExp(jkl)),)
+    # $(abc$(def)xyz)           ->  VarExp(abc,VarRef(def),Literal(xyz),)
+    # $(info this is a varref)  ->  VarExp(info this is a varref)
+    def __init__(self, token_list ):
+        self.token_list = token_list
+
+        # sanity check
+#        print("token_list={0}".format(self.token_list))
+        for t in self.token_list :
+#            print("t={0} {1}".format(str(t),type(t)) )
+            assert isinstance(t,Symbol), (type(t),t)
+
+    def __str__(self):
+        s = "VarRef("
+        for t in self.token_list :
+            s += str(t)
+        s += ")"
+
+        return s
+        
+
+class Assign(Expression):
+    pass
 
 def comment(string):
     state_start = 1
@@ -184,7 +233,7 @@ def tokenize_assignment_or_rule(string):
 
     return tokens
 
-def tokenize_statement_LHS(string,lhs_whitespace=""):
+def tokenize_statement_LHS(string,separators=""):
     # formerly tokenize_rule()
 
     state_start = 1
@@ -229,7 +278,7 @@ def tokenize_statement_LHS(string,lhs_whitespace=""):
 
             # whitespace in LHS of assignment is significant
             # whitespace in LHS of rule is ignored
-            elif c in lhs_whitespace :
+            elif c in separators :
                 # end of word
                 yield Token(token)
                 # restart token
@@ -342,6 +391,29 @@ def tokenize_statement_LHS(string,lhs_whitespace=""):
 
     # don't raise error; just return assuming rest of string is happy 
 
+depth = 0
+def depth_reset():
+    # reset the depth (used when testing the depth checker)
+    global depth
+    depth = 0
+
+def depth_checker(func):
+    def check_depth(*args):
+        global depth
+        depth += 1
+        if depth > 10 : 
+            raise NestedTooDeep(depth)
+        ret = func(*args)
+        depth -= 1
+
+        # shouldn't happen!
+        assert depth >= 0, depth 
+
+        return ret
+
+    return check_depth
+
+@depth_checker
 def tokenize_variable_ref(string):
     
     state_start = 1
@@ -350,11 +422,15 @@ def tokenize_variable_ref(string):
 
     state = state_start
     token = ""
+    token_list = []
 
-#    print( "state={0}".format(state))
+    sanity = 0
 
     for c in string : 
-        print("v c={0} state={1}".format(c,state))
+        sanity += 1
+        assert sanity < 100, (sanity,depth)
+
+#        print("v c={0} state={1} idx={2}".format(c,state,string.idx))
         if state==state_start:
             if c=='$':
                 state=state_dollar
@@ -365,22 +441,25 @@ def tokenize_variable_ref(string):
             if c=='(' or c=='{':
                 opener = c
                 state = state_in_var_ref
-                yield Token("$"+c)
             elif c=='$':
                 # literal "$$"
-                yield Token("$$")
+                token += "$"
             elif not c in whitespace :
                 # single letter variable, e.g., $@ $x $_ etc.
-                token += c
-                yield Token("$")
-                yield Token(token)
-                return 
+                token_list.append( Literal(c) )
+                return VarRef(token_list)
+                # done tokenizing the var ref
+
         elif state==state_in_var_ref:
             if c==')' or c=='}':
+                # end of var ref
                 # TODO make sure to match the open/close chars
-                yield Token(token)
-                yield Token(c)
-                return 
+
+                # save what we've read so far
+                token_list.append( Literal(token) )
+                return VarRef(token_list)
+                # done tokenizing the var ref
+
             elif c=='$':
                 # nested expression!  :-O
                 # if lone $$ token, preserve the $$ in the current token string
@@ -389,17 +468,14 @@ def tokenize_variable_ref(string):
                     token += "$$"
                     string.next()
                 else:
-                    # return token so far
-                    yield Token(token)
+                    # save token so far
+                    token_list.append( Literal(token) )
                     # restart token
                     token = ""
                     # push the '$' back onto the scanner
                     string.pushback()
                     # recurse into this scanner again
-                    for t in tokenize_variable_ref(string):
-                        yield t
-                    # python 3.3 and above
-                    #yield from tokenize_variable_ref(string)
+                    token_list.append( tokenize_variable_ref(string) )
             else:
                 token += c
 
@@ -474,19 +550,24 @@ def run_tests_list(tests_list,tokenizer):
 
 def variable_ref_test():
 
-    tests_list = ( 
+    variable_ref_tests = ( 
         # string    result
+        ("$(CC)",   ("$(","CC",")")),
+        ("$a",   ("$","a",)),
         ("$($$)",      ("$(","$$",")",)),
         ("$($$$$$$)",      ("$(","$$$$$$",")",)),
-        ("$(CC)",   ("$(","CC",")")),
         ("$( )",   ("$("," ",")")),
         ("$(    )",   ("$(","    ",")")),
         ("$( CC )", ("$("," CC ", ")")),
         ("$(CC$$)",   ("$(","CC$$", ")")),
+        ("$($$CC$$)",   ("$(","$$CC$$", ")")),
+        ("$($(CC)$$)",   ("$(","$(","CC", "$$",")",")")),
+        ("$($$$(CC)$$)",   ("$(","$$","$(","CC",")","$$", ")")),
         ("$(CC$(LD))",   ("$(","CC","$(","LD",")","",")")),
         ("${CC}",   ("${","CC","}")),
         ("$@",      ("$", "@",)),
         ("$<",      ("$", "<",)),
+        ("$F",      ("$","F",)),
         ("$F",      ("$","F",)),
 #        ("$Ff",      ("$","F","f",)),
 #        ("$F$f",      ("$","F","$","f",)),
@@ -516,17 +597,17 @@ def variable_ref_test():
         ("$(info = # foo#foo foo#foo foo#foo ###=# foo#foo foo#foo foo#foo ###)",
           ("$(","info = # foo#foo foo#foo foo#foo ###=# foo#foo foo#foo foo#foo ###",")")),
     )
-    for test in tests_list :
-        print("test={0}".format(test))
-        s,result = test
-        print("s={0}".format(s))
-        my_iter = ScannerIterator(s)
-        tokens = [ t for t in tokenize_variable_ref(my_iter)] 
-        print( "tokens={0}".format("|".join([t.string for t in tokens])) )
 
-        for v in zip(tokens,result):
-#            assert  v[0]==v[1], v
-            assert  v[0].string==v[1], v
+#    run_tests_list( variable_ref_tests, tokenize_variable_ref )
+    
+    for test in variable_ref_tests : 
+        s,v = test
+        print("test={0}".format(s))
+        my_iter = ScannerIterator(s)
+
+        tokens = tokenize_variable_ref(my_iter)
+        print( "tokens={0}".format(str(tokens)) )
+        print("\n")
 
     # this should fail
 #    print( "var={0}".format(tokenize_variable_ref(ScannerIterator("$(CC"))) )
@@ -611,11 +692,28 @@ def statement_test():
 
     run_tests_list( rules_tests, tokenize_assignment_or_rule)
 
+@depth_checker
+def recurse(foo,bar,baz):
+    recurse(foo+1,bar+1,baz+1)
+
 def test():
-#    variable_ref_test()
+    assert isinstance(VarRef([]),Symbol)
+
+    # $($(qq))
+    v = VarRef( [VarRef([Literal("qq")]),] )
+    print("v={0}".format(str(v)))
+
+    try : 
+        recurse(10,20,30)
+    except NestedTooDeep:
+        depth_reset()
+    else:
+        assert 0
+    assert depth==0
+
+    variable_ref_test()
 #    rules_test()
-    statement_test()
-    pass
+#    statement_test()
 
 def main():
     import sys
