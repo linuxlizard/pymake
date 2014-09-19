@@ -128,43 +128,37 @@ class ParseError(Exception):
 class NestedTooDeep(Exception):
     pass
 
-# tinkering with a class for tokens
-#def Token(s): return s
-
-#class Token(object):
-#    def __init__(self,s):
-#        self.string = s
 #
-#    def __str__(self):
-#        return self.string
+#  Class Hierarchy for Tokens
 #
-#    def __repr__(self):
-#        return self.string
-
 class Symbol(object):
-    pass
-
-class Literal(Symbol):
-    # A literal found in the token stream. Store as a string.
+    # base class of everything we find in the makefile
     def __init__(self,string):
+        # by default, save the token's string 
+        # (descendent classes could store something differnet)
         self.string = string
 
     def __str__(self):
-        return "Literal({0})".format(self.string)
+        # create a string such as "Literal(all)"
+        return "{0}({1})".format(self.__class__.__name__,self.string)
+
+class Literal(Symbol):
+    # A literal found in the token stream. Store as a string.
+    pass
 
 class Operator(Symbol):
-    def __init__(self,string):
-        self.string=string
+    pass
 
 class AssignOp(Operator):
-    def __str__(self):
-        return "AssignOp({0})".format(self.string)
+    # An assignment symbol, one of { = , := , ?= , += , != , ::= }
+    pass
     
 class RuleOp(Operator):
-    def __str__(self):
-        return "RuleOp({0})".format(self.string)
+    # A rule sumbol, one of { : , :: }
+    pass
     
 class Expression(Symbol):
+    # An expression is a list of symbols.
     def __init__(self, token_list ):
         self.token_list = token_list
 
@@ -173,7 +167,8 @@ class Expression(Symbol):
             assert isinstance(t,Symbol), (type(t),t)
 
     def __str__(self):
-        s = "Expression("
+        # return a ()'d list of our tokens
+        s = "{0}(".format(self.__class__.__name__)
         for t in self.token_list :
             s += str(t)
         s += ")"
@@ -193,21 +188,8 @@ class VarRef(Expression):
     # $(abc$(def)$(ghi$(jkl)))  ->  VarExp(abc,VarExp(def),VarExp(ghi,VarExp(jkl)),)
     # $(abc$(def)xyz)           ->  VarExp(abc,VarRef(def),Literal(xyz),)
     # $(info this is a varref)  ->  VarExp(info this is a varref)
-#    def __init__(self, token_list ):
-#        self.token_list = token_list
-#
-#        # sanity check
-##        print("token_list={0}".format(self.token_list))
-#        for t in self.token_list :
-##            print("t={0} {1}".format(str(t),type(t)) )
-#            assert isinstance(t,Symbol), (type(t),t)
 
-    def __str__(self):
-        s = "VarRef("
-        for t in self.token_list :
-            s += str(t)
-        s += ")"
-        return s
+    pass
 
 def comment(string):
     state_start = 1
@@ -246,6 +228,8 @@ def depth_reset():
     depth = 0
 
 def depth_checker(func):
+    # Avoid very deep recurssion into tokenizers.
+    # Note this uses a global so is NOT thread safe.
     def check_depth(*args):
         global depth
         depth += 1
@@ -263,10 +247,17 @@ def depth_checker(func):
 
 @depth_checker
 def tokenize_assignment_or_rule(string):
+    # at start of scanning, we don't know if this is a rule or an assignment
+    # this is a test : foo   -> (this,is,a,test,:,)
+    # this is a test = foo   -> (this is a test,=,)
+    #
+    # I tokenize assuming it's an assignment statement. If the final token is a
+    # rule token, then I re-tokenize as a rule.
+    #
 
+    # save current position in the token stream
     string.push_state()
     tokens = tokenize_statement_LHS(string)
-#    print( "tokens={0}".format(str(tokens)) )
     
     assert isinstance(tokens,Expression),(type(tokens),tokens)
 
@@ -283,7 +274,9 @@ def tokenize_assignment_or_rule(string):
 
 @depth_checker
 def tokenize_statement_LHS(string,separators=""):
-    # formerly tokenize_rule()
+    # Tokenize the LHS of a rule or an assignment statement. A rule uses
+    # whitespace as a separator. An assignment statement preserves internal
+    # whitespace but leading/trailing whitespace is stripped.
 
     state_start = 1
     state_in_word = 2
@@ -301,6 +294,7 @@ def tokenize_statement_LHS(string,separators=""):
     # find the operator. Otherwise, the LHS between assignment and rule are
     # identical.
     #
+    # BNF is sorta
     # assignment ::= LHS assignment_operator RHS
     # rule       ::= LHS rule_operator RHS
     #
@@ -434,8 +428,6 @@ def tokenize_statement_LHS(string,separators=""):
         else:
             assert 0,state
 
-    print("end of string! state={0}".format(state))
-
     # hit end of string; what was our final state?
     if state==state_colon:
         # ":"
@@ -450,7 +442,10 @@ def tokenize_statement_LHS(string,separators=""):
 
 @depth_checker
 def tokenize_variable_ref(string):
-    
+    # Tokenize a variable reference e.g., $(expression) or $c 
+    # Handles nested expressions e.g., $( $(foo) )
+    # Returns a VarExp object.
+
     state_start = 1
     state_dollar = 2
     state_in_var_ref = 3
@@ -459,12 +454,7 @@ def tokenize_variable_ref(string):
     token = ""
     token_list = []
 
-    sanity = 0
-
     for c in string : 
-        sanity += 1
-        assert sanity < 100, (sanity,depth)
-
 #        print("v c={0} state={1} idx={2}".format(c,state,string.idx))
         if state==state_start:
             if c=='$':
@@ -553,7 +543,7 @@ class ScannerIterator(object):
     def pop_state(self):
         self.idx = self.state_stack.pop()
 
-def parse(infilename):
+def parse_file(infilename):
     infile = open(infilename)
     all_lines = infile.readlines()
     infile.close()
@@ -562,11 +552,8 @@ def parse(infilename):
     
     my_iter = ScannerIterator(s)
 
-    new_makefile = "".join( [ c for c in eatwhite(comment(my_iter)) ] )
-    print(new_makefile)
-
-#    for c in comment(s):
-#        print(c,end="")
+    # TODO
+    assert 0
 
 def run_tests_list(tests_list,tokenizer):
     for test in tests_list :
@@ -604,9 +591,9 @@ def variable_ref_test():
         ("$<",      ("$", "<",)),
         ("$F",      ("$","F",)),
         ("$F",      ("$","F",)),
-#        ("$Ff",      ("$","F","f",)),
-#        ("$F$f",      ("$","F","$","f",)),
-#        ("$F$f$",      ("$$","$","F","$","f","$$",)),
+        ("$Ff",      ("$","F","f",)),
+        ("$F$f",      ("$","F","$","f",)),
+        ("$F$f$",      ("$$","$","F","$","f","$$",)),
         ("$($($(FOO)))",    ("$(","","$(","","$(","FOO",")","",")","",")")),
         ("$($($(FOO)a)b)c", ("$(","","$(","","$(","FOO",")","a",")","b",")")),
         ("$(a$(b$(FOO)a)b)c", ("$(","a","$(","b","$(","FOO",")","a",")","b",")")),
@@ -745,13 +732,13 @@ def internal_tests():
 
 def test():
 #    internal_tests()
-#    variable_ref_test()
+    variable_ref_test()
     statement_test()
 
 def main():
     import sys
     for infilename in sys.argv[1:]:
-        parse(infilename)
+        parse_file(infilename)
     test()
 
 if __name__=='__main__':
