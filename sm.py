@@ -12,10 +12,12 @@ import sys
 if sys.version_info.major < 3:
     raise Exception("Requires Python 3.x")
 
-whitespace = set( ' \t\r\n' )
+#whitespace = set( ' \t\r\n' )
+whitespace = set( ' \t' )
 
 assignment_operators = {"=","?=",":=","::=","+=","!="}
 rule_operators = { ":", "::" }
+eol = set("\r\n")
 
 # 4.8 Special Built-In Target Names
 built_in_targets = {
@@ -191,6 +193,19 @@ class VarRef(Expression):
 
     pass
 
+class AssignmentExpression(Expression):
+    def __init__(self,token_list):
+        Expression.__init__(self,token_list)
+
+        # AssignmentExpression :=  Expression AssignOp Expression
+        assert len(self.token_list)==3,len(self.token_list)
+        assert isinstance(self.token_list[0],Expression)
+        assert isinstance(self.token_list[1],AssignOp)
+        assert isinstance(self.token_list[2],Expression),(type(self.token_list[2]),)
+
+class RuleExpression(Expression):
+    pass
+
 def comment(string):
     state_start = 1
     state_eat_comment = 2
@@ -257,20 +272,29 @@ def tokenize_assignment_or_rule(string):
 
     # save current position in the token stream
     string.push_state()
-    tokens = tokenize_statement_LHS(string)
+    lhs = tokenize_statement_LHS(string)
     
-    assert isinstance(tokens,Expression),(type(tokens),tokens)
+    assert type(lhs)==type(())
+    for token in lhs : 
+        assert isinstance(token,Symbol),(type(token),token)
 
-    statement_type = "rule" if tokens[-1].string in rule_operators else "assign" 
+    statement_type = "rule" if lhs[-1].string in rule_operators else "assignment" 
 
-    print( "last_token={0} ∴ statement is a {1}".format(tokens[-1],statement_type))
-    if tokens[-1].string in rule_operators :
+    print( "last_token={0} ∴ statement is {1}".format(lhs[-1],statement_type))
+    if lhs[-1].string in rule_operators :
         print("re-run as rule")
         string.pop_state()
         # re-tokenize as a rule (backtrack)
-        tokens = tokenize_statement_LHS(string,whitespace)
+        lhs = tokenize_statement_LHS(string,whitespace)
+    
+        # TODO add rule RHS
 
-    return tokens
+        return lhs
+
+    # The statement is an assignment. Tokenize rest of line as an assignment.
+    statement = list(lhs)
+    statement.append(tokenize_assign_RHS( string ))
+    return AssignmentExpression( statement )
 
 @depth_checker
 def tokenize_statement_LHS(string,separators=""):
@@ -353,8 +377,7 @@ def tokenize_statement_LHS(string,separators=""):
                 if string.lookahead()=='=':
                     string.next()
                     token_list.append(Literal(token.rstrip()))
-                    token_list.append(AssignOp(c+'='))
-                    return Expression(token_list)
+                    return Expression(token_list),AssignOp(c+'=')
                 else:
                     token += c
 
@@ -362,8 +385,7 @@ def tokenize_statement_LHS(string,separators=""):
                 # definitely an assignment 
                 # strip trailing whitespace
                 token_list.append(Literal(token.rstrip()))
-                token_list.append(AssignOp("="))
-                return Expression(token_list)
+                return Expression(token_list),AssignOp("=")
                 
             else :
                 token += c
@@ -405,40 +427,110 @@ def tokenize_statement_LHS(string,separators=""):
                 state = state_colon_colon
             elif c=='=':
                 # :=
-                token_list.append( AssignOp(":=") )
                 # end of RHS
-                return Expression(token_list)
+                return Expression(token_list), AssignOp(":=") 
             else:
                 # Single ':' followed by something. Whatever it was, put it back!
                 string.pushback()
-                token_list.append( RuleOp(":") )
                 # successfully found LHS 
-                return Expression(token_list)
+                return Expression(token_list),RuleOp(":")
         elif state==state_colon_colon :
             # preceeding chars are "::"
             if c=='=':
                 # ::= 
-                token_list.append( AssignOp("::=") )
-            else:
-                string.pushback()
-                token_list.append( RuleOp("::") )
-
+                return Expression(token_list), AssignOp("::=") 
+            string.pushback()
             # successfully found LHS 
-            return Expression(token_list)
+            return Expression(token_list), RuleOp("::") 
         else:
             assert 0,state
 
     # hit end of string; what was our final state?
     if state==state_colon:
         # ":"
-        token_list.append( RuleOp(":") )
-        return Expression(token_list)
+        return Expression(token_list), RuleOp(":") 
     elif state==state_colon_colon:
         # "::"
-        token_list.append( RuleOp("::") )
-        return Expression(token_list)
+        return Expression(token_list), RuleOp("::") 
 
     # don't raise error; just return assuming rest of string is happy 
+
+@depth_checker
+def tokenize_assign_RHS(string):
+
+    state_start = 1
+    state_dollar = 2
+    state_literal = 3
+    state_eol = 4
+
+    state = state_start
+    token = ""
+    token_list = []
+
+    for c in string :
+        print("a c={0} state={1} idx={2}".format(c,state,string.idx))
+        if state==state_start :
+            if c=='$':
+                state = state_dollar
+            elif c=='#':
+                string.pushback()
+                # eat comment until end of line
+                comment(string)
+                # bye!
+                return Expression(token_list)
+            elif not c in whitespace :
+                string.pushback()
+                state = state_literal
+
+            # default will eat leading whitespace
+            # once we leave the state state, we will never return
+            # (all whitespace after leading whitespace is preserved)
+
+        elif state==state_dollar :
+            if c=='$':
+                # literal $
+                token += "$"
+            else:
+                # save token so far; note no rstrip()!
+                token_list.append(Literal(token))
+                # restart token
+                token = ""
+
+                # jump to variable_ref tokenizer
+                # restore "$" + "(" in the string
+                string.pushback()
+                string.pushback()
+
+                # jump to var_ref tokenizer
+                token_list.append( tokenize_variable_ref(string) )
+
+            state = state_literal
+
+        elif state==state_literal:
+            if c=='$' :
+                state = state_dollar
+            elif c=='#':
+                string.pushback()
+                # eat comment until end of line
+                comment(string)
+                # bye!
+                token_list.append(Literal(token))
+                return Expression(token_list)
+            elif c in eol :
+                state = state_eol
+            else:
+                token += c
+
+        elif state==state_eol :
+            if not c in eol :
+                string.pushback()
+                token_list.append(Literal(token))
+                return Expression(token_list)
+
+    # end of string
+    # save what we've seen so far
+    token_list.append(Literal(token))
+    return Expression(token_list)
 
 @depth_checker
 def tokenize_variable_ref(string):
@@ -711,9 +803,49 @@ def statement_test():
         print("\n")
 #    run_tests_list( rules_tests, tokenize_assignment_or_rule)
 
+def assignment_test():
+
+    assignment_tests = ( 
+        ("foo=baz",""),
+        ("foo=$(baz)",""),
+        ("foo=$(baz3) $(baz3) $(baz3)",""),
+
+        # leading spaces discarded, trailing spaces preserved
+        ("foo=     $(baz3) $(baz3) $(baz3)",""),
+        ("foo= this is a test # this is a comment",""),
+        ("foo= this is a test # this is a comment\nbar=baz",""),
+
+        # empty is fine, too
+        ( "foo=", ""),
+        ( " foo =     ", "" ),
+
+        # assignment done at eol
+        ( "foo=$(CC)\nfoo bar baz=$(LD)\n", "" ), 
+
+        ( "today != $(shell date)", "" ),
+        ( "this is a test = this is a test", "" ),
+    )
+
+    for test in assignment_tests : 
+        s,v = test
+        print("test={0}".format(s))
+        my_iter = ScannerIterator(s)
+
+        tokens = tokenize_assignment_or_rule(my_iter)
+        print( "tokens={0}".format(str(tokens)) )
+
+        # AssignmentExpression :=  Expression AssignOp Expression
+        assert isinstance(tokens,AssignmentExpression)
+        assert isinstance(tokens[0],Expression)
+        assert isinstance(tokens[1],AssignOp)
+        assert isinstance(tokens[2],Expression),(type(tokens[2]),)
+
+#        print( "string={0}".format(my_iter))
+        print("\n")
+
 @depth_checker
-def recurse(foo,bar,baz):
-    recurse(foo+1,bar+1,baz+1)
+def recurse_test(foo,bar,baz):
+    recurse_test(foo+1,bar+1,baz+1)
 
 def internal_tests():
     assert isinstance(VarRef([]),Symbol)
@@ -723,7 +855,7 @@ def internal_tests():
     print("v={0}".format(str(v)))
 
     try : 
-        recurse(10,20,30)
+        recurse_test(10,20,30)
     except NestedTooDeep:
         depth_reset()
     else:
@@ -732,8 +864,9 @@ def internal_tests():
 
 def test():
 #    internal_tests()
-    variable_ref_test()
-    statement_test()
+#    variable_ref_test()
+#    statement_test()
+    assignment_test()
 
 def main():
     import sys
