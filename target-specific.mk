@@ -35,5 +35,11 @@ rules: CC=potato-cc LD=potato-ld spaces CROSS_COMPILE=potato $(FOO) potato
 rules:
 	@echo $@ CC=@@$(CC)@@ LD=@@$(LD)@@ CROSS_COMPILE=$(CROSS_COMPILE) TEST=$(this is a test)
 
-more-spaces : 
+# GNU Make only preserves one trailing space.
+# Leading spaces are discarded.
+# Comment is successfully ignored.
+more-spaces :   CC   =   single-trailing-space-cc 
+more-spaces :   LD    =     lots-of-trailing-spaces-ld      # I am a comment
+more-spaces:
+	@echo $@ CC=@@$(CC)@@ LD=@@$(LD)@@ TEST=$(this is a test)
 
