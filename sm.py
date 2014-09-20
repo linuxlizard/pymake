@@ -287,9 +287,11 @@ def tokenize_assignment_or_rule(string):
         # re-tokenize as a rule (backtrack)
         lhs = tokenize_statement_LHS(string,whitespace)
     
-        # TODO add rule RHS
+        # add rule RHS
+        statement = list(lhs)
+        statement.append( tokenize_rule_RHS(string) )
 
-        return lhs
+        return RuleExpression( statement ) 
 
     # The statement is an assignment. Tokenize rest of line as an assignment.
     statement = list(lhs)
@@ -454,6 +456,10 @@ def tokenize_statement_LHS(string,separators=""):
         return Expression(token_list), RuleOp("::") 
 
     # don't raise error; just return assuming rest of string is happy 
+
+@depth_checker
+def tokenize_assign_RHS(string):
+    pass
 
 @depth_checker
 def tokenize_assign_RHS(string):
