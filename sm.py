@@ -496,7 +496,8 @@ def tokenize_rule_prereq_or_assign(string):
 @depth_checker
 def tokenize_rule_RHS(string):
 
-    # RHS ::= symbols               -->  simple rule's prerequisites
+    # RHS ::=                       -->  empty perfectly valid
+    #     ::= symbols               -->  simple rule's prerequisites
     #     ::= symbols : symbols     -->  implicit pattern rule
     #     ::= symbols | symbols     -->  order only prerequisite
     #     ::= assignment            -->  target specific assignment 
@@ -600,6 +601,9 @@ def tokenize_rule_RHS(string):
             if c==':':
                 # maybe ::= 
                 state = state_double_colon
+            elif c=='=':
+                # definitely an assign; bail out and we'll retokenize as assign
+                return None
             else:
                 # implicit pattern rule
                 # TODO
@@ -1059,8 +1063,13 @@ def rule_rhs_test():
         ( "CC?=mycc", () ),
         ( "CC!=mycc", () ),
 
-        # static pattern rule
+        # static pattern rule TODO
 #        ( ": %.o: %.c", () ),
+
+        # order only prereq
+        ( "| $(OBJDIR)", () ),
+        ( "$(SRC) | $(OBJDIR)", () ),
+
     )
 
     for test in rule_rhs_test_list : 
@@ -1071,12 +1080,29 @@ def rule_rhs_test():
         tokens = tokenize_rule_prereq_or_assign(my_iter)
         print( "tokens={0}".format(str(tokens)) )
 
+def rule_test() :
+    # parse a full rule! 
+    rule_test_list = ( 
+        ( "all : this is a test", () ),
+        ( "all : ", () ),
+        ( "all : CC=gcc", () ),
+    )
+
+    for test in rule_test_list : 
+        s,v = test
+        print("test={0}".format(s))
+        my_iter = ScannerIterator(s)
+
+        tokens = tokenize_assignment_or_rule(my_iter)
+        print( "tokens={0}".format(str(tokens)) )
+
 def test():
 #    internal_tests()
 #    variable_ref_test()
 #    statement_test()
 #    assignment_test()
-    rule_rhs_test()
+#    rule_rhs_test()
+    rule_test()
 
 def main():
     import sys
