@@ -206,6 +206,9 @@ class AssignmentExpression(Expression):
 class RuleExpression(Expression):
     pass
 
+class PrerequisiteList(Expression):
+    pass
+
 def comment(string):
     state_start = 1
     state_eat_comment = 2
@@ -375,7 +378,7 @@ def tokenize_statement_LHS(string,separators=""):
 
             elif c in set("?+!"):
                 # maybe assignment ?= += !=
-                # cheat and peakahead
+                # cheat and peekahead
                 if string.lookahead()=='=':
                     string.next()
                     token_list.append(Literal(token.rstrip()))
@@ -458,8 +461,167 @@ def tokenize_statement_LHS(string,separators=""):
     # don't raise error; just return assuming rest of string is happy 
 
 @depth_checker
-def tokenize_assign_RHS(string):
-    pass
+def tokenize_rule_prereq_or_assign(string):
+    # We are on the RHS of a rule's : or ::
+    # We may have a set of prerequisites
+    # or we may have a target specific assignment.
+
+    # save current position in the token stream
+    string.push_state()
+    rhs = tokenize_rule_RHS(string)
+
+    # Not a prereq. We found ourselves an assignment statement.
+    if rhs is None : 
+        string.pop_state()
+
+        # We have target-specifc assignment. For example:
+        # foo : CC=intel-cc
+        # retokenize as an assignment statement
+        lhs = tokenize_statement_LHS(string)
+        statement = list(lhs)
+
+        assert lhs[-1].string in assignment_operators
+
+        statement.append( tokenize_assign_RHS(string) )
+        rhs = AssignmentExpression( statement )
+    else : 
+        assert isinstance(rhs,PrerequisiteList)
+
+    # stupid human check
+    for token in rhs : 
+        assert isinstance(token,Symbol),(type(token),token)
+
+    return rhs
+
+@depth_checker
+def tokenize_rule_RHS(string):
+
+    # RHS ::= symbols               -->  simple rule's prerequisites
+    #     ::= symbols : symbols     -->  implicit pattern rule
+    #     ::= symbols | symbols     -->  order only prerequisite
+    #     ::= assignment            -->  target specific assignment 
+    state_start = 1
+    state_word = 2
+    state_colon = 3
+    state_double_colon = 4
+    state_dollar = 6
+
+    state = state_start
+    token = ""
+    token_list = []
+
+    for c in string :
+        print("p c={0} state={1} idx={2}".format(c,state,string.idx))
+
+        if state==state_start :
+            if c=='$':
+                state = state_dollar
+            elif c=='#':
+                string.pushback()
+                # eat comment until end of line
+                comment(string)
+                # bye!
+                break
+            elif not c in whitespace :
+                string.pushback()
+                state = state_word
+
+        elif state==state_dollar :
+            if c=='$':
+                # literal $
+                token += "$"
+            else:
+                # save token so far 
+                token_list.append(Literal(token.rstrip()))
+                # restart token
+                token = ""
+
+                # jump to variable_ref tokenizer
+                # restore "$" + "(" in the string
+                string.pushback()
+                string.pushback()
+
+                # jump to var_ref tokenizer
+                token_list.append( tokenize_variable_ref(string) )
+
+            state = state_word
+
+        elif state==state_word:
+            if c in whitespace :
+                # save token so far 
+                token_list.append(Literal(token.rstrip()))
+                # restart the current token
+                token = ""
+                # restart eating whitespace
+                state = state_start
+
+            elif c=='\\':
+                state = state_backspace
+
+            elif c==':':
+                state = state_colon
+                # assignment? 
+                # implicit pattern rule?
+
+            elif c=='|':
+                # We have hit token indicating order-only prerequisite.
+                # TODO
+                assert 0
+
+            elif c in set("?+!"):
+                # maybe assignment ?= += !=
+                # cheat and peekahead
+                if string.lookahead()=='=':
+                    # definitely an assign; bail out and we'll retokenize as assign
+                    return None
+                else:
+                    token += c
+
+            elif c=='=':
+                # definitely an assign; bail out and we'll retokenize as assign
+                return None
+
+            elif c=='#':
+                string.pushback()
+                # eat comment until end of line
+                comment(string)
+                # bye!
+                token_list.append(Literal(token))
+                return Expression(token_list)
+
+            elif c=='$':
+                state = state_dollar
+
+            else:
+                token += c
+            
+
+        elif state==state_colon : 
+            if c==':':
+                # maybe ::= 
+                state = state_double_colon
+            else:
+                # implicit pattern rule
+                # TODO
+                assert 0
+
+        elif state==state_double_colon : 
+            # found ::
+            if c=='=':
+                # definitely assign
+                # bail out and retokenize as assign
+                return None
+            else:
+                # is this an implicit pattern rule?
+                # TODO
+                assert 0
+
+    print("end of rhs?")
+
+    # save the token we've seen so far
+    token_list.append(Literal(token))
+
+    return PrerequisiteList(token_list)
 
 @depth_checker
 def tokenize_assign_RHS(string):
@@ -483,7 +645,7 @@ def tokenize_assign_RHS(string):
                 # eat comment until end of line
                 comment(string)
                 # bye!
-                return Expression(token_list)
+                break
             elif not c in whitespace :
                 string.pushback()
                 state = state_literal
@@ -868,11 +1030,53 @@ def internal_tests():
         assert 0
     assert depth==0
 
+def rule_rhs_test():
+    rule_rhs_test_list = (
+        # e.g., foo:
+        ( "", () ),
+        ( "   # this is foo", () ),
+
+        # e.g., foo:all
+        ( "all", () ),
+
+        # e.g., foo : this is a test
+        ( "this is a test", () ),
+
+        ( "*.h", () ),
+
+        ( "$(objects)", () ),
+        ( "Makefile $(objects) link.ld", () ),
+        ( "$(SRCS) $(AUX)", () ),
+        ( ".c .o .h", () ),
+
+        # target specific assignment
+        ( "CC=mycc", () ),
+        ( "CC=mycc #this is a comment", () ),
+        ( "CC=mycc ; @echo this is part of the string not a recipe", () ),
+        ( "CC:=mycc", () ),
+        ( "CC::=mycc", () ),
+        ( "CC+=mycc", () ),
+        ( "CC?=mycc", () ),
+        ( "CC!=mycc", () ),
+
+        # static pattern rule
+#        ( ": %.o: %.c", () ),
+    )
+
+    for test in rule_rhs_test_list : 
+        s,v = test
+        print("test={0}".format(s))
+        my_iter = ScannerIterator(s)
+
+        tokens = tokenize_rule_prereq_or_assign(my_iter)
+        print( "tokens={0}".format(str(tokens)) )
+
 def test():
 #    internal_tests()
 #    variable_ref_test()
 #    statement_test()
-    assignment_test()
+#    assignment_test()
+    rule_rhs_test()
 
 def main():
     import sys
