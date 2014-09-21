@@ -15,7 +15,7 @@ SHELL=/bin/echo
 
 all : normal specific other multiple spaces rules more-spaces confused vbar\
 	foovbar whitebar semicolon backslash 2backslash backslash-? \
-        2backslash-?
+        2backslash-? colon
 
 # make -f target-specific.mk normal
 normal : 
@@ -118,8 +118,7 @@ backslash-? :
 2backslash-? :
 	@= xyzcc\\?=$(CC)
 
-
-oneline: OCC=gcc; @echo $(CC)
-oneline:
-	@echo $@ foo foo foo $(OCC)
+colon : CC:=:
+colon : 
+	@= :=$(CC)
 
