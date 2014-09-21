@@ -26,6 +26,13 @@ def validate(infile):
         if len(line)<=0:
             return
 
+        # Make 3.81 automatically prepends "-c" onto recipe lines when
+        # launching SHELL 
+        # Make >= 3.82 has SHELLOPTS to override 
+        if line.startswith("-c "):
+            line = line[3:]
+
+        print("line={0}".format(line))
         separator = line[0]
         fields = line[2:].split(separator)
         assert len(fields)==2,(len(fields),(line,fields))
