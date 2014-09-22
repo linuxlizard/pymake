@@ -144,6 +144,10 @@ class Symbol(object):
         # create a string such as "Literal(all)"
         return "{0}({1})".format(self.__class__.__name__,self.string)
 
+    def __eq__(self,rhs):
+        # lhs is self
+        return self.string==rhs.string
+
 class Literal(Symbol):
     # A literal found in the token stream. Store as a string.
     pass
@@ -166,6 +170,7 @@ class Expression(Symbol):
 
         # sanity check
         for t in self.token_list :
+#            print("t={0}".format( t ) )
             assert isinstance(t,Symbol), (type(t),t)
 
     def __str__(self):
@@ -178,6 +183,21 @@ class Expression(Symbol):
 
     def __getitem__(self,idx):
         return self.token_list[idx]
+
+    def __eq__(self,rhs):
+        # lhs is self
+        # rhs better be another expression
+        assert isinstance(rhs,Expression),(type(rhs),rhs)
+
+        if len(self.token_list) != len(rhs.token_list):
+            return False
+
+        for tokens in zip(self.token_list,rhs.token_list) :
+            # will recurse into sub-expressions
+            if not tokens[0] == tokens[1] :
+                return False
+
+        return True
 
 class VarRef(Expression):
     # A variable reference found in the token stream. Save as a nested set of
@@ -292,7 +312,7 @@ def tokenize_assignment_or_rule(string):
     
         # add rule RHS
         statement = list(lhs)
-        statement.append( tokenize_rule_RHS(string) )
+        statement.append( tokenize_rule_prereq_or_assign(string) )
 
         return RuleExpression( statement ) 
 
@@ -512,7 +532,7 @@ def tokenize_rule_RHS(string):
     token_list = []
 
     for c in string :
-        print("p c={0} state={1} idx={2}".format(c,state,string.idx))
+#        print("p c={0} state={1} idx={2}".format(c,state,string.idx))
 
         if state==state_start :
             if c=='$':
@@ -619,8 +639,6 @@ def tokenize_rule_RHS(string):
                 # is this an implicit pattern rule?
                 # TODO
                 assert 0
-
-    print("end of rhs?")
 
     # save the token we've seen so far
     token_list.append(Literal(token))
@@ -1026,6 +1044,10 @@ def internal_tests():
     v = VarRef( [VarRef([Literal("qq")]),] )
     print("v={0}".format(str(v)))
 
+    # 
+    # Verify my recursion circuit breaker.
+    # (Much more shallow than Python's built-in recursion depth checker.)
+    #
     try : 
         recurse_test(10,20,30)
     except NestedTooDeep:
@@ -1033,6 +1055,44 @@ def internal_tests():
     else:
         assert 0
     assert depth==0
+
+    # 
+    # Verify == operator
+    # The equality operator mostly used in regression tests.
+    # 
+    lit1 = Literal("all")
+    lit2 = Literal("all")
+    assert lit1==lit2
+
+    lit1 = Literal("all")
+    lit2 = Literal("foo")
+    assert lit1!=lit2
+
+    for s in rule_operators : 
+        op1 = RuleOp(s)
+        op2 = RuleOp(s)
+        assert op1==op2
+
+    for s in assignment_operators : 
+        op1 = AssignOp(s)
+        op2 = AssignOp(s)
+        assert op1==op2
+
+    exp1 = RuleExpression( ( Expression( (Literal("all"),) ),
+                             RuleOp(":"),
+                             PrerequisiteList( () ) )
+                        ) 
+    exp2 = RuleExpression( (  Expression( (Literal("all"),) ),
+                             RuleOp(":"),
+                             PrerequisiteList( () ) )
+                        ) 
+    assert exp1==exp2
+
+    exp2 = RuleExpression( (  Expression( (Literal("all"),) ),
+                             RuleOp("::"),
+                             PrerequisiteList( () ) )
+                        ) 
+    assert exp1!=exp2
 
 def rule_rhs_test():
     rule_rhs_test_list = (
@@ -1080,29 +1140,12 @@ def rule_rhs_test():
         tokens = tokenize_rule_prereq_or_assign(my_iter)
         print( "tokens={0}".format(str(tokens)) )
 
-def rule_test() :
-    # parse a full rule! 
-    rule_test_list = ( 
-        ( "all : this is a test", () ),
-        ( "all : ", () ),
-        ( "all : CC=gcc", () ),
-    )
-
-    for test in rule_test_list : 
-        s,v = test
-        print("test={0}".format(s))
-        my_iter = ScannerIterator(s)
-
-        tokens = tokenize_assignment_or_rule(my_iter)
-        print( "tokens={0}".format(str(tokens)) )
-
 def test():
-#    internal_tests()
+    internal_tests()
 #    variable_ref_test()
 #    statement_test()
 #    assignment_test()
 #    rule_rhs_test()
-    rule_test()
 
 def main():
     import sys
