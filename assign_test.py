@@ -55,8 +55,13 @@ def assignment_test():
         assert isinstance(tokens[1],AssignOp)
         assert isinstance(tokens[2],Expression),(type(tokens[2]),)
 
-#        print( "string={0}".format(my_iter))
+        print( tokens.makefile() )
+
         print("\n")
+
+    # test round trip
+#    tokens=AssignmentExpression( [Expression( [Literal("MANPAGES")]),AssignOp("="),Expression( [Literal(""),VarRef( [Literal("PROGS-yes:%=doc/%.1")]),Literal("    "),VarRef( [Literal("PROGS-yes:%=doc/%-all.1")]),Literal("    "),VarRef( [Literal("COMPONENTS-yes:%=doc/%.1")]),Literal("    "),VarRef( [Literal("LIBRARIES-yes:%=doc/%.3")]),Literal("")])])
+#    print( tokens.makefile() )
 
 if __name__=='__main__':
     assignment_test()

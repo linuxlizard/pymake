@@ -149,7 +149,7 @@ class Symbol(object):
         # lhs is self
         return self.string==rhs.string
 
-    def makestring(self):
+    def makefile(self):
         # create a Makefile from this object
         return self.string
 
@@ -210,11 +210,11 @@ class Expression(Symbol):
 
         return True
 
-    def makestring(self):
+    def makefile(self):
         # Build a Makefile string from this rule expression.
         s = ""
         for t in self.token_list : 
-            s += t.makestring()
+            s += t.makefile()
         return s
             
 
@@ -230,10 +230,10 @@ class VarRef(Expression):
     # $(abc$(def)xyz)           ->  VarExp(abc,VarRef(def),Literal(xyz),)
     # $(info this is a varref)  ->  VarExp(info this is a varref)
 
-    def makestring(self):
+    def makefile(self):
         s = "$("
         for t in self.token_list : 
-            s += t.makestring()
+            s += t.makefile()
 
         s += ")"
         return s
@@ -252,9 +252,9 @@ class RuleExpression(Expression):
     pass
 
 class PrerequisiteList(Expression):
-    def makestring(self):
+    def makefile(self):
         # space separated
-        s = " ".join( [ t.makestring() for t in self.token_list ] )
+        s = " ".join( [ t.makefile() for t in self.token_list ] )
         return s
 
 def comment(string):
@@ -564,7 +564,7 @@ def tokenize_rule_RHS(string):
     token_list = []
 
     for c in string :
-#        print("p c={0} state={1} idx={2}".format(c,state,string.idx))
+        print("p c={0} state={1} idx={2}".format(c,state,string.idx))
 
         if state==state_start :
             if c=='$':
@@ -574,7 +574,14 @@ def tokenize_rule_RHS(string):
                 # eat comment until end of line
                 comment(string)
                 # bye!
-                break
+                return PrerequisiteList(token_list)
+
+            elif c==';':
+                # end of prerequisites; start of recipe
+                # note we don't preserve token because it will be empty at this
+                # point
+                # bye!
+                return PrerequisiteList(token_list)
             elif not c in whitespace :
                 string.pushback()
                 state = state_word
@@ -644,6 +651,11 @@ def tokenize_rule_RHS(string):
 
             elif c=='$':
                 state = state_dollar
+
+            elif c==';':
+                # end of prerequisites; start of recipe
+                token_list.append(Literal(token))
+                return PrerequisiteList(token_list)
 
             else:
                 token += c

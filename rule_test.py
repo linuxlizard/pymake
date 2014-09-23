@@ -38,6 +38,27 @@ def rule_test() :
                     ),
                 ),
 
+        # no whitespace
+        ( "all:", RuleExpression(
+                        ( Expression( (Literal("all"),) ),
+                          RuleOp(":"),
+                          PrerequisiteList( 
+                                ( Literal(""), ) 
+                          ),
+                        ),
+                    ),
+                ),
+        # lots of whitespace
+        ( "          all          :                                      ", 
+                    RuleExpression(
+                        ( Expression( (Literal("all"),) ),
+                          RuleOp(":"),
+                          PrerequisiteList( 
+                                ( Literal(""), ) 
+                          ),
+                        ),
+                    ),
+                ),
         # target specific variables
         ( "all : CC=gcc",
                           RuleExpression(
@@ -190,21 +211,43 @@ def rule_test() :
                         RuleExpression( [Expression( [Literal(""),VarRef( [Literal("hello "),VarRef( [Literal("there "),VarRef( [Literal("all "),VarRef( [Literal("you")]),Literal(" rabbits")]),Literal("")]),Literal("")]),Literal("")]),RuleOp(":"),PrerequisiteList( [Literal(""),VarRef( [Literal("hello")]),Literal(""),Literal("there"),Literal("all"),Literal("you"),Literal("rabbits")])])
         ),
 
-        ( "all : ; @echo $@", RuleExpression( 
-                                [ Expression( (Literal("all"),) ),
-                                   RuleOp(":"),
-                                   PrerequisiteList( [Literal(";"),Literal("@echo"),Literal(""),VarRef( [Literal("@")]),Literal("")] ) 
-                                ] 
-                              ),
-                            ),
+        ( "all : ; @echo $@", 
+                    RuleExpression(
+                        [ Expression( (Literal("all"),) ),
+                          RuleOp(":"),
+                          PrerequisiteList( [] ),
+                        ],
+                    ),
+            ),
 
+        ( "all:foo   # this is a comment",  
+                    RuleExpression(
+                        [ Expression( (Literal("all"),) ),
+                          RuleOp(":"),
+                          PrerequisiteList( [ Literal("foo"), ] ),
+                        ],
+                    ),
+            ),
+        ( "all : foo ; @echo $@", 
+                    RuleExpression(
+                        [ Expression( (Literal("all"),) ),
+                          RuleOp(":"),
+                          PrerequisiteList( [ Literal("foo"), ] ),
+                        ],
+                    ),
+            ),
+        
         # from ffmpeg
-        ( "doc/%-all.html: TAG = HTML", () ),
-        ( "doc/%-all.html: doc/%.texi $(SRC_PATH)/doc/t2h.init $(GENTEXI)", () ),
+        ( "doc/%-all.html: TAG = HTML",
+            RuleExpression( [Expression( [Literal("doc/%-all.html")]),RuleOp(":"),AssignmentExpression( [Expression( [Literal("TAG")]),AssignOp("="),Expression( [Literal("HTML")])])])
+            ),
+        ( "doc/%-all.html: doc/%.texi $(SRC_PATH)/doc/t2h.init $(GENTEXI)", RuleExpression( [Expression( [Literal("doc/%-all.html")]),RuleOp(":"),PrerequisiteList( [Literal("doc/%.texi"),Literal(""),VarRef( [Literal("SRC_PATH")]),Literal("/doc/t2h.init"),Literal(""),VarRef( [Literal("GENTEXI")]),Literal("")])])  ),
         
         # static pattern rule
+        # TODO
 
         # order only prereq
+        # TODO
     )
 
     for test in rule_test_list : 
@@ -219,14 +262,16 @@ def rule_test() :
 
         assert tokens==v
 
+        assert isinstance(tokens,RuleExpression)
+
+        print( tokens.makefile() )
         print()
 
+#    # Can we round trip? (the following is the output of the tokenizer) Does it build?
+#    tokens=RuleExpression( [Expression( [Literal(""),VarRef( [Literal("hello "),VarRef( [Literal("there "),VarRef( [Literal("all "),VarRef( [Literal("you")]),Literal(" rabbits")]),Literal("")]),Literal("")]),Literal("")]),RuleOp(":"),PrerequisiteList( [Literal(""),VarRef( [Literal("hello")]),Literal(""),Literal("there"),Literal("all"),Literal("you"),Literal("rabbits")])]) 
+#
+#    print(tokens.makefile())
+
 if __name__=='__main__':
-    # Can we round trip? (the following is the output of the tokenizer) Does it build?
-    tokens=RuleExpression( [Expression( [Literal(""),VarRef( [Literal("hello "),VarRef( [Literal("there "),VarRef( [Literal("all "),VarRef( [Literal("you")]),Literal(" rabbits")]),Literal("")]),Literal("")]),Literal("")]),RuleOp(":"),PrerequisiteList( [Literal(""),VarRef( [Literal("hello")]),Literal(""),Literal("there"),Literal("all"),Literal("you"),Literal("rabbits")])]) 
-
-    print(tokens.makestring())
-
-#    print("tokens={0}".format(str(tokens)))
-#    rule_test()
+    rule_test()
 
