@@ -179,17 +179,24 @@ def rule_test() :
                           ),
                      ),
 
-#        ( "$(hello there all you) rabbits : hello there all you rabbits", () ),
-#        ( "$(hello there all you) rabbits : $(hello) there all you rabbits", () ),
-        ( "$(hello $(there $(all $(you) rabbits))) : $(hello) there all you rabbits", () ),
+        # I'm starting to use the output of the tokenizer, visually verified, as the verification string. 
+        # I hope I don't regret this. :-O   davep 23-Sep-2014
 
-        ( "all : ; @echo $@", RuleExpression
-                                ( (Expression( (Literal("all"),) ),
+        ( "$(hello there all you) rabbits : hello there all you rabbits", RuleExpression( [Expression( [Literal(""),VarRef( [Literal("hello there all you")]),Literal(""),Literal("rabbits")]),RuleOp(":"),PrerequisiteList( [Literal("hello"),Literal("there"),Literal("all"),Literal("you"),Literal("rabbits")])]) ),
+
+        ( "$(hello there all you) rabbits : $(hello) there all you rabbits", RuleExpression( [Expression( [Literal(""),VarRef( [Literal("hello there all you")]),Literal(""),Literal("rabbits")]),RuleOp(":"),PrerequisiteList( [Literal(""),VarRef( [Literal("hello")]),Literal(""),Literal("there"),Literal("all"),Literal("you"),Literal("rabbits")])]) ),
+
+        ( "$(hello $(there $(all $(you) rabbits))) : $(hello) there all you rabbits", 
+                        RuleExpression( [Expression( [Literal(""),VarRef( [Literal("hello "),VarRef( [Literal("there "),VarRef( [Literal("all "),VarRef( [Literal("you")]),Literal(" rabbits")]),Literal("")]),Literal("")]),Literal("")]),RuleOp(":"),PrerequisiteList( [Literal(""),VarRef( [Literal("hello")]),Literal(""),Literal("there"),Literal("all"),Literal("you"),Literal("rabbits")])])
+        ),
+
+        ( "all : ; @echo $@", RuleExpression( 
+                                [ Expression( (Literal("all"),) ),
                                    RuleOp(":"),
-                                   PrerequisiteList( () ) 
-                                  ) 
-                                ) 
+                                   PrerequisiteList( [Literal(";"),Literal("@echo"),Literal(""),VarRef( [Literal("@")]),Literal("")] ) 
+                                ] 
                               ),
+                            ),
 
         # from ffmpeg
         ( "doc/%-all.html: TAG = HTML", () ),
@@ -215,5 +222,11 @@ def rule_test() :
         print()
 
 if __name__=='__main__':
-    rule_test()
+    # Can we round trip? (the following is the output of the tokenizer) Does it build?
+    tokens=RuleExpression( [Expression( [Literal(""),VarRef( [Literal("hello "),VarRef( [Literal("there "),VarRef( [Literal("all "),VarRef( [Literal("you")]),Literal(" rabbits")]),Literal("")]),Literal("")]),Literal("")]),RuleOp(":"),PrerequisiteList( [Literal(""),VarRef( [Literal("hello")]),Literal(""),Literal("there"),Literal("all"),Literal("you"),Literal("rabbits")])]) 
+
+    print(tokens.makestring())
+
+#    print("tokens={0}".format(str(tokens)))
+#    rule_test()
 

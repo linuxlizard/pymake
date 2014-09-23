@@ -149,6 +149,10 @@ class Symbol(object):
         # lhs is self
         return self.string==rhs.string
 
+    def makestring(self):
+        # create a Makefile from this object
+        return self.string
+
 class Literal(Symbol):
     # A literal found in the token stream. Store as a string.
     pass
@@ -206,6 +210,14 @@ class Expression(Symbol):
 
         return True
 
+    def makestring(self):
+        # Build a Makefile string from this rule expression.
+        s = ""
+        for t in self.token_list : 
+            s += t.makestring()
+        return s
+            
+
 class VarRef(Expression):
     # A variable reference found in the token stream. Save as a nested set of
     # tuples representing a tree. 
@@ -218,7 +230,13 @@ class VarRef(Expression):
     # $(abc$(def)xyz)           ->  VarExp(abc,VarRef(def),Literal(xyz),)
     # $(info this is a varref)  ->  VarExp(info this is a varref)
 
-    pass
+    def makestring(self):
+        s = "$("
+        for t in self.token_list : 
+            s += t.makestring()
+
+        s += ")"
+        return s
 
 class AssignmentExpression(Expression):
     def __init__(self,token_list):
@@ -234,7 +252,10 @@ class RuleExpression(Expression):
     pass
 
 class PrerequisiteList(Expression):
-    pass
+    def makestring(self):
+        # space separated
+        s = " ".join( [ t.makestring() for t in self.token_list ] )
+        return s
 
 def comment(string):
     state_start = 1
