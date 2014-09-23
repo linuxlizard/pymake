@@ -672,7 +672,7 @@ def tokenize_assign_RHS(string):
     token_list = []
 
     for c in string :
-        print("a c={0} state={1} idx={2}".format(c,state,string.idx))
+#        print("a c={0} state={1} idx={2}".format(c,state,string.idx))
         if state==state_start :
             if c=='$':
                 state = state_dollar
@@ -1013,46 +1013,6 @@ def statement_test():
         print( "tokens={0}".format(str(tokens)) )
         print("\n")
 #    run_tests_list( rules_tests, tokenize_assignment_or_rule)
-
-def assignment_test():
-
-    assignment_tests = ( 
-        ("foo=baz",""),
-        ("foo=$(baz)",""),
-        ("foo=$(baz3) $(baz3) $(baz3)",""),
-
-        # leading spaces discarded, trailing spaces preserved
-        ("foo=     $(baz3) $(baz3) $(baz3)",""),
-        ("foo= this is a test # this is a comment",""),
-        ("foo= this is a test # this is a comment\nbar=baz",""),
-
-        # empty is fine, too
-        ( "foo=", ""),
-        ( " foo =     ", "" ),
-
-        # assignment done at eol
-        ( "foo=$(CC)\nfoo bar baz=$(LD)\n", "" ), 
-
-        ( "today != $(shell date)", "" ),
-        ( "this is a test = this is a test", "" ),
-    )
-
-    for test in assignment_tests : 
-        s,v = test
-        print("test={0}".format(s))
-        my_iter = ScannerIterator(s)
-
-        tokens = tokenize_assignment_or_rule(my_iter)
-        print( "tokens={0}".format(str(tokens)) )
-
-        # AssignmentExpression :=  Expression AssignOp Expression
-        assert isinstance(tokens,AssignmentExpression)
-        assert isinstance(tokens[0],Expression)
-        assert isinstance(tokens[1],AssignOp)
-        assert isinstance(tokens[2],Expression),(type(tokens[2]),)
-
-#        print( "string={0}".format(my_iter))
-        print("\n")
 
 @depth_checker
 def recurse_test(foo,bar,baz):
