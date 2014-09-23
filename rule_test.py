@@ -191,6 +191,10 @@ def rule_test() :
                                 ) 
                               ),
 
+        # from ffmpeg
+        ( "doc/%-all.html: TAG = HTML", () ),
+        ( "doc/%-all.html: doc/%.texi $(SRC_PATH)/doc/t2h.init $(GENTEXI)", () ),
+        
         # static pattern rule
 
         # order only prereq
@@ -204,9 +208,11 @@ def rule_test() :
 
         tokens = tokenize_assignment_or_rule(my_iter)
         print( "tokens={0}".format(str(tokens)) )
-        print( "     v={0}".format(str(v)) )
+#        print( "     v={0}".format(str(v)) )
 
         assert tokens==v
+
+        print()
 
 if __name__=='__main__':
     rule_test()

@@ -35,6 +35,10 @@ def assignment_test():
 
         ( "today != $(shell date)", "" ),
         ( "this is a test = this is a test", "" ),
+
+        # from ffmpeg
+        ( "LDLIBS := $(shell pkg-config --libs $(FFMPEG_LIBS)) $(LDLIBS)", ""),
+        ( " MANPAGES    = $(PROGS-yes:%=doc/%.1)    $(PROGS-yes:%=doc/%-all.1)    $(COMPONENTS-yes:%=doc/%.1)    $(LIBRARIES-yes:%=doc/%.3)", "" ),
     )
 
     for test in assignment_tests : 
