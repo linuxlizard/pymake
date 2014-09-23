@@ -142,7 +142,8 @@ class Symbol(object):
 
     def __str__(self):
         # create a string such as "Literal(all)"
-        return "{0}({1})".format(self.__class__.__name__,self.string)
+        return "{0}(\"{1}\")".format(self.__class__.__name__,self.string)
+#        return "{0}({1})".format(self.__class__.__name__,self.string)
 
     def __eq__(self,rhs):
         # lhs is self
@@ -175,10 +176,13 @@ class Expression(Symbol):
 
     def __str__(self):
         # return a ()'d list of our tokens
-        s = "{0}(".format(self.__class__.__name__)
-        for t in self.token_list :
-            s += str(t)
-        s += ")"
+        s = "{0}( [".format(self.__class__.__name__)
+        if 0:
+            for t in self.token_list :
+                s += str(t)
+        else:
+            s += ",".join( [ str(t) for t in self.token_list ] )
+        s += "])"
         return s
 
     def __getitem__(self,idx):
@@ -193,7 +197,10 @@ class Expression(Symbol):
             return False
 
         for tokens in zip(self.token_list,rhs.token_list) :
-            # will recurse into sub-expressions
+            if tokens[0].__class__ != tokens[1].__class__ : 
+                return False
+
+            # Recurse into sub-expressions. It's tokens all the way down!
             if not tokens[0] == tokens[1] :
                 return False
 
@@ -459,6 +466,7 @@ def tokenize_statement_LHS(string,separators=""):
                 string.pushback()
                 # successfully found LHS 
                 return Expression(token_list),RuleOp(":")
+
         elif state==state_colon_colon :
             # preceeding chars are "::"
             if c=='=':
@@ -467,6 +475,7 @@ def tokenize_statement_LHS(string,separators=""):
             string.pushback()
             # successfully found LHS 
             return Expression(token_list), RuleOp("::") 
+
         else:
             assert 0,state
 
@@ -521,11 +530,13 @@ def tokenize_rule_RHS(string):
     #     ::= symbols : symbols     -->  implicit pattern rule
     #     ::= symbols | symbols     -->  order only prerequisite
     #     ::= assignment            -->  target specific assignment 
+    #
+    # RHS terminated by comment, EOL, ';'
     state_start = 1
     state_word = 2
     state_colon = 3
     state_double_colon = 4
-    state_dollar = 6
+    state_dollar = 5
 
     state = state_start
     token = ""
@@ -640,6 +651,9 @@ def tokenize_rule_RHS(string):
                 # TODO
                 assert 0
 
+        else : 
+            assert 0, state
+
     # save the token we've seen so far
     token_list.append(Literal(token))
 
@@ -717,6 +731,9 @@ def tokenize_assign_RHS(string):
                 token_list.append(Literal(token))
                 return Expression(token_list)
 
+        else:
+            assert 0, state
+
     # end of string
     # save what we've seen so far
     token_list.append(Literal(token))
@@ -785,6 +802,10 @@ def tokenize_variable_ref(string):
                     token_list.append( tokenize_variable_ref(string) )
             else:
                 token += c
+
+        else:
+            assert 0, state
+
 
     raise ParseError()
 
