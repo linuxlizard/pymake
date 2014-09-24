@@ -300,3 +300,11 @@ foo:
 
 $(shell echo target $$$$) : $(shell echo prereq $$$$)
 
+# which order are the prereqs executed?
+# looks to be left-to-right
+order-foo : order-bar order-baz order-blah ; @echo $@
+
+order-baz : ; @echo $@
+order-blah : ; @echo $@
+order-bar : ; @echo $@
+
