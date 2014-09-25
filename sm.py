@@ -19,6 +19,8 @@ assignment_operators = {"=","?=",":=","::=","+=","!="}
 rule_operators = { ":", "::" }
 eol = set("\r\n")
 
+recipe_prefix = "\t"
+
 # 4.8 Special Built-In Target Names
 built_in_targets = {
         ".PHONY",
@@ -142,6 +144,7 @@ class Symbol(object):
 
     def __str__(self):
         # create a string such as "Literal(all)"
+        # TODO handle embedded " and ' (with backslashes I guess?)
         return "{0}(\"{1}\")".format(self.__class__.__name__,self.string)
 #        return "{0}({1})".format(self.__class__.__name__,self.string)
 
@@ -255,6 +258,18 @@ class PrerequisiteList(Expression):
     def makefile(self):
         # space separated
         s = " ".join( [ t.makefile() for t in self.token_list ] )
+        return s
+
+class Recipe(Expression):
+    # A single line of a recipe
+    pass
+
+class RecipeList( Expression ) : 
+    # A collection of recipes
+
+    def makefile(self):
+        # newline separated
+        s = "\t"+"\n\t".join( [ t.makefile() for t in self.token_list ] )
         return s
 
 def comment(string):
@@ -839,8 +854,152 @@ def tokenize_variable_ref(string):
         else:
             assert 0, state
 
-
     raise ParseError()
+
+def filter_char(c):
+    # make printable char
+    if ord(c) < ord(' '):
+        return hex(ord(c))
+    return c
+
+@depth_checker
+def tokenize_recipe(string):
+    # Collect characters together into a token. 
+    # At token boundary, store token as a Literal. Add to token_list. Reset token.
+    # A variable ref is a token boundary, and EOL is a token boundary.
+    # At recipe boundary, create a Recipe from the token_list. 
+    #   Also store Recipe in recipe_list. Reset token_list.
+    # At rule boundary, create a RecipeList from the recipe_list.
+
+    state_start = -1
+    state_recipe = 1
+    state_lhs_white = 2
+    state_seeking_next_recipe = 3
+    state_space = 4
+    state_dollar = 5
+    state_backslash = 6
+    
+    state = state_start
+    token = ""
+    token_list = []
+    recipe_list = []
+
+    for c in string :
+        print("e c={0} state={1} idx={3} token=\"{2}\"".format(
+                filter_char(c),state,token,string.idx))
+        if state==state_start : 
+            # eat leading recipe_prefix
+            if c==recipe_prefix :
+                state = state_lhs_white
+            else:
+                raise ParseError()
+                
+        elif state_lhs_white :
+            # Whitespace after the <tab> (or .RECIPEPREFIX) until the first
+            # shell-able command is eaten.
+            if c in eol : 
+                # empty line
+                state = state_start
+            elif not c in whitespace : 
+                string.pushback()
+                state = state_recipe
+
+        elif state==state_recipe :
+            if c in eol : 
+                # save what we've seen so far
+                token_list.append( Literal(token) )
+                recipe_list.append( Recipe( token_list ) )
+                token = ""
+                token_list = []
+                # TODO handle \r \r\n \n\r \n
+                state = state_seeking_next_recipe
+            elif c=='#':
+                # save what we've seen so far
+                token_list.append( Literal(token) )
+                recipe_list.append( Recipe( token_list ) )
+                token = ""
+                token_list = []
+                # eat the comment 
+                string.pushback()
+                comment(string)
+                state = state_seeking_next_recipe
+            elif c=='$':
+                state = state_dollar
+            elif c=='\\':
+                state = state_backslash
+            else:
+                token += c
+
+        elif state==state_seeking_next_recipe : 
+            if c=='#':
+                # eat the comment 
+                string.pushback()
+                comment(string)
+            elif c==recipe_prefix :
+                # jump back to start to eat any more leading whitespace
+                # (leading whitespace is stripped, trailing whitespace is
+                # preserved)
+                state.pushback()
+                state = state_start
+            elif c in whitespace: 
+                state = state_space
+            elif c in eol : 
+                # ignore EOL, continue seeking
+                pass
+            else:
+                # found some other character therefore no next recipe
+                # bye!
+                string.pushback()
+                return RecipeList(recipe_list)
+
+        elif state==state_space : 
+            # eat spaces until EOL or !spaces
+            # TODO what happens if .RECIPEPREFIX != <tab>? Is <tab> now
+            # whitespace?
+            if c in eol : 
+                state = state_seeking_next_recipe
+            elif c=='#' :
+                # eat the comment 
+                string.pushback()
+                comment(string)
+                state = state_seeking_next_recipe
+            elif not c in whitespace :
+                # buh-bye!
+                string.pushback()
+                return RecipeList(recipe_list)
+
+        elif state==state_dollar : 
+            if c=='$':
+                # literal $
+                token += "$"
+            else:
+                # save token so far; note no rstrip()!
+                token_list.append(Literal(token))
+                # restart token
+                token = ""
+
+                # jump to variable_ref tokenizer
+                # restore "$" + "(" in the string
+                string.pushback()
+                string.pushback()
+
+                # jump to var_ref tokenizer
+                token_list.append( tokenize_variable_ref(string) )
+
+            state=state_recipe
+
+        elif state==state_backslash : 
+            # TODO
+            assert 0
+
+        else:
+            assert 0,state
+
+    # end of string
+    # save what we've seen so far
+    token_list.append( Literal(token) )
+    recipe_list.append( Recipe(token_list) )
+    return RecipeList( recipe_list )
 
 class ScannerIterator(object):
     # string iterator that allows look ahead and push back
@@ -878,6 +1037,10 @@ class ScannerIterator(object):
 
     def pop_state(self):
         self.idx = self.state_stack.pop()
+
+    def remain(self):
+        # Test/debug method. Return what remains of the string.
+        return self.string[self.idx:]
 
 def parse_file(infilename):
     infile = open(infilename)
