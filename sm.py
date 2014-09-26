@@ -871,57 +871,64 @@ def tokenize_recipe(string):
     #   Also store Recipe in recipe_list. Reset token_list.
     # At rule boundary, create a RecipeList from the recipe_list.
 
-    state_start = -1
-    state_recipe = 1
+    state_start = 1
     state_lhs_white = 2
     state_seeking_next_recipe = 3
-    state_space = 4
-    state_dollar = 5
-    state_backslash = 6
+    state_recipe = 4
+    state_space = 5
+    state_dollar = 6
+    state_backslash = 7
     
     state = state_start
     token = ""
     token_list = []
     recipe_list = []
 
+    sanity_count = 0
+
     for c in string :
-        print("e c={0} state={1} idx={3} token=\"{2}\"".format(
-                filter_char(c),state,token,string.idx))
+        print("e c={0} state={1} idx={2} token=\"{3}\"".format(
+                filter_char(c),state,string.idx,token))
+
+        sanity_count += 1
+#        assert sanity_count < 50
+
         if state==state_start : 
-            # eat leading recipe_prefix
-            if c==recipe_prefix :
+            # Must arrive here right after the end of the prerequisite list.
+            # Should find either a ; or an EOL
+            # example:
+            #
+            # foo : <eol>
+            # <tab>@echo bar
+            #
+            # foo : ; @echo bar
+            #
+            if c in eol:
+                state = state_seeking_next_recipe 
+            elif c==';':
                 state = state_lhs_white
             else:
                 raise ParseError()
                 
-        elif state_lhs_white :
+        elif state==state_lhs_white :
             # Whitespace after the <tab> (or .RECIPEPREFIX) until the first
             # shell-able command is eaten.
-            if c in eol : 
-                # empty line
-                state = state_start
-            elif not c in whitespace : 
+            if not c in whitespace : 
                 string.pushback()
                 state = state_recipe
+            else:
+                # eat the whitespace
+                pass
 
         elif state==state_recipe :
             if c in eol : 
                 # save what we've seen so far
                 token_list.append( Literal(token) )
                 recipe_list.append( Recipe( token_list ) )
+                # reset our collecting
                 token = ""
                 token_list = []
                 # TODO handle \r \r\n \n\r \n
-                state = state_seeking_next_recipe
-            elif c=='#':
-                # save what we've seen so far
-                token_list.append( Literal(token) )
-                recipe_list.append( Recipe( token_list ) )
-                token = ""
-                token_list = []
-                # eat the comment 
-                string.pushback()
-                comment(string)
                 state = state_seeking_next_recipe
             elif c=='$':
                 state = state_dollar
@@ -935,20 +942,20 @@ def tokenize_recipe(string):
                 # eat the comment 
                 string.pushback()
                 comment(string)
+                # continue seeking next recipe
             elif c==recipe_prefix :
                 # jump back to start to eat any more leading whitespace
                 # (leading whitespace is stripped, trailing whitespace is
                 # preserved)
-                state.pushback()
-                state = state_start
+                state = state_lhs_white
             elif c in whitespace: 
                 state = state_space
             elif c in eol : 
                 # ignore EOL, continue seeking
                 pass
             else:
-                # found some other character therefore no next recipe
-                # bye!
+                # Found some other character therefore no next recipe
+                # therefore end of recipe list. Bye!
                 string.pushback()
                 return RecipeList(recipe_list)
 
@@ -972,7 +979,9 @@ def tokenize_recipe(string):
             if c=='$':
                 # literal $
                 token += "$"
+                state = state_recipe
             else:
+                # definitely a variable ref of some sort
                 # save token so far; note no rstrip()!
                 token_list.append(Literal(token))
                 # restart token
@@ -1033,9 +1042,11 @@ class ScannerIterator(object):
         self.idx -= 1
 
     def push_state(self):
+        assert 0 # temp debug
         self.state_stack.append(self.idx)
 
     def pop_state(self):
+        assert 0 # temp debug
         self.idx = self.state_stack.pop()
 
     def remain(self):

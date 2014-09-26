@@ -267,6 +267,15 @@ def rule_test() :
         print( tokens.makefile() )
         print()
 
+
+    # these should all fail
+    fail_tests = ( 
+        # some chars aren't valid in the rule name
+        # TODO find more invalid characters
+        ( "rule-with-; : ", () ),
+
+    )
+
 #    # Can we round trip? (the following is the output of the tokenizer) Does it build?
 #    tokens=RuleExpression( [Expression( [Literal(""),VarRef( [Literal("hello "),VarRef( [Literal("there "),VarRef( [Literal("all "),VarRef( [Literal("you")]),Literal(" rabbits")]),Literal("")]),Literal("")]),Literal("")]),RuleOp(":"),PrerequisiteList( [Literal(""),VarRef( [Literal("hello")]),Literal(""),Literal("there"),Literal("all"),Literal("you"),Literal("rabbits")])]) 
 #
