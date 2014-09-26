@@ -19,6 +19,9 @@ assignment_operators = {"=","?=",":=","::=","+=","!="}
 rule_operators = { ":", "::" }
 eol = set("\r\n")
 
+# eventually will need to port this thing to Windows' CR+LF
+platform_eol = "\n"
+
 recipe_prefix = "\t"
 
 # 4.8 Special Built-In Target Names
@@ -252,6 +255,7 @@ class AssignmentExpression(Expression):
         assert isinstance(self.token_list[2],Expression),(type(self.token_list[2]),)
 
 class RuleExpression(Expression):
+    # TODO add sanity check in constructor
     pass
 
 class PrerequisiteList(Expression):
@@ -265,7 +269,7 @@ class Recipe(Expression):
     pass
 
 class RecipeList( Expression ) : 
-    # A collection of recipes
+    # A collection of Recipe objects
 
     def makefile(self):
         # newline separated
@@ -998,8 +1002,15 @@ def tokenize_recipe(string):
             state=state_recipe
 
         elif state==state_backslash : 
-            # TODO
-            assert 0
+            if not c in eol :
+                # literal \ followed by some char
+                token += '\\'
+                token += c
+            else :
+                # save backslash+newline
+                token += '\\' 
+                token += platform_eol
+            state = state_recipe
 
         else:
             assert 0,state
