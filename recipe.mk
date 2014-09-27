@@ -67,7 +67,7 @@ varrefs : ; @echo $@
 	@echo varref recipe info=$(info inside varref recipes)
 # this $() is executed (seeing the date)
 	@echo varref recipe date=$(shell date)
-    # this $(error IS hit) (this comment is valid but Vim highlights as error)
+    # this next $(error IS hit) (this comment is valid but Vim highlights as error)
 	@echo varref recipe info=$(error inside varref recipes)
 
 end-of-varrefs=yeah this ends varrefs rule for sure
@@ -99,13 +99,13 @@ spaces-in-weird-places : ; @echo = spaces-in-weird-places=$@
 # the trailing whitespace is preserved
 	@echo I have trailing whitespacespaces                  	   	
 
-# this line ends the recipe; note can be interpretted as either an assignment or a shell recipe
+# this <space><tab> line ends the recipe; note can be interpretted as either an assignment or a shell recipe
  	foo=bar printenv "foo"
 $(info = bar printenv "foo"=$(foo))
 
 whitespace-error : ; @echo $@
 # the next line is <space><tab> then the echo
-# error "missing separator"
+# error "missing separator" -- make is expecting a statement (rule|assign|directive)
 # 	@echo space tab
 
 # error "missing separator"
@@ -114,9 +114,15 @@ whitespace-error : ; @echo $@
 ifdef foo
 endif
 
+# the comment should be sent to the shell
+comment-one-liner : ; # this is a comment
+
 # Need to avoid confusion between recipe trailing rule with ';' and the recipes
 # on the next line
 # This is not valid.
 #weird-semicolon:
 #; @echo $@
+
+# tab before the @echo -- works
+single-line-with-tab : ; 	@echo $@
 
