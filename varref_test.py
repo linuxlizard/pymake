@@ -1,4 +1,19 @@
-def variable_ref_test():
+#!/usr/bin/env python3
+
+# test tokenizing variable reference
+#
+# moved to own file 
+# davep 27-sep-2014
+
+import sys
+
+# require Python 3.x 
+if sys.version_info.major < 3:
+    raise Exception("Requires Python 3.x")
+
+from sm import *
+
+def run():
 
     variable_ref_tests = ( 
         # string    result
@@ -62,4 +77,6 @@ def variable_ref_test():
     # this should fail
 #    print( "var={0}".format(tokenize_variable_ref(ScannerIterator("$(CC"))) )
 
+if __name__=='__main__':
+    run()
 

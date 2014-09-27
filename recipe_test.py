@@ -14,7 +14,7 @@ from sm import *
 if sys.version_info.major < 3:
     raise Exception("Requires Python 3.x")
 
-def recipe_test() :
+def run() :
     # parse a full rule! 
     recipe_test_list = ( 
         ( ";echo foo", () ),
@@ -141,5 +141,5 @@ end-of-varrefs=yeah this ends varrefs rule for sure
 
 
 if __name__=='__main__':
-    recipe_test()
+    run()
 

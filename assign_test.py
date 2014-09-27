@@ -14,7 +14,7 @@ from sm import *
 if sys.version_info.major < 3:
     raise Exception("Requires Python 3.x")
 
-def assignment_test():
+def run():
 
     assignment_tests = ( 
         ("foo=baz",""),
@@ -64,5 +64,5 @@ def assignment_test():
 #    print( tokens.makefile() )
 
 if __name__=='__main__':
-    assignment_test()
+    run()
 

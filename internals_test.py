@@ -12,7 +12,7 @@ from sm import *
 def recurse_test(foo,bar,baz):
     recurse_test(foo+1,bar+1,baz+1)
 
-def internal_tests():
+def run():
     assert isinstance(VarRef([]),Symbol)
 
     # $($(qq))
@@ -69,4 +69,6 @@ def internal_tests():
                         ) 
     assert exp1!=exp2
 
+if __name__=='__main__':
+    run()
 

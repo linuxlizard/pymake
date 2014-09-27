@@ -1,4 +1,23 @@
-def statement_test():
+#!/usr/bin/env python3
+
+# Test Makefile statement
+#
+#   statement ::=  rule
+#             ::=  assignment
+#             ::=  directive
+#
+# Originally inside the parser python itself. Moved to own file.
+# davep 27-sep-2014
+
+import sys
+
+# require Python 3.x 
+if sys.version_info.major < 3:
+    raise Exception("Requires Python 3.x")
+
+from sm import *
+
+def run():
     rules_tests = ( 
         # rule LHS
         ( "all:",    ("all",":")),
@@ -43,16 +62,19 @@ def statement_test():
             ( 'I', '$(', 'CC', ')', 'have', '$(', 'LD',')','embedded','$(','OBJ',')','varref',':',';',
               '@echo $(subst hello.o,HELLO.O,$(subst ld,LD,$(subst gcc,GCC,$@)))',)
         ),
-        ('$(filter %.o,$(files)): %.o: %.c',    
-                    ( '', '$(','filter %.o,',
-                            '$(','files',')','',
-                       ')','',
-                          ':','%.o',':','%.c',)),
-        ('aa$(filter %.o,bb$(files)cc)dd: %.o: %.c',    
-                    ( 'aa', '$(','filter %.o,bb',
-                            '$(','files',')','cc',
-                       ')','dd',
-                          ':','%.o',':','%.c',)),
+
+        # implicit pattern rule TODO
+#        ('$(filter %.o,$(files)): %.o: %.c',    
+#                    ( '', '$(','filter %.o,',
+#                            '$(','files',')','',
+#                       ')','',
+#                          ':','%.o',':','%.c',)),
+
+#        ('aa$(filter %.o,bb$(files)cc)dd: %.o: %.c',    
+#                    ( 'aa', '$(','filter %.o,bb',
+#                            '$(','files',')','cc',
+#                       ')','dd',
+#                          ':','%.o',':','%.c',)),
         ("double-colon1 :: colon2", ("double-colon1","::","colon2")),
         ( "%.tab.c %.tab.h: %.y", ("%.tab.c","%.tab.h",":","%.y")),
         ("foo2:   # hello there; is this comment ignored?",("foo2",":")),
@@ -75,4 +97,6 @@ def statement_test():
         print("\n")
 #    run_tests_list( rules_tests, tokenize_assignment_or_rule)
 
+if __name__=='__main__':
+    run()
 

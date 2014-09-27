@@ -281,6 +281,56 @@ def rule_test() :
 #
 #    print(tokens.makefile())
 
-if __name__=='__main__':
+def rule_rhs_test():
+    rule_rhs_test_list = (
+        # e.g., foo:
+        ( "", () ),
+        ( "   # this is foo", () ),
+
+        # e.g., foo:all
+        ( "all", () ),
+
+        # e.g., foo : this is a test
+        ( "this is a test", () ),
+
+        ( "*.h", () ),
+
+        ( "$(objects)", () ),
+        ( "Makefile $(objects) link.ld", () ),
+        ( "$(SRCS) $(AUX)", () ),
+        ( ".c .o .h", () ),
+
+        # target specific assignment
+        ( "CC=mycc", () ),
+        ( "CC=mycc #this is a comment", () ),
+        ( "CC=mycc ; @echo this is part of the string not a recipe", () ),
+        ( "CC:=mycc", () ),
+        ( "CC::=mycc", () ),
+        ( "CC+=mycc", () ),
+        ( "CC?=mycc", () ),
+        ( "CC!=mycc", () ),
+
+        # static pattern rule TODO
+#        ( ": %.o: %.c", () ),
+
+        # order only prereq TODO 
+#        ( "| $(OBJDIR)", () ),
+#        ( "$(SRC) | $(OBJDIR)", () ),
+
+    )
+
+    for test in rule_rhs_test_list : 
+        s,v = test
+        print("test={0}".format(s))
+        my_iter = ScannerIterator(s)
+
+        tokens = tokenize_rule_prereq_or_assign(my_iter)
+        print( "tokens={0}".format(str(tokens)) )
+
+def run():
+    rule_rhs_test()
     rule_test()
+
+if __name__=='__main__':
+    run()
 
