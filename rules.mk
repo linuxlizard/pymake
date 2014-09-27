@@ -169,6 +169,15 @@ prog.o foo.o bar.o :
 % :: RCS/%,v
 	$(CO) $(COFLAGS) $<
 
+# semicolon here is invalid (that's a surprise)
+#rule-with-; : ; @echo $@
+
+# ok
+rule-with-! : ; @echo $@
+
+# this is OK
+empty-recipe : ; 
+
 # implicit rules need careful study
 # make -f rules.mk anything --> anything
 %:;@echo {implicit rule} $@
