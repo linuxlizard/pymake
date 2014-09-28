@@ -8,24 +8,42 @@
 
 import sys
 
-from sm import *
-
 # require Python 3.x 
 if sys.version_info.major < 3:
     raise Exception("Requires Python 3.x")
 
+from sm import *
+from run_tests import run_tests_list
+
 def run() :
     # parse a full rule! 
     recipe_test_list = ( 
-        ( ";echo foo", () ),
-        ( ";echo foo\n\techo bar", () ),
-        ( ";echo foo\n\techo bar", () ),
-        ( ";echo foo\n\techo bar\n\techo baz\n\n", () ),
-        ( ";echo foo\n\techo bar\n\techo baz\n\nthis is an ugly comment", () ),
+        ( ";echo foo", RecipeList( [Recipe( [Literal("echo foo")])]) ),
+
+        ( ";echo foo\n\techo bar", 
+            RecipeList( [Recipe( [Literal("echo foo")]),Recipe( [Literal("echo bar")])])
+        ),
+        
+        ( ";echo foo\n\t    echo bar", 
+            RecipeList( [Recipe( [Literal("echo foo")]),Recipe( [Literal("echo bar")])])
+        ),
+
+        ( ";echo foo\n\techo bar\n\techo baz\n\n\n\n\n", 
+            RecipeList( [Recipe( [Literal("echo foo")]),
+                         Recipe( [Literal("echo bar")]),
+                         Recipe( [Literal("echo baz")])])
+        ),
+
+        ( ";echo foo\n\techo bar\n\techo baz\n\nthis is an ugly comment", 
+            RecipeList( [Recipe( [Literal("echo foo")]),
+                         Recipe( [Literal("echo bar")]),
+                         Recipe( [Literal("echo baz")])])
+        ),
+
 # use """ to make easier to read tests
 # -------------
 #
-("""
+    ("""
 \techo foo 1
 \techo bar 2
 \techo baz 3
@@ -33,15 +51,22 @@ def run() :
 # this is a comment at column 0
 
 # this is a line after a blank line
-# """, () ),
+# """,
+
+    RecipeList( [Recipe( [Literal("echo foo 1")]),Recipe( [Literal("echo bar 2")]),Recipe( [Literal("echo baz 3")]),Recipe( [Literal("date")])])
+    ),
 
 # -------------
 ("""; echo foo
 # 
-this-is-an-assignment=42""", () ),
+this-is-an-assignment=42""", 
+    RecipeList( [Recipe( [Literal("echo foo")])])
+),
 # -------------
 
-        ( "\n\tgcc -c -Wall -o $@ $<", () ),
+        ( "\n\tgcc -c -Wall -o $@ $<",
+            RecipeList( [Recipe( [Literal("gcc -c -Wall -o "),VarRef( [Literal("@")]),Literal(" "),VarRef( [Literal("<")])])])
+        ),
 
 # -- from ffmpeg
 ("""
@@ -125,19 +150,21 @@ end-of-varrefs=yeah this ends varrefs rule for sure
         ( "foo:\n; @echo bar", () )
     )
 
-    for test in recipe_test_list : 
-        # source, validate
-        s,v = test[0],test[1]
-        print("test={0}".format(s))
-        my_iter = ScannerIterator(s)
+    run_tests_list(recipe_test_list,tokenize_recipe)
 
-        tokens = tokenize_recipe(my_iter)
-        print( "tokens={0}".format(str(tokens)) )
-
-        print( "remain={0} idx={1} max={2}".format(
-                my_iter.remain(),my_iter.idx,my_iter.max_idx) )
-        print( "makefile=\n{0}#end-of-makefile\n".format(tokens.makefile()) )
-        print()
+#    for test in recipe_test_list : 
+#        # source, validate
+#        s,v = test[0],test[1]
+#        print("test={0}".format(s))
+#        my_iter = ScannerIterator(s)
+#
+#        tokens = tokenize_recipe(my_iter)
+#        print( "tokens={0}".format(str(tokens)) )
+#
+#        print( "remain={0} idx={1} max={2}".format(
+#                my_iter.remain(),my_iter.idx,my_iter.max_idx) )
+#        print( "makefile=\n{0}#end-of-makefile\n".format(tokens.makefile()) )
+#        print()
 
 
 if __name__=='__main__':
