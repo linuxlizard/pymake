@@ -24,12 +24,75 @@ def run():
 
         ( "foo=barbazblahblahblah", AssignmentExpression( [Expression( [Literal("foo")]),AssignOp("="),Expression( [Literal("barbazblahblahblah")])]) ),
 
+        ( r"trailing-slash\ =", 
+            AssignmentExpression( [Expression( [Literal("trailing-slash\\")]),
+                                                AssignOp("="),
+                                                Expression( [Literal("")])]) ),
+        ( r'\% = percent', 
+            AssignmentExpression( [Expression( [Literal("\\%")]),
+                                                AssignOp("="),
+                                                Expression( [Literal("percent")])]) ),
+        ( r'%\ = percent', 
+            AssignmentExpression( [Expression( [Literal("%\\")]),
+                                                AssignOp("="),
+                                                Expression( [Literal("percent")])]) ),
+
+
+        ( r"embedded-slash-o-rama\ =\ foo\ bar\ baz\ blahblahblah", 
+            AssignmentExpression( [Expression( [Literal("embedded-slash-o-rama\\")]),
+                                                AssignOp("="),
+                                                Expression( [Literal("\\ foo\\ bar\\ baz\\ blahblahblah")])]) ),
+
         # this is a hot mess
-        (r"""foo\
-        =\
+        (r"""slash-o-rama\
+= foo\
 bar\
 baz\
-blahblahblah""", AssignmentExpression( [Expression( [Literal("foo")]),AssignOp("="),Expression( [Literal("barbazblahblahblah")])]) ),
+blahblahblah""", 
+            AssignmentExpression( [Expression( [Literal("slash-o-rama")]),AssignOp("="),Expression( [Literal("foo bar baz blahblahblah")])]) ),
+
+        # trailing spaces still preserved?
+        (r"""trailing-spaces-backslashes\
+        = foo \
+        bar \
+        baz     \
+        """, 
+            AssignmentExpression( [Expression( [Literal("trailing-spaces-backslashes")]),
+                                    AssignOp("="),
+                                    Expression( [Literal("foo bar baz ")])]) ),
+
+        ( # yikes
+r"""more-fun-in-assign\
+=           \
+    the     \
+    leading \
+    and     \
+    trailing\
+    white   \
+    space   \
+    should  \
+    be      \
+    eliminated\
+    \
+    \
+    \
+    including \
+    \
+    \
+    blank\
+    \
+    \
+    lines
+""", 
+            AssignmentExpression( [Expression( [Literal("more-fun-in-assign")]),
+                                    AssignOp("="),
+                                    Expression( [Literal("the leading and trailing white space should be eliminated including black lines")])]) ),
+
+        # literal backslashes in the RHS
+        ( r"""literal-backslash\
+                = \
+                foo\bar\baz\
+                blahblahblah""", () ),
 
         # leading spaces discarded, trailing spaces preserved
         ("foo=     $(baz3) $(baz3) $(baz3)",""),
@@ -53,27 +116,6 @@ blahblahblah""", AssignmentExpression( [Expression( [Literal("foo")]),AssignOp("
 
     run_tests_list(assignment_tests,tokenize_assignment_or_rule)
 
-#    for test in assignment_tests : 
-#        s,v = test
-#        print("test={0}".format(s))
-#        my_iter = ScannerIterator(s)
-#
-#        tokens = tokenize_assignment_or_rule(my_iter)
-#        print( "tokens={0}".format(str(tokens)) )
-#
-#        # AssignmentExpression :=  Expression AssignOp Expression
-#        assert isinstance(tokens,AssignmentExpression)
-#        assert isinstance(tokens[0],Expression)
-#        assert isinstance(tokens[1],AssignOp)
-#        assert isinstance(tokens[2],Expression),(type(tokens[2]),)
-#
-#        print( tokens.makefile() )
-#
-#        print("\n")
-
-    # test round trip
-#    tokens=AssignmentExpression( [Expression( [Literal("MANPAGES")]),AssignOp("="),Expression( [Literal(""),VarRef( [Literal("PROGS-yes:%=doc/%.1")]),Literal("    "),VarRef( [Literal("PROGS-yes:%=doc/%-all.1")]),Literal("    "),VarRef( [Literal("COMPONENTS-yes:%=doc/%.1")]),Literal("    "),VarRef( [Literal("LIBRARIES-yes:%=doc/%.3")]),Literal("")])])
-#    print( tokens.makefile() )
 
 if __name__=='__main__':
     run()
