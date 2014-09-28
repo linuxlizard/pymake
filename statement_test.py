@@ -21,6 +21,12 @@ from run_tests import run_tests_list
 def run():
     rules_tests = ( 
         # rule LHS
+        ( "clean : ; $(RM) $(OBJ) tst", 
+            RuleExpression( [Expression( [Literal("clean")]),RuleOp(":"),PrerequisiteList( [])]) ),
+        
+        ( "clean : ; $(RM) $(OBJ) tst\n\n", 
+            RuleExpression( [Expression( [Literal("clean")]),RuleOp(":"),PrerequisiteList( [])]) ),
+
         ( "all:",    RuleExpression( [Expression( [Literal("all")]),RuleOp(":"),PrerequisiteList( [])])),
         ( "all::",   RuleExpression( [Expression( [Literal("all")]),RuleOp("::"),PrerequisiteList( [])])),
         # assignment LHS
@@ -84,22 +90,35 @@ split-prereqs-with-backslashes this-is-a-rule-with-backslashes \
                MMX-OBJS YASM-OBJS                                        \
                MIPSFPU-OBJS MIPSDSPR2-OBJS MIPSDSPR1-OBJS MIPS32R2-OBJS  \
                OBJS HOSTOBJS TESTOBJS
-               """, () ),
+               """, 
+              AssignmentExpression( [Expression( [Literal("SUBDIR_VARS")]),AssignOp(":="),Expression( [Literal("CLEANFILES EXAMPLES FFLIBS HOSTPROGS TESTPROGS TOOLS HEADERS ARCH_HEADERS BUILT_HEADERS SKIPHEADERS ARMV5TE-OBJS ARMV6-OBJS VFP-OBJS NEON-OBJS ALTIVEC-OBJS VIS-OBJS MMX-OBJS YASM-OBJS MIPSFPU-OBJS MIPSDSPR2-OBJS MIPSDSPR1-OBJS MIPS32R2-OBJS OBJS HOSTOBJS TESTOBJS")])]) 
+               ),
 
         # from busybox
-        ( """
-SUBARCH := $(shell echo $(SUBARCH) | sed -e s/i.86/i386/ -e s/sun4u/sparc64/ \
-					 -e s/arm.*/arm/ -e s/sa110/arm/ \
-					 -e s/s390x/s390/ -e s/parisc64/parisc/ \
-					 -e s/ppc.*/powerpc/ -e s/mips.*/mips/ )
-                                         """, () ),
+        # TODO - requires weird backslash handling that I don't have finished yet
+#        ( """
+#SUBARCH := $(shell echo $(SUBARCH) | sed -e s/i.86/i386/ -e s/sun4u/sparc64/ \
+#					 -e s/arm.*/arm/ -e s/sa110/arm/ \
+#					 -e s/s390x/s390/ -e s/parisc64/parisc/ \
+#					 -e s/ppc.*/powerpc/ -e s/mips.*/mips/ )
+#                                         """, () ),
 
         ( "the quick brown fox jumped over lazy dogs : ; ", 
-            ("the", "quick", "brown", "fox","jumped","over","lazy","dogs",":", ";", )),
-        ( '"foo" : ; ',     ('"foo"',":",";")),
-        ('"foo qqq baz" : ;',   ('"foo',"qqq",'baz"',":",";")),
-        (r'\foo : ; ',  (r'\foo', ':', ';')),
+            RuleExpression( [Expression( [Literal("the"),Literal("quick"),Literal("brown"),Literal("fox"),Literal("jumped"),Literal("over"),Literal("lazy"),Literal("dogs")]),RuleOp(":"),PrerequisiteList( [])]) ),
+
+        ( '"foo" : ; ',     
+            RuleExpression( [Expression( [Literal("\"foo\"")]),RuleOp(":"),PrerequisiteList( [])]) ),
+
+        ('"foo qqq baz" : ;',   
+            RuleExpression( [Expression( [Literal("\"foo"),Literal("qqq"),Literal("baz\"")]),RuleOp(":"),PrerequisiteList( [])])
+        ),
+
+        (r'\foo : ; ',  
+            RuleExpression( [Expression( [Literal("\foo")]),RuleOp(":"),PrerequisiteList( [])])
+        ),
+
         (r'foo\  : ; ', (r'foo ',':', ';',)),
+
         ('@:;@:',       ('@',':',';','@:',)),
         ('I\ have\ spaces : ; @echo $@',    ('I have spaces',':',';','@echo $@',)),
         ('I\ \ \ have\ \ \ three\ \ \ spaces : ; @echo $@', ('I   have   three   spaces',':', ';', '@echo $@' )),
@@ -129,21 +148,6 @@ SUBARCH := $(shell echo $(SUBARCH) | sed -e s/i.86/i386/ -e s/sun4u/sparc64/ \
 
     run_tests_list(rules_tests,tokenize_assignment_or_rule)
 
-#    for test in rules_tests : 
-#        s,result = test
-#        my_iter = ScannerIterator(s)
-#        tokens = tokenize_assignment_or_rule(my_iter)
-#        print( "tokens={0}".format("|".join([t.string for t in tokens])) )
-
-#    for test in rules_tests : 
-#        s,v = test
-#        print("test={0}".format(s))
-#        my_iter = ScannerIterator(s)
-#
-#        tokens = tokenize_assignment_or_rule(my_iter)
-#        print( "tokens={0}".format(str(tokens)) )
-#        print("\n")
-##    run_tests_list( rules_tests, tokenize_assignment_or_rule)
 
 if __name__=='__main__':
     run()
