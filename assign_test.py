@@ -8,18 +8,28 @@
 
 import sys
 
-from sm import *
-
 # require Python 3.x 
 if sys.version_info.major < 3:
     raise Exception("Requires Python 3.x")
 
+from sm import *
+from run_tests import run_tests_list
+
 def run():
 
     assignment_tests = ( 
-        ("foo=baz",""),
-        ("foo=$(baz)",""),
-        ("foo=$(baz3) $(baz3) $(baz3)",""),
+        ("foo=baz",AssignmentExpression( [Expression( [Literal("foo")]),AssignOp("="),Expression( [Literal("baz")])]) ),
+        ("foo=$(baz)",AssignmentExpression( [Expression( [Literal("foo")]),AssignOp("="),Expression( [Literal(""),VarRef( [Literal("baz")]),Literal("")])]) ),
+        ("foo=$(baz3) $(baz3) $(baz3)", AssignmentExpression( [Expression( [Literal("foo")]),AssignOp("="),Expression( [Literal(""),VarRef( [Literal("baz3")]),Literal(" "),VarRef( [Literal("baz3")]),Literal(" "),VarRef( [Literal("baz3")]),Literal("")])]) ),
+
+        ( "foo=barbazblahblahblah", AssignmentExpression( [Expression( [Literal("foo")]),AssignOp("="),Expression( [Literal("barbazblahblahblah")])]) ),
+
+        # this is a hot mess
+        (r"""foo\
+        =\
+bar\
+baz\
+blahblahblah""", AssignmentExpression( [Expression( [Literal("foo")]),AssignOp("="),Expression( [Literal("barbazblahblahblah")])]) ),
 
         # leading spaces discarded, trailing spaces preserved
         ("foo=     $(baz3) $(baz3) $(baz3)",""),
@@ -41,23 +51,25 @@ def run():
         ( " MANPAGES    = $(PROGS-yes:%=doc/%.1)    $(PROGS-yes:%=doc/%-all.1)    $(COMPONENTS-yes:%=doc/%.1)    $(LIBRARIES-yes:%=doc/%.3)", "" ),
     )
 
-    for test in assignment_tests : 
-        s,v = test
-        print("test={0}".format(s))
-        my_iter = ScannerIterator(s)
+    run_tests_list(assignment_tests,tokenize_assignment_or_rule)
 
-        tokens = tokenize_assignment_or_rule(my_iter)
-        print( "tokens={0}".format(str(tokens)) )
-
-        # AssignmentExpression :=  Expression AssignOp Expression
-        assert isinstance(tokens,AssignmentExpression)
-        assert isinstance(tokens[0],Expression)
-        assert isinstance(tokens[1],AssignOp)
-        assert isinstance(tokens[2],Expression),(type(tokens[2]),)
-
-        print( tokens.makefile() )
-
-        print("\n")
+#    for test in assignment_tests : 
+#        s,v = test
+#        print("test={0}".format(s))
+#        my_iter = ScannerIterator(s)
+#
+#        tokens = tokenize_assignment_or_rule(my_iter)
+#        print( "tokens={0}".format(str(tokens)) )
+#
+#        # AssignmentExpression :=  Expression AssignOp Expression
+#        assert isinstance(tokens,AssignmentExpression)
+#        assert isinstance(tokens[0],Expression)
+#        assert isinstance(tokens[1],AssignOp)
+#        assert isinstance(tokens[2],Expression),(type(tokens[2]),)
+#
+#        print( tokens.makefile() )
+#
+#        print("\n")
 
     # test round trip
 #    tokens=AssignmentExpression( [Expression( [Literal("MANPAGES")]),AssignOp("="),Expression( [Literal(""),VarRef( [Literal("PROGS-yes:%=doc/%.1")]),Literal("    "),VarRef( [Literal("PROGS-yes:%=doc/%-all.1")]),Literal("    "),VarRef( [Literal("COMPONENTS-yes:%=doc/%.1")]),Literal("    "),VarRef( [Literal("LIBRARIES-yes:%=doc/%.3")]),Literal("")])])
