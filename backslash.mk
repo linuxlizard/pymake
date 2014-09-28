@@ -8,6 +8,10 @@
 # condensed into a single space: this includes all whitespace proceding the
 # backslash, all whitespace at the beginning of the line after the
 # backslash/newline, and any consecutive backslash/newline combinations."
+#
+#
+# TODO .POSIX will change the behavior of this file
+#
 
 # Don't use the shell because the shell will eat the whitespaces.  Make also
 # preserves the leading whitespaces. 
@@ -183,6 +187,110 @@ rule-not-highlighted-by-vim : ; @echo $@
 \t : \g ; @echo \\\
 \\\
 \\
+
+slash-o-rama\
+=\
+foo\
+bar\
+baz\
+blahblahblah
+$(info foo bar baz blahblahblah=$(slash-o-rama))
+
+slash-o-rama-rule : SHELL=/bin/echo
+slash-o-rama-rule : 
+	@echo slash-o-rama=$(slash-o-rama)
+
+embedded-slash-o-rama\ =\ foo\ bar\ baz\ blahblahblah 
+$(info = \ foo\ bar\ baz\ blahblahblah=$(embedded-slash-o-rama\))
+
+embedded-slash-o-rama-rule : SHELL=/bin/echo
+embedded-slash-o-rama-rule : 
+	@echo embedded-slash-o-rama=$(embedded-slash-o-rama\)
+
+# reserved symbols backslashable?
+# \% -> % ?  Or just a literal "\%"
+\% = percent
+$(info = percent=$(\%))
+%\ = percent
+$(info = percent=$(%\))
+
+# 3.1.1 Splitting Long Lines
+#  "Outside of recipe lines, backslash/newlines are converted into a single
+#  space character. Once that is done, all whitespace around the
+#  backslash/newline is condensed into a single space: this includes all
+#  whitespace preceding the backslash, all whitespace at the beginning of the
+#  line after the backslash/newline, and any consecutive backslash/newline
+#  combinations."
+more-fun-in-assign\
+=           \
+    the     \
+    leading \
+    and     \
+    trailing\
+    white   \
+    space   \
+    should  \
+    be      \
+    eliminated\
+    \
+    \
+    \
+    including \
+    \
+    \
+    blank\
+    \
+    \
+    lines
+$(info = the leading and trailing white space should be elminated including blank lines=$(more-fun-in-assign))
+
+# all these empty lines should be ignored 
+many-empty-lines\
+=\
+    \
+    \
+    \
+    \
+\
+\
+\
+                            \
+\
+    foo
+$(info = foo=$(many-empty-lines))
+
+# lone backslash (Trailing space after \ to make a literal \<space>
+backslash-space = \ 
+$(info = \ =$(backslash-space))
+
+# lone backslash with continuation
+literal-backslash = \\\
+q
+$(info = \ q=$(literal-backslash))
+
+# lone backslash with continuation (spaces before q are eaten)
+literal-backslash-2 = \\\
+        q
+$(info = \ q=$(literal-backslash-2))
+
+# Leading backslash seems to violate GNU Make's manual.
+# By the manual's rules there should be a space before foo.
+leading-backslash\
+=\
+foo
+$(info = foo=$(leading-backslash))
+
+leading-backslash-2\
+=\
+            foo
+$(info = foo=$(leading-backslash-2))
+
+# there is a space between foo and bar but not before foo
+leading-backslash-3\
+=\
+            foo\
+            bar
+$(info = foo bar=$(leading-backslash-3))
 
 # implicit "catch all" rule to trap busted rules 
 % : ; @echo {implicit} $@
