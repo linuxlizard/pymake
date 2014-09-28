@@ -14,10 +14,11 @@
 SHELL=/bin/echo
 
 all : test-backslash-semicolon test-backslash-recipes lots-of-fore-whitespace\
-lots-of-aft-whitespace backslash-in-string backslash-in-string-echo\
-backslash-eol backslash-o-rama backslash-space-eol assignment split-assignment \
-split-prereqs-with-backslashes this-is-a-rule-with-backslashes \
- ; @echo $@
+    lots-of-aft-whitespace backslash-in-string backslash-in-string-echo\
+    backslash-eol backslash-o-rama backslash-space-eol assignment split-assignment \
+    split-prereqs-with-backslashes this-is-a-rule-with-backslashes \
+    backslash-in-comment rule-not-highlighted-by-vim \qqq \n \
+ ; @echo $@ $^
 
 
 test-backslash-semicolon : ; @echo $@ \
@@ -151,6 +152,37 @@ clean: $(clean-dirs)
 		-o -name '*.symtypes' -o -name 'modules.order' \
 		-o -name modules.builtin -o -name '.tmp_*.o.*' \
 		-o -name '*.gcno' \) -type f -print | xargs 
+
+# use this shell on this so can tinker with the prerequisites
+backslash-in-prereqs : SHELL=/bin/sh
+backslash-in-prereqs : a\
+b\
+c\
+d\
+        e\
+    f
+	@for t in $^ ; do echo $$t ; done
+	@for t in $^ ; do echo $(addprefix @@,$$t) ; done
+
+backslash-in-comment : # this is a comment \
+does this continue the comment?\
+how about now?\
+seems like it does\
+
+rule-not-highlighted-by-vim : ; @echo $@
+# the trailing \ on the backslash-in-comment is confusing vim but gnu make
+# seems happy with it
+
+# backslash in rules/prereqs?
+\qqq : \abc
+	@echo $@
+
+\n : \r
+	@echo $@
+
+\t : \g ; @echo \\\
+\\\
+\\
 
 # implicit "catch all" rule to trap busted rules 
 % : ; @echo {implicit} $@
