@@ -279,6 +279,7 @@ class RecipeList( Expression ) :
 def comment(string):
     state_start = 1
     state_eat_comment = 2
+    state_backslash = 3
 
     state = state_start
 
@@ -289,22 +290,22 @@ def comment(string):
             if c=='#':
                 state = state_eat_comment
             else:
-                # shouldn't be here unless comment
+                # shouldn't be here unless we're eating a comment
                 raise ParseError()
+
         elif state==state_eat_comment:
             # comments finish at end of line
-            # FIXME handle \r\n,\n\r,\r and other weird line endings
-            if c=='\n' :
+            if c in eol :
                 return
+            elif c == '\\':
+                state = state_backslash
             # otherwise char is eaten
+
+        elif state==state_backslash:
+            state = state_eat_comment
+
         else:
             assert 0, state
-
-def eatwhite(string):
-    # eat all whitespace (testing characters + sets)
-    for c in string:
-        if not c in whitespace:
-            yield c
 
 depth = 0
 def depth_reset():
@@ -339,6 +340,9 @@ def tokenize_assignment_or_rule(string):
     # I tokenize assuming it's an assignment statement. If the final token is a
     # rule token, then I re-tokenize as a rule.
     #
+    # Only difference between a rule LHS and an assignment LHS is the
+    # whitespace. In a rule, the whitespace is ignored. In an assignment, the
+    # whitespace is preserved.
 
     # save current position in the token stream
     string.push_state()
@@ -358,6 +362,9 @@ def tokenize_assignment_or_rule(string):
         lhs = tokenize_statement_LHS(string,whitespace)
     
         # add rule RHS
+        # rule RHS  ::= assignment
+        #           ::= prerequisite_list
+        #           ::= <empty>
         statement = list(lhs)
         statement.append( tokenize_rule_prereq_or_assign(string) )
 
@@ -485,6 +492,9 @@ def tokenize_statement_LHS(string,separators=""):
         elif state==state_backslash :
             if c in backslashable : 
                 token += c
+            elif c in eol : 
+                # line continuation
+                pass
             else :
                 # literal '\' + somechar
                 token += '\\'
@@ -534,6 +544,10 @@ def tokenize_rule_prereq_or_assign(string):
     # We are on the RHS of a rule's : or ::
     # We may have a set of prerequisites
     # or we may have a target specific assignment.
+    # or we may have nothing at all!
+    #
+    # End of the rule's RHS is ';' or EOL.  The ';' may be followed by a
+    # recipe.
 
     # save current position in the token stream
     string.push_state()
@@ -577,6 +591,8 @@ def tokenize_rule_RHS(string):
     state_colon = 3
     state_double_colon = 4
     state_dollar = 5
+    state_whitespace = 6
+    state_backslash = 7
 
     state = state_start
     token = ""
@@ -586,56 +602,39 @@ def tokenize_rule_RHS(string):
         print("p c={0} state={1} idx={2}".format(c,state,string.idx))
 
         if state==state_start :
-            if c=='$':
-                state = state_dollar
-            elif c=='#':
+            if c==';':
+                # End of prerequisites; start of recipe.  Note we don't
+                # preserve token because it will be empty at this point.
+                # bye!
+                # XXX pushback ';' ? I think I need to for the recipe
+                # tokenizer.
                 string.pushback()
-                # eat comment until end of line
-                comment(string)
-                # bye!
                 return PrerequisiteList(token_list)
-
-            elif c==';':
-                # end of prerequisites; start of recipe
-                # note we don't preserve token because it will be empty at this
-                # point
-                # bye!
-                return PrerequisiteList(token_list)
-            elif not c in whitespace :
+            elif c in whitespace :
+                # eat whitespace until we find something interesting
+                state = state_whitespace
+            else :
                 string.pushback()
                 state = state_word
 
-        elif state==state_dollar :
-            if c=='$':
-                # literal $
-                token += "$"
-            else:
-                # save token so far 
-                token_list.append(Literal(token.rstrip()))
-                # restart token
-                token = ""
-
-                # jump to variable_ref tokenizer
-                # restore "$" + "(" in the string
+        elif state==state_whitespace :
+            # eat whitespaces between symbols (a symbol is a prerequisite or a
+            # field in an assignment)
+            if not c in whitespace : 
                 string.pushback()
-                string.pushback()
-
-                # jump to var_ref tokenizer
-                token_list.append( tokenize_variable_ref(string) )
-
-            state = state_word
+                state = state_start
 
         elif state==state_word:
             if c in whitespace :
                 # save token so far 
-                token_list.append(Literal(token.rstrip()))
+                token_list.append(Literal(token))
                 # restart the current token
                 token = ""
-                # restart eating whitespace
-                state = state_start
+                # start eating whitespace
+                state = state_whitespace
 
             elif c=='\\':
-                state = state_backspace
+                state = state_backslash
 
             elif c==':':
                 state = state_colon
@@ -661,17 +660,25 @@ def tokenize_rule_RHS(string):
                 return None
 
             elif c=='#':
+                # eat comment 
                 string.pushback()
-                # eat comment until end of line
                 comment(string)
-                # bye!
+                # save the token we've captured
                 token_list.append(Literal(token))
-                return Expression(token_list)
+                # start seeking next boundary
+                state = state_start
 
             elif c=='$':
                 state = state_dollar
 
-            elif c==';':
+            elif c==';' :
+                # recipe tokenizer expects to start with a ';' or a <tab>
+                token.pushback()
+                # end of prerequisites; start of recipe
+                token_list.append(Literal(token))
+                return PrerequisiteList(token_list)
+            
+            elif c in eol :
                 # end of prerequisites; start of recipe
                 token_list.append(Literal(token))
                 return PrerequisiteList(token_list)
@@ -679,13 +686,33 @@ def tokenize_rule_RHS(string):
             else:
                 token += c
             
+        elif state==state_dollar :
+            if c=='$':
+                # literal $
+                token += "$"
+            else:
+                # save token so far 
+                token_list.append(Literal(token))
+                # restart token
+                token = ""
+
+                # jump to variable_ref tokenizer
+                # restore "$" + "(" in the string
+                string.pushback()
+                string.pushback()
+
+                # jump to var_ref tokenizer
+                token_list.append( tokenize_variable_ref(string) )
+
+            state = state_word
 
         elif state==state_colon : 
             if c==':':
                 # maybe ::= 
                 state = state_double_colon
             elif c=='=':
-                # definitely an assign; bail out and we'll retokenize as assign
+                # found := so definitely a rule specific  assignment; bail out
+                # and we'll retokenize as assignment
                 return None
             else:
                 # implicit pattern rule
@@ -693,21 +720,39 @@ def tokenize_rule_RHS(string):
                 assert 0
 
         elif state==state_double_colon : 
-            # found ::
+            # at this point, we found ::
             if c=='=':
                 # definitely assign
                 # bail out and retokenize as assign
                 return None
             else:
                 # is this an implicit pattern rule?
+                # or a parse error?
                 # TODO
                 assert 0
 
+        elif state==state_backslash : 
+            if not c in eol : 
+                # literal backslash
+                token += '\\'
+                state = state_word
+            else:
+                # The prerequisites (or whatever) are continued on the next
+                # line. We treat the EOL as a boundary between symbols
+                state = state_start
+                
         else : 
+            # wtf?
             assert 0, state
 
-    # save the token we've seen so far
-    token_list.append(Literal(token))
+    if state==state_word:
+        # save the token we've seen so far
+        token_list.append(Literal(token.rstrip()))
+    elif state in (state_whitespace, state_start) :
+        pass
+    else:
+        # premature end of file?
+        raise ParseError()
 
     return PrerequisiteList(token_list)
 
@@ -717,14 +762,15 @@ def tokenize_assign_RHS(string):
     state_start = 1
     state_dollar = 2
     state_literal = 3
-    state_eol = 4
+    state_backslash = 4
+    state_eol = 5
 
     state = state_start
     token = ""
     token_list = []
 
     for c in string :
-#        print("a c={0} state={1} idx={2}".format(c,state,string.idx))
+        print("a c={0} state={1} idx={2}".format(filter_char(c),state,string.idx))
         if state==state_start :
             if c=='$':
                 state = state_dollar
@@ -766,16 +812,23 @@ def tokenize_assign_RHS(string):
             if c=='$' :
                 state = state_dollar
             elif c=='#':
-                string.pushback()
-                # eat comment until end of line
-                comment(string)
-                # bye!
+                # save the token we've seen so far
                 token_list.append(Literal(token))
-                return Expression(token_list)
+                string.pushback()
+                # eat comment 
+                comment(string)
+                # stay in same state
             elif c in eol :
                 state = state_eol
+            elif c=='\\':
+                state = state_backslash
             else:
                 token += c
+
+        elif state==state_backslash : 
+            # eat the EOL  (backslash+eol == line continuation)
+            if c in eol : 
+                state = state_literal
 
         elif state==state_eol :
             if not c in eol :
