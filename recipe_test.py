@@ -12,39 +12,19 @@ import sys
 if sys.version_info.major < 3:
     raise Exception("Requires Python 3.x")
 
+import hexdump
 from sm import *
 from run_tests import run_tests_list
+import vline
 
-def run() :
-    # parse a full rule! 
+def big_recipes_test() :
+    # parse a full block of recipes! 
+
     recipe_test_list = ( 
-        ( ";echo foo", RecipeList( [Recipe( [Literal("echo foo")])]) ),
-
-        ( ";echo foo\n\techo bar", 
-            RecipeList( [Recipe( [Literal("echo foo")]),Recipe( [Literal("echo bar")])])
-        ),
-        
-        ( ";echo foo\n\t    echo bar", 
-            RecipeList( [Recipe( [Literal("echo foo")]),Recipe( [Literal("echo bar")])])
-        ),
-
-        ( ";echo foo\n\techo bar\n\techo baz\n\n\n\n\n", 
-            RecipeList( [Recipe( [Literal("echo foo")]),
-                         Recipe( [Literal("echo bar")]),
-                         Recipe( [Literal("echo baz")])])
-        ),
-
-        ( ";echo foo\n\techo bar\n\techo baz\n\nthis is an ugly comment", 
-            RecipeList( [Recipe( [Literal("echo foo")]),
-                         Recipe( [Literal("echo bar")]),
-                         Recipe( [Literal("echo baz")])])
-        ),
-
 # use """ to make easier to read tests
 # -------------
 #
-    ("""
-\techo foo 1
+    ("""\techo foo 1
 \techo bar 2
 \techo baz 3
 \tdate
@@ -57,15 +37,23 @@ def run() :
     ),
 
 # -------------
-("""; echo foo
+("""; echo semicolon-foo
 # 
 this-is-an-assignment=42""", 
-    RecipeList( [Recipe( [Literal("echo foo")])])
+    RecipeList( [Recipe( [Literal("echo semicolon-foo")])])
 ),
 # -------------
 
         ( "\n\tgcc -c -Wall -o $@ $<",
-            RecipeList( [Recipe( [Literal("gcc -c -Wall -o "),VarRef( [Literal("@")]),Literal(" "),VarRef( [Literal("<")])])])
+            RecipeList( [Recipe( [Literal("gcc -c -Wall -o "),
+                                  VarRef([Literal("@")]),
+                                  Literal(" "),
+                                  VarRef( [Literal("<")] ), 
+                                  Literal( "" ),
+                                 ]
+                               )
+                        ]
+                      )
         ),
 
 # -- from ffmpeg
@@ -143,6 +131,28 @@ end-of-varrefs=yeah this ends varrefs rule for sure
 """, () ),
 #------
 
+        ( ";echo foo", RecipeList( [Recipe( [Literal("echo foo")])]) ),
+
+        ( ";echo foo\n\techo bar", 
+            RecipeList( [Recipe( [Literal("echo foo")]),Recipe( [Literal("echo bar")])])
+        ),
+        
+        ( ";echo foo\n\t    echo bar", 
+            RecipeList( [Recipe( [Literal("echo foo")]),Recipe( [Literal("echo bar")])])
+        ),
+
+        ( ";echo foo\n\techo bar\n\techo baz\n\n\n\n\n", 
+            RecipeList( [Recipe( [Literal("echo foo")]),
+                         Recipe( [Literal("echo bar")]),
+                         Recipe( [Literal("echo baz")])])
+        ),
+
+        ( ";echo foo\n\techo bar\n\techo baz\n\nthis is an ugly comment", 
+            RecipeList( [Recipe( [Literal("echo foo")]),
+                         Recipe( [Literal("echo bar")]),
+                         Recipe( [Literal("echo baz")])])
+        ),
+
     )
 
     # these must fail
@@ -150,22 +160,60 @@ end-of-varrefs=yeah this ends varrefs rule for sure
         ( "foo:\n; @echo bar", () )
     )
 
-    run_tests_list(recipe_test_list,tokenize_recipe)
+#    run_tests_list(recipe_test_list,tokenize_recipe_list)
 
-#    for test in recipe_test_list : 
-#        # source, validate
-#        s,v = test[0],test[1]
-#        print("test={0}".format(s))
-#        my_iter = ScannerIterator(s)
-#
-#        tokens = tokenize_recipe(my_iter)
-#        print( "tokens={0}".format(str(tokens)) )
-#
-#        print( "remain={0} idx={1} max={2}".format(
-#                my_iter.remain(),my_iter.idx,my_iter.max_idx) )
-#        print( "makefile=\n{0}#end-of-makefile\n".format(tokens.makefile()) )
-#        print()
+    # test make_recipe_block() which splits apart the makefile lines into
+    # separate recipe lines
+    for test in recipe_test_list : 
+        s,v = test
 
+        print( "s=[\n{0}  ]\n".format(hexdump.dump(s,16)),end="")
+        file_lines = s.split("\n")[:-1]
+        lines = [ line+"\n" for line in file_lines ]
+
+        semicolon_recipe = ""
+        if s.startswith(";") :
+            assert 0
+
+        my_iter = ScannerIterator( lines )
+        recipe_list = vline.make_recipe_block(my_iter,semicolon_recipe)
+        print("recipe_list={0}".format(recipe_list.makefile()))
+        print("v={0}".format(v.makefile()))
+
+        assert v==recipe_list
+
+
+def single_recipe_test() : 
+    # simple single recipes
+
+    test_list = ( 
+        (   "	$(CC) -g -wall -o $@ $^", 
+            Recipe( [Literal(""),VarRef( [Literal("CC")]),Literal(" -g -wall -o "),VarRef( [Literal("@")]),Literal(" "),VarRef( [Literal("^")]),Literal("")]) 
+        ),
+
+        (   "; $(CC) -g -wall -o $@ $^", 
+            Recipe( [Literal(""),VarRef( [Literal("CC")]),Literal(" -g -wall -o "),VarRef( [Literal("@")]),Literal(" "),VarRef( [Literal("^")]),Literal("")]) 
+        ),
+
+        ( "	@echo this \\\nis\\\na\\\ntest\n", Recipe( [Literal("@echo this \\\nis\\\na\\\ntest" )])),
+
+        # From linux kernel
+        (   r"""	$(if $(KBUILD_VERBOSE:1=),@)$(MAKE) -C $(KBUILD_OUTPUT) \
+	KBUILD_SRC=$(CURDIR) \
+	KBUILD_EXTMOD="$(KBUILD_EXTMOD)" -f $(CURDIR)/Makefile \
+	$(filter-out _all sub-make,$(MAKECMDGOALS))
+""",
+    Recipe( [Literal(""),VarRef( [Literal("if "),VarRef( [Literal("KBUILD_VERBOSE:1=")]),Literal(",@")]),Literal(""),VarRef( [Literal("MAKE")]),Literal(" -C "),VarRef( [Literal("KBUILD_OUTPUT")]),Literal(" \\\n\tKBUILD_SRC="),VarRef( [Literal("CURDIR")]),Literal(" \\\n\tKBUILD_EXTMOD=\""),VarRef( [Literal("KBUILD_EXTMOD")]),Literal("\" -f "),VarRef( [Literal("CURDIR")]),Literal("/Makefile \\\n\t"),VarRef( [Literal("filter-out _all sub-make,"),VarRef( [Literal("MAKECMDGOALS")]),Literal("")]),Literal("")])
+        ),
+
+    # end of tests
+    )
+
+    run_tests_list( test_list,tokenize_recipe )
+
+def run() : 
+    single_recipe_test()
+    big_recipes_test()
 
 if __name__=='__main__':
     run()
