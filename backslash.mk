@@ -25,6 +25,14 @@ all : test-backslash-semicolon test-backslash-recipes lots-of-fore-whitespace\
  ; @echo $@ $^
 
 
+# silent output without launching a shell
+silent : SHELL=/usr/bin/touch
+silent : ; @/dev/null
+# Using test doesn't work. I don't know why. Always throws an error. Need to
+# run GNU Make under the debugger. 
+#silent : SHELL=/bin/test
+#silent : ; @ 1 -eq 1
+
 test-backslash-semicolon : ; @echo $@ \
  qqqq
 
@@ -90,6 +98,7 @@ backslash-space-eol :
 	@echo $@ \
 space after this backslash!\  
 
+
 # this works \ in RHS of assignment is ok
 I am an assignment statement = \
 that equals \ a bunch of stuff \ with \
@@ -100,8 +109,10 @@ assignment :
 	@echo $(I am an assignment statement)
 
 # this works. \ in LHS of assignment is ok
+# fails in 3.82 and 4.0
 I am a \
-split assignment = is this legal?
+split assignment = legal in 3.81 
+
 split-assignment : 
 	@echo $(I am a split assignment)
 
@@ -124,6 +135,8 @@ rule-\
 with-\
 backslashes : ; @echo $@
 
+# I think "space" this winds up being an empty string. But the blank line after
+# is confusing my backslash handling so this is a good test regardless
 space=\
 
 fake-out : this-$(space)is-$(space)a-$(space)rule-$(space)with-$(space)backslashes
@@ -131,6 +144,8 @@ fake-out : this-$(space)is-$(space)a-$(space)rule-$(space)with-$(space)backslash
 
 fake-out-2 : this- is- a- rule- with- backslashes
 	@echo $@
+
+$(info = @@space@@=@@space$(space)@@)
 
 # from ffmpeg
 # Note in the $(info) output all the extra spaces are collapsed into a single space
@@ -141,7 +156,7 @@ SUBDIR_VARS := CLEANFILES EXAMPLES FFLIBS HOSTPROGS TESTPROGS TOOLS      \
                MMX-OBJS YASM-OBJS                                        \
                MIPSFPU-OBJS MIPSDSPR2-OBJS MIPSDSPR1-OBJS MIPS32R2-OBJS  \
                OBJS HOSTOBJS TESTOBJS
-$(info $(SUBDIR_VARS))
+#$(info $(SUBDIR_VARS))
 subdir_vars : $(SUBDIR_VARS)
 
 # from Linux kernel 3.12.5 (removed the 'rm' so it's not dangerous)
@@ -194,13 +209,13 @@ foo\
 bar\
 baz\
 blahblahblah
-$(info foo bar baz blahblahblah=$(slash-o-rama))
+$(info = foo bar baz blahblahblah=$(slash-o-rama))
 
 slash-o-rama-rule : SHELL=/bin/echo
 slash-o-rama-rule : 
 	@echo slash-o-rama=$(slash-o-rama)
 
-embedded-slash-o-rama\ =\ foo\ bar\ baz\ blahblahblah 
+embedded-slash-o-rama\ =\ foo\ bar\ baz\ blahblahblah
 $(info = \ foo\ bar\ baz\ blahblahblah=$(embedded-slash-o-rama\))
 
 embedded-slash-o-rama-rule : SHELL=/bin/echo
@@ -242,7 +257,7 @@ more-fun-in-assign\
     \
     \
     lines
-$(info = the leading and trailing white space should be elminated including blank lines=$(more-fun-in-assign))
+$(info = the leading and trailing white space should be eliminated including blank lines=$(more-fun-in-assign))
 
 # all these empty lines should be ignored 
 many-empty-lines\
@@ -261,36 +276,48 @@ $(info = foo=$(many-empty-lines))
 
 # lone backslash (Trailing space after \ to make a literal \<space>
 backslash-space = \ 
-$(info = \ =$(backslash-space))
+$(info = one backslash \ =one backslash $(backslash-space))
+
+# two backslash (Trailing space after \ to make a literal \\<space>
+two-backslash-space = \\ 
+$(info = two backslash \\ =two backslash $(two-backslash-space))
 
 # lone backslash with continuation
-literal-backslash = \\\
+# XXX this should become two backslashes
+literal-2-backslash = \\\
 q
-$(info = \ q=$(literal-backslash))
+$(info = 1 \ q=1 $(literal-2-backslash))
 
 # lone backslash with continuation (spaces before q are eaten)
-literal-backslash-2 = \\\
+# this is so weird. I'm getting lone \ for the two \\ when I expect to see two
+# \\ (backslashes) output. Did I find a GNU make parser bug?
+literal-2-backslash-spaces = \\\
         q
-$(info = \ q=$(literal-backslash-2))
+$(info = 2 \ q=2 $(literal-2-backslash-spaces))
+
+# Do spaces after my \\ give me two \\ output? yes! WTF?
+literal-2-backslash-more-spaces = \\   \
+        q
+$(info = 3 \\ q=3 $(literal-2-backslash-more-spaces))
 
 # Leading backslash seems to violate GNU Make's manual.
 # By the manual's rules there should be a space before foo.
 leading-backslash\
 =\
 foo
-$(info = foo=$(leading-backslash))
+$(info = 1 foo=1 $(leading-backslash))
 
 leading-backslash-2\
 =\
             foo
-$(info = foo=$(leading-backslash-2))
+$(info = 2 foo=2 $(leading-backslash-2))
 
 # there is a space between foo and bar but not before foo
 leading-backslash-3\
 =\
             foo\
             bar
-$(info = foo bar=$(leading-backslash-3))
+$(info = 3 foo bar=3 $(leading-backslash-3))
 
 # implicit "catch all" rule to trap busted rules 
 % : ; @echo {implicit} $@
