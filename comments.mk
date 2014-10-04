@@ -5,9 +5,10 @@
 
 # this is a comment (duh)
 
-all : a-rule # this is a comment
+all : a-rule comment-in-recipe # this is a comment
 # this comment ignored by make
 	# this comment passed to shell
+	@echo $@
 
 #this is a comment\
 with\
@@ -39,4 +40,22 @@ lines
 $(info = =$(this-is-also-a-variable))  # empty output
 
 -include foo.mk # how about comments here?
+
+comment-in-recipe : 
+	@echo $@
+# this is a Makefile commment
+	@echo after makefile comment # this is a shell comment
+	@echo this line is also passed to the shell \
+including the continuation
+# this\
+# is\
+# a\
+# makefile\
+# comment
+	@echo after the big long comment
+    # this is also a makefile comment
+ end of recipe = 42  # end of recipe
+$(info = 42=$(end of recipe))
+
+semicolon-then-comment : ; # this semicolon should be passed to the shell
 
