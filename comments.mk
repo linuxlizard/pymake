@@ -5,7 +5,7 @@
 
 # this is a comment (duh)
 
-all : a-rule comment-in-recipe # this is a comment
+all : a-rule comment-in-recipe semicolon-then-comment # this is a comment
 # this comment ignored by make
 	# this comment passed to shell
 	@echo $@
@@ -46,16 +46,18 @@ comment-in-recipe :
 # this is a Makefile commment
 	@echo after makefile comment # this is a shell comment
 	@echo this line is also passed to the shell \
-including the continuation
+including the continuation \
+# and this comment
 # this\
-# is\
-# a\
-# makefile\
-# comment
+ is\
+ a\
+ makefile\
+ comment
 	@echo after the big long comment
     # this is also a makefile comment
- end of recipe = 42  # end of recipe
+	@echo after another makefile comment
+ end-of-recipe = 42  # end of recipe
 $(info = 42=$(end of recipe))
 
-semicolon-then-comment : ; # this semicolon should be passed to the shell
+semicolon-then-comment : ; # semicolon comment should be passed to the shell
 
