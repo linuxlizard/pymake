@@ -161,6 +161,70 @@ def run_tests() :
     test_line_cont()
     test_vline()
 
+def make_recipe_block( file_lines, semicolon_chunk ) : 
+
+    state_start = 1
+    state_comment_backslash = 3
+    state_recipe_backslash = 5
+
+    state = state_start
+
+    # array of Recipe
+    recipe_list = []
+
+    # array of text lines (recipes with \)
+    recipe_lines_list = []
+
+    if len(semicolon_chunk) : 
+        # TODO
+        assert 0
+
+    for line in file_lines : 
+#        print("")
+#        print( hexdump.dump(line,16), end="" )
+        print( "l line={0}".format(line),end="")
+        if state==state_start : 
+            if line.startswith(recipe_prefix):
+                if line.endswith('\\'):
+                    recipe_lines_list = [ line ] 
+                    state = state_recipe_backslash
+                else :
+                    recipe = tokenize_recipe(ScannerIterator(line))
+                    print("recipe={0}".format(recipe.makefile()))
+                    recipe_list.append(recipe)
+            else : 
+                line_stripped = line.strip()
+                if line_stripped.startswith("#"):
+                    if line.endswith('\\'):
+                        state = state_recipe_backslash
+                else:
+                    # done with recipe list
+                    break
+
+        elif state==state_comment_backslash : 
+            if not line.endswith('\\'):
+                state = state_start
+
+        elif state==state_recipe_backslash : 
+            if line.endswith('\\'):
+                recipe_lines_list.append( line )
+            else : 
+                one_line = "".join(recipe_lines_list)
+                my_iter = ScannerIterator(one_line)
+                recipe = tokenize_recipe_list(my_iter)
+                print("recipe={0}".format(recipe.makefile()))
+                recipe_list.append(recipe)
+                line.push_back()
+                state = state_start
+
+        else : 
+            # wtf?
+            assert 0,state
+
+    print("bottom of make_recipe_block()")
+
+    return RecipeList(recipe_list)
+
 def make_line_blocks(file_lines_list): 
     # File_lines is an array of strings.
     # Each string should be terminated by an EOL.
@@ -234,8 +298,8 @@ def make_line_blocks(file_lines_list):
 
             # make a virtual line
             virt_line = VirtualLine(line_list,start_row_idx)
-            line_list = None
-            line_list = []
+            del line_list # detach the ref
+            line_list = []  # start over empty
 
             # now tokenize
             my_iter = iter(virt_line)
@@ -244,10 +308,13 @@ def make_line_blocks(file_lines_list):
             # if we found a rule, we need to change how we're handling the
             # lines
             if isinstance(token,RuleExpression) : 
+                # TODO handle ; 
                 assert len(my_iter.remain())==0
-                state = state_recipe
-            else : 
-                state = state_start
+                
+                recipe_list = make_recipe_block( file_lines )
+                assert isinstance(recipe_list,RecipeList)
+
+            state = state_start
             
             block_list.append( virt_line ) 
             virt_line = None
@@ -364,7 +431,7 @@ baz
         # string, validation
         s,v = test
 #        print(s,end="")
-        print("s={0}".format(hexdump.dump(s,16)),end="")
+#        print("s={0}".format(hexdump.dump(s,16)),end="")
 
         # This seems silly but VirtualLine needs an array of lines from a file.
         # The EOLs must be preserved. But I want a nice easy way to make
