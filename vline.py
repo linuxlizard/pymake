@@ -27,7 +27,7 @@ COL = 1
 
 class VirtualLine(object):
 
-    def __init__(self,phys_lines_list, starts_at_file_line ):
+    def __init__(self,phys_lines_list, starts_at_file_line=0 ):
         # need an array of strings (2-D array of characters)
         assert type(phys_lines_list)==type([])
 
@@ -64,7 +64,7 @@ class VirtualLine(object):
                 vline.append(vchar)
             self.virt_lines.append(vline)
 
-#            print("virt_lines={0}".format(self.virt_lines))
+            print("virt_lines={0}".format(self.virt_lines))
 
     def collapse_virtual_line(self):
         # collapse continuation lines according to the whitepace rules around
@@ -137,11 +137,33 @@ class VirtualLine(object):
         i = itertools.chain(*self.virt_lines)
         return "".join( [ c["char"] for c in i if not c["hide"] ] )
 
-
     def __iter__(self):
-        # A list of the characters that are still valid.
-        # Make the iterator we will feed to the tokenizer.
-        return ScannerIterator( [ c["char"] for c in itertools.chain(*self.virt_lines) if not c["hide"] ] )
+        # This iterator we will feed the characters that are still visible to
+        # the tokenizer.
+        self.virt_iterator = ScannerIterator( [ c["char"] for c in itertools.chain(*self.virt_lines) if not c["hide"] ] )
+        return self.virt_iterator
+
+    def truncate(self):
+        # Created to allow the parser to cut off a block at a token boundary.
+        # Need to parse something like:
+        # foo : bar ; baz 
+        # into a rule and a recipe but we won't know where the rule ends and
+        # the (maybe) recipes begin until we fully tokenize the rule
+        # (Only need this rarely)
+
+        # truncate the virtual line 
+        # TODO
+
+        # truncate the physical line(s)
+        # TODO
+
+        # truncate the iterator (stops the iterator)
+        self.virt_iterator.truncate()
+
+class RecipeVirtualLine(VirtualLine):
+    # A block containing recipe. Don't collapse around backslashes. 
+    def collapse_virtual_line(self):
+        pass
 
 def is_line_continuation(line):
     # does this line end with "\" + eol? 
@@ -161,7 +183,14 @@ def run_tests() :
     test_line_cont()
     test_vline()
 
-def make_recipe_block( file_lines, semicolon_chunk ) : 
+def parse_recipes( file_lines, semicolon_str ) : 
+    # I put stuff like this in here because I lose track of what I'm doing
+#    assert type(file_lines)==type([]),type(file_lines)
+#    assert type(file_lines[0])==type(""),type(file_lines[0])
+#    assert type(semicolon_str)==type(""),type(semicolon_str)
+
+    print("parse_recipes()")
+    print( file_lines.remain() )
 
     state_start = 1
     state_comment_backslash = 3
@@ -173,78 +202,103 @@ def make_recipe_block( file_lines, semicolon_chunk ) :
     recipe_list = []
 
     # array of text lines (recipes with \)
-    recipe_lines_list = []
+    lines_list = []
 
-    if len(semicolon_chunk) : 
-        # TODO
-        assert 0
+    if len(semicolon_str) : 
+        # we have something that trails a ; on the rule
+        recipe_vline = RecipeVirtualLine([semicolon_str])
+        recipe = tokenize_recipe(iter(recipe_vline))
+        print("recipe={0}".format(recipe.makefile()))
+        recipe.set_code( recipe_vline )
+        recipe_list.append(recipe)
 
     for line in file_lines : 
 #        print("")
-#        print( hexdump.dump(line,16), end="" )
-        print( "l line={0}".format(line),end="")
+        print( "l state={0}".format(state))
+        print( hexdump.dump(line,16), end="" )
+
         if state==state_start : 
             if line.startswith(recipe_prefix):
-                if line.endswith('\\'):
-                    recipe_lines_list = [ line ] 
+                # TODO handle DOS line ending
+                if line.endswith('\\\n'):
+                    lines_list = [ line ] 
                     state = state_recipe_backslash
                 else :
-                    recipe = tokenize_recipe(ScannerIterator(line))
+                    # single line
+                    recipe_vline = RecipeVirtualLine([line])
+                    recipe = tokenize_recipe(iter(recipe_vline))
+#                    recipe = tokenize_recipe(ScannerIterator(line))
                     print("recipe={0}".format(recipe.makefile()))
+                    recipe.set_code(recipe_vline)
                     recipe_list.append(recipe)
             else : 
                 line_stripped = line.strip()
-                if line_stripped.startswith("#"):
-                    if line.endswith('\\'):
+                if len(line_stripped)==0:
+                    # ignore blank lines
+                    pass
+                elif line_stripped.startswith("#"):
+                    # ignore makefile comments
+                    # TODO handle DOS line ending
+                    if line.endswith('\\\n'):
                         state = state_recipe_backslash
                 else:
+                    # found a line that doesn't belong to the recipe;
                     # done with recipe list
+                    file_lines.pushback()
                     break
 
         elif state==state_comment_backslash : 
-            if not line.endswith('\\'):
+            # TODO handle DOS line ending
+            if not line.endswith('\\\n'):
                 state = state_start
 
         elif state==state_recipe_backslash : 
-            if line.endswith('\\'):
-                recipe_lines_list.append( line )
+            # TODO handle DOS line ending
+            if line.endswith('\\\n'):
+                lines_list.append( line )
             else : 
-                one_line = "".join(recipe_lines_list)
-                my_iter = ScannerIterator(one_line)
-                recipe = tokenize_recipe_list(my_iter)
-                print("recipe={0}".format(recipe.makefile()))
+                # now have an array of lines that need to be one line for the
+                # recipes tokenizer
+                recipe_vline = RecipeVirtualLine(lines_list)
+                recipe = tokenize_recipe(iter(recipe_vline))
+                recipe.set_code(recipe_vline)
                 recipe_list.append(recipe)
-                line.push_back()
+
+                # go back and look for more
                 state = state_start
 
         else : 
             # wtf?
             assert 0,state
 
-    print("bottom of make_recipe_block()")
+    print("bottom of parse_recipes()")
 
     return RecipeList(recipe_list)
 
-def make_line_blocks(file_lines_list): 
+def parse_lines(file_lines): 
     # File_lines is an array of strings.
     # Each string should be terminated by an EOL.
-    # Create a VirtualLine object for each line. Handle cases where line is
-    # continued after the EOL by a \+EOL (backslash).
+    # Handle cases where line is continued after the EOL by a \+EOL
+    # (backslash).
+
+    # I put stuff like this in here because I lose track of what I'm doing
+    assert type(file_lines)==type([])
+    assert type(file_lines[0])==type("")
 
     state_start = 1
     state_backslash = 2
-    state_recipe = 3
-    state_tokenize = 4
+    state_tokenize = 3
     
     state = state_start 
     start_row_idx = 0
 
+    # array of Symbols we have parsed in the file
     block_list = []
 
-    # we need an iterator that supports pushback
-    file_lines = ScannerIterator(file_lines_list)
+    # we need an iterator across our lines that supports pushback
+    line_iter = ScannerIterator(file_lines)
 
-    for line in file_lines:
+    for line in line_iter :
         if state==state_start : 
             start_line_stripped = line.strip()
 
@@ -253,7 +307,7 @@ def make_line_blocks(file_lines_list):
                 continue
 
             line_list = [ line ] 
-            start_row_idx = file_lines.idx
+            start_row_idx = line_iter.idx
 
             if is_line_continuation(line):
                 # We found a line with trailing \+eol
@@ -270,20 +324,6 @@ def make_line_blocks(file_lines_list):
                 # This is the last line of our continuation block. Create a
                 # virtual block for this array of lines.
                 state = state_tokenize
-
-        elif state==state_recipe :
-            # we are gathering a list of recipes
-
-            if line.startswith(recipe_prefix):
-                line_list.append(line)
-            else : 
-                print(line_list)
-                assert 0
-
-                # End of recipe. Put the line back for someone else to use.
-                file_lines.push_back()
-
-                state = state_start
 
         else:
             # wtf?
@@ -302,22 +342,50 @@ def make_line_blocks(file_lines_list):
             line_list = []  # start over empty
 
             # now tokenize
-            my_iter = iter(virt_line)
-            token = tokenize_statement(my_iter)
+            statement_iter = iter(virt_line)
+            token = tokenize_statement(statement_iter)
 
-            # if we found a rule, we need to change how we're handling the
-            # lines
+            # If we found a rule, we need to change how we're handling the
+            # lines. (Recipes have different whitespace and backslash rules.)
             if isinstance(token,RuleExpression) : 
-                # TODO handle ; 
-                assert len(my_iter.remain())==0
-                
-                recipe_list = make_recipe_block( file_lines )
+                # rule line can contain a recipe following a ; 
+                # for example:
+                # foo : bar ; @echo baz
+                #
+                # The rule parser should stop at the semicolon. Will leave the
+                # semicolon as the first char of iterator
+                # 
+                print("rule={0}".format(str(token)))
+
+                # truncate the virtual line that precedes the recipe (cut off
+                # at a ";" that might be lurking
+                # foo : bar ; @echo baz
+                #          ^--- truncate here
+                # I have to parse the full like as a rule to know where the
+                # rule ends and the recipe(s) begin. The backslash makes me
+                # crazy.
+                # foo : bar ; @echo baz\
+                # I am more recipe hur hur hur
+                dangling_recipe_str = "".join(statement_iter.remain())
+                if len(dangling_recipe_str)>0:
+                    virt_line.truncate()
+
+                recipe_list = parse_recipes( line_iter, dangling_recipe_str )
                 assert isinstance(recipe_list,RecipeList)
 
+                print("recipe_list={0}".format(str(recipe_list)))
+
+                # attach the recipe(s) to the rule
+                token.add_recipe_list(recipe_list)
+
+            token.set_code(virt_line)
+
+            # save the chunk with its parse
+            block_list.append( token ) 
+            del virt_line # detach the ref
+
+            # back around the horn
             state = state_start
-            
-            block_list.append( virt_line ) 
-            virt_line = None
 
     return block_list 
 
@@ -331,9 +399,18 @@ def main() :
     with open(infilename,'r') as infile :
         file_lines = infile.readlines()
 
-    block_list = make_line_blocks(file_lines)
+    block_list = parse_lines(file_lines)
     for block in block_list : 
-        print("^^{0}$$".format(block),end="")
+        assert isinstance(block,Symbol),(type(block),)
+        assert hasattr(block,"code")
+        print("{0}".format(block.code),end="")
+        if isinstance(block,RuleExpression):
+            for recipe in block.recipe_list : 
+                print("{0}".format(recipe.code))
+
+
+#    for block in block_list : 
+#        print("{0}".format(block),end="")
         
 
 def test_line_cont():
@@ -444,7 +521,7 @@ baz
 #        print( "split={0}".format(s.split("\n")))
 #        print( "lines={0} len={1}".format(lines,len(lines)),end="")
 
-        vline = VirtualLine( lines, 0 )
+        vline = VirtualLine( lines )
         for line in vline.virt_lines : 
             print(line)
         print(vline)

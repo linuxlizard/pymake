@@ -135,21 +135,39 @@ class ParseError(Exception):
 class NestedTooDeep(Exception):
     pass
 
+def happy_string(s): 
+    # Convert a string with unprintable chars / weird printing chars into
+    # something that can be printed without side effects.
+    # For example, <tab> -> "\t"   <eol> -> "\n"
+
+    def mkhappy(c):
+        if ord(c) < 32 : 
+            if c=='\t':return "\\t"
+            if c=='\n':return "\\n"
+            return "\\x{0:02x}".format(ord(c))
+        if c=='\\': return '\\\\'
+        if c=='"': return '\\"'
+        return c
+
+    return "".join( [ mkhappy(c) for c in s ] )
+
 #
 #  Class Hierarchy for Tokens
 #
 class Symbol(object):
     # base class of everything we find in the makefile
-    def __init__(self,string):
+    def __init__(self,string=None):
         # by default, save the token's string 
-        # (descendent classes could store something differnet)
+        # (descendent classes could store something different)
         self.string = string
+
+        # a VirtualLine that holds the code that is compiled to this symbol
+        self.code = None
 
     def __str__(self):
         # create a string such as "Literal(all)"
         # TODO handle embedded " and ' (with backslashes I guess?)
-        return "{0}(\"{1}\")".format(self.__class__.__name__,self.string)
-#        return "{0}({1})".format(self.__class__.__name__,self.string)
+        return "{0}(\"{1}\")".format(self.__class__.__name__,happy_string(self.string))
 
     def __eq__(self,rhs):
         # lhs is self
@@ -159,6 +177,15 @@ class Symbol(object):
     def makefile(self):
         # create a Makefile from this object
         return self.string
+
+    def set_code(self,vline):
+        # the block of text for this symbol
+        assert hasattr(vline,"phys_lines")
+        assert hasattr(vline,"virt_lines")
+        print("set_code() start={0} end={1}".format(
+                vline.virt_lines[0][0]["pos"],
+                vline.virt_lines[-1][-1]["pos"]) )
+        self.code = vline
 
 class Literal(Symbol):
     # A literal found in the token stream. Store as a string.
@@ -184,6 +211,8 @@ class Expression(Symbol):
         for t in self.token_list :
 #            print("t={0}".format( t ) )
             assert isinstance(t,Symbol), (type(t),t)
+
+        Symbol.__init__(self)
 
     def __str__(self):
         # return a ()'d list of our tokens
@@ -275,7 +304,7 @@ class RuleExpression(Expression):
         assert isinstance(token_list[2],PrerequisiteList)
 
         # start with a default empty recipe list
-        self.recipe_list = RecipeList([])
+        self.recipe_list =  RecipeList([]) 
         token_list.append( self.recipe_list )
 
         Expression.__init__(self,token_list)
@@ -294,9 +323,15 @@ class RuleExpression(Expression):
     def add_recipe_list( self, recipe_list ) : 
         assert isinstance(recipe_list,RecipeList)
 
+        print("add_recipe_list() rule={0}".format(self.makefile()))
+        print("add_recipe_list() recipe_list={0}".format(str(recipe_list)))
+
         # replace my recipe list with this recipe list
+        self.token_list[3] = recipe_list
         self.recipe_list = recipe_list
-        self.token_list[3] = self.recipe_list
+
+        print("add_recipe_list()",self.makefile())
+        print("add_recipe_list()",self.recipe_list.code)
 
 class PrerequisiteList(Expression):
     def makefile(self):
@@ -318,6 +353,8 @@ class RecipeList( Expression ) :
         for r in recipe_list :
             assert isinstance(r,Recipe),(r,)
         
+        if len(recipe_list)>0:
+            print("RecipeList()",str(recipe_list[0]))
         Expression.__init__(self,recipe_list)
 
     def makefile(self):
@@ -1340,6 +1377,12 @@ class ScannerIterator(object):
     def remain(self):
         # Test/debug method. Return what remains of the data.
         return self.data[self.idx:]
+
+    def truncate(self):
+        # kill anything after the current position
+        self.data = self.data[:self.idx]
+        self.max_idx = len(self.data)
+        print("truncate() idx={0} len={1}".format(self.idx,self.max_idx))
 
 def parse_file(infilename):
     infile = open(infilename)
