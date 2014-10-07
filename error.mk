@@ -1,0 +1,4 @@
+$(error hello, world)
+
+all:;@:
+

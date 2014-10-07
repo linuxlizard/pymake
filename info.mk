@@ -1,0 +1,4 @@
+$(info hello, world)
+
+all:;@:
+
