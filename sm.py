@@ -136,10 +136,16 @@ class NestedTooDeep(Exception):
     pass
 
 def happy_string(s): 
-    # Convert a string with unprintable chars / weird printing chars into
+    # Convert a string with unprintable chars and/or weird printing chars into
     # something that can be printed without side effects.
-    # For example, <tab> -> "\t"   <eol> -> "\n"
-
+    # For example, 
+    #   <tab> -> "\t"   
+    #   <eol> -> "\n"
+    #   "     -> \"
+    #
+    # Want to be able to round trip the output of the Symbol hierarchy back
+    # into valid Python code.
+    #
     def mkhappy(c):
         if ord(c) < 32 : 
             if c=='\t':return "\\t"
@@ -165,8 +171,8 @@ class Symbol(object):
         self.code = None
 
     def __str__(self):
-        # create a string such as "Literal(all)"
-        # TODO handle embedded " and ' (with backslashes I guess?)
+        # create a string such as Literal("all")
+        # handle embedded " and ' (with backslashes I guess?)
         return "{0}(\"{1}\")".format(self.__class__.__name__,happy_string(self.string))
 
     def __eq__(self,rhs):
@@ -179,12 +185,14 @@ class Symbol(object):
         return self.string
 
     def set_code(self,vline):
-        # the block of text for this symbol
+        # the VirtualLine instance holding the block of text for this symbol
         assert hasattr(vline,"phys_lines")
         assert hasattr(vline,"virt_lines")
+
         print("set_code() start={0} end={1}".format(
                 vline.virt_lines[0][0]["pos"],
                 vline.virt_lines[-1][-1]["pos"]) )
+
         self.code = vline
 
 class Literal(Symbol):
@@ -216,7 +224,7 @@ class Expression(Symbol):
 
     def __str__(self):
         # return a ()'d list of our tokens
-        s = "{0}( [".format(self.__class__.__name__)
+        s = "{0}([".format(self.__class__.__name__)
         if 0:
             for t in self.token_list :
                 s += str(t)
@@ -294,18 +302,33 @@ class RuleExpression(Expression):
     # to be separated differently for rules vs recipes (backslashes and
     # comments are handled differently).
     # 
+    # Rule ::= Target RuleOperator Prerequisites 
+    #      ::= Target Assignment 
     #
-    # add sanity check in constructor
+    # 
+
     def __init__(self, token_list):
-        assert len(token_list)==3,len(token_list)
+        # add sanity check in constructor
 
-        assert isinstance(token_list[0],Expression)
-        assert isinstance(token_list[1],RuleOp)
-        assert isinstance(token_list[2],PrerequisiteList)
+        assert len(token_list)==3 or len(token_list)==4, len(token_list)
 
-        # start with a default empty recipe list
-        self.recipe_list =  RecipeList([]) 
-        token_list.append( self.recipe_list )
+        assert isinstance(token_list[0],Expression),(type(token_list[0]),)
+        assert isinstance(token_list[1],RuleOp),(type(token_list[1]),)
+
+        if isinstance(token_list[2],PrerequisiteList) : 
+            pass
+        elif isinstance(token_list[2],AssignmentExpression) :
+            pass 
+        else:
+            assert 0,(type(token_list[2]),)
+
+        # If one not provied, start with a default empty recipe list
+        # (so this object will always have a RecipeList instance)
+        if len(token_list)==3 : 
+            self.recipe_list = RecipeList([]) 
+            token_list.append( self.recipe_list )
+        elif len(token_list)==4 : 
+            assert isinstance(token_list[3],RecipeList),(type(token_list[3]),)
 
         Expression.__init__(self,token_list)
 
@@ -379,7 +402,8 @@ def comment(string):
     state = state_start
 
     # this could definitely be faster (method in ScannerIterator to eat until EOL?)
-    for c in string : 
+    for c_obj in string : 
+        c = c_obj["char"]
         print("c c={0} state={1}".format(filter_char(c),state))
         if state==state_start:
             if c=='#':
@@ -507,7 +531,8 @@ def tokenize_statement_LHS(string,separators=""):
     # XXX in both rule and assignment LHS? O_o
 #    backslashable = set("%:,")
 
-    for c in string : 
+    for c_obj in string : 
+        c = c_obj["char"]
         print("s c={0} state={1} idx={2} ".format(
                 filter_char(c),state,string.idx,token))
         if state==state_start:
@@ -637,8 +662,12 @@ def tokenize_statement_LHS(string,separators=""):
     elif state==state_colon_colon:
         # "::"
         return Expression(token_list), RuleOp("::") 
+    elif state==state_in_word :
+        # likely a lone word (Parse Error) or a $() call
+        # TODO handle parse error
+        return Expression(token_list), 
 
-    assert 0, (state,string.remain(),)
+    assert 0, (state,string.starting_file_line)
 
 #@depth_checker
 def tokenize_rule_prereq_or_assign(string):
@@ -699,7 +728,8 @@ def tokenize_rule_RHS(string):
     token = ""
     token_list = []
 
-    for c in string :
+    for c_obj in string :
+        c = c_obj["char"]
         print("p c={0} state={1} idx={2}".format(filter_char(c),state,string.idx))
 
         if state==state_start :
@@ -872,7 +902,8 @@ def tokenize_assign_RHS(string):
     white_token = ""
     token_list = []
 
-    for c in string :
+    for c_obj in string :
+        c = c_obj["char"]
         print("a c={0} state={1} idx={2}".format(
                 filter_char(c),state,string.idx, string.remain()))
         if state==state_start :
@@ -965,8 +996,9 @@ def tokenize_variable_ref(string):
     token = ""
     token_list = []
 
-    for c in string : 
-        print("v c={0} state={1} idx={2}".format(c,state,string.idx))
+    for c_obj in string : 
+        c = c_obj["char"]
+        print("v c={0} state={1} idx={2}".format(filter_char(c),state,string.idx))
         if state==state_start:
             if c=='$':
                 state=state_dollar
@@ -1053,7 +1085,8 @@ def tokenize_recipe_list(string):
 
     sanity_count = 0
 
-    for c in string :
+    for c_obj in string :
+        c = c_obj["char"]
         print("r c={0} state={1} idx={2} ".format(
                 filter_char(c),state,string.idx,token))
 
@@ -1201,6 +1234,8 @@ def tokenize_recipe(string):
     # A variable ref is a token boundary, and EOL is a token boundary.
     # At recipe boundary, create a Recipe from the token_list. 
 
+    print("tokenize_recipe()")
+
     state_start = 1
     state_lhs_white = 2
     state_recipe = 3
@@ -1214,7 +1249,8 @@ def tokenize_recipe(string):
 
     sanity_count = 0
 
-    for c in string :
+    for c_obj in string :
+        c = c_obj["char"]
         print("r c={0} state={1} idx={2} ".format(
                 filter_char(c),state,string.idx,token))
 
@@ -1293,7 +1329,7 @@ def tokenize_recipe(string):
     if state==state_recipe : 
         token_list.append( Literal(token) )
     else:
-        assert 0,state
+        assert 0,(state,string.starting_file_line)
 
     return Recipe( token_list )
 
@@ -1337,6 +1373,7 @@ def tokenize_makefile(string):
 
 class ScannerIterator(object):
     # string iterator that allows look ahead and push back
+    # can also push/pop state (for deep lookaheads)
     def __init__(self,data):
         self.data = data
         self.idx = 0
@@ -1378,11 +1415,13 @@ class ScannerIterator(object):
         # Test/debug method. Return what remains of the data.
         return self.data[self.idx:]
 
-    def truncate(self):
+    def stop(self):
+        # truncate the iterator at the current position
+        assert self.idx < self.max_idx, self.idx
+
         # kill anything after the current position
         self.data = self.data[:self.idx]
         self.max_idx = len(self.data)
-        print("truncate() idx={0} len={1}".format(self.idx,self.max_idx))
 
 def parse_file(infilename):
     infile = open(infilename)
