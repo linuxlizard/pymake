@@ -12,6 +12,7 @@ if sys.version_info.major < 3:
     raise Exception("Requires Python 3.x")
 
 from sm import *
+from vline import VirtualLine
 
 def run():
 
@@ -63,19 +64,24 @@ def run():
           ("$(","info = # foo#foo foo#foo foo#foo ###=# foo#foo foo#foo foo#foo ###",")")),
     )
 
+    fail_tests = ( 
+         ( "foo", () ),
+         ( "$(foo", () ),
+
+    )
+
 #    run_tests_list( variable_ref_tests, tokenize_variable_ref )
     
+#    for test in fail_tests: 
     for test in variable_ref_tests : 
         s,v = test
         print("test={0}".format(s))
-        my_iter = ScannerIterator(s)
+        vline = VirtualLine([s],0)
+        my_iter = iter(vline) 
 
         tokens = tokenize_variable_ref(my_iter)
         print( "tokens={0}".format(str(tokens)) )
         print("\n")
-
-    # this should fail
-#    print( "var={0}".format(tokenize_variable_ref(ScannerIterator("$(CC"))) )
 
 if __name__=='__main__':
     run()
