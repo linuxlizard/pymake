@@ -8,7 +8,7 @@ import subprocess
 import tempfile
 
 import sm
-from sm import ScannerIterator
+from vline import VirtualLine
 
 # require Python 3.x 
 if sys.version_info.major < 3:
@@ -19,7 +19,9 @@ def run_tests_list(tests_list,tokenizer):
     for test in tests_list :
         s,validate = test
         print("test={0}".format(test))
-        my_iter = ScannerIterator(s)
+#        my_iter = ScannerIterator(s)
+        vline = VirtualLine([s],0)
+        my_iter = iter(vline) 
 
         tokens = tokenizer(my_iter)
         print( "  tokens={0}".format(str(tokens)) )
