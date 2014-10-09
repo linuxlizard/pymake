@@ -447,21 +447,12 @@ def depth_checker(func):
 
 #@depth_checker
 def tokenize_statement(string):
-    # statement ::= directive
-    #           ::= rule
-    #           ::= assignment
-    #
-    # XXX currently only support rule and assignment. No directive yet.
-    return tokenize_assignment_or_rule(string)
-
-#@depth_checker
-def tokenize_assignment_or_rule(string):
     # at start of scanning, we don't know if this is a rule or an assignment
     # this is a test : foo   -> (this,is,a,test,:,)
     # this is a test = foo   -> (this is a test,=,)
     #
-    # I tokenize assuming it's an assignment statement. If the final token is a
-    # rule token, then I re-tokenize as a rule.
+    # I first tokenize assuming it's an assignment statement. If the final
+    # token is a rule token, then I re-tokenize as a rule.
     #
     # Only difference between a rule LHS and an assignment LHS is the
     # whitespace. In a rule, the whitespace is ignored. In an assignment, the
@@ -475,11 +466,19 @@ def tokenize_assignment_or_rule(string):
     for token in lhs : 
         assert isinstance(token,Symbol),(type(token),token)
 
-    statement_type = "rule" if lhs[-1].string in rule_operators else "assignment" 
+    # decode what kind of statement do we have based on where
+    # tokenize_statemetn_LHS() stopped.
+    last_symbol = lhs[-1]
 
-    print( "last_token={0} ∴ statement is {1}".format(lhs[-1],statement_type))
-    if lhs[-1].string in rule_operators :
+    print(lhs[-1],len(lhs))
+
+    if isinstance(last_symbol,RuleOp): 
+        statement_type = "rule"
+
+        print( "last_token={0} ∴ statement is {1}".format(last_symbol,statement_type))
         print("re-run as rule")
+
+        # jump back to starting position
         string.pop_state()
         # re-tokenize as a rule (backtrack)
         lhs = tokenize_statement_LHS(string,whitespace)
@@ -494,11 +493,22 @@ def tokenize_assignment_or_rule(string):
         # don't look for recipe(s) yet
 
         return RuleExpression( statement ) 
+    elif isinstance(last_symbol,AssignOp): 
+        statement_type = "assignment"
 
-    # The statement is an assignment. Tokenize rest of line as an assignment.
-    statement = list(lhs)
-    statement.append(tokenize_assign_RHS( string ))
-    return AssignmentExpression( statement )
+        print( "last_token={0} ∴ statement is {1}".format(last_symbol,statement_type))
+
+        # The statement is an assignment. Tokenize rest of line as an assignment.
+        statement = list(lhs)
+        statement.append(tokenize_assign_RHS( string ))
+        return AssignmentExpression( statement )
+
+    else:
+        statement_type="????"
+        print( "last_token={0} ∴ statement is {1}".format(last_symbol,statement_type))
+
+        assert 0,last_symbol
+
 
 #@depth_checker
 def tokenize_statement_LHS(string,separators=""):
@@ -523,8 +533,24 @@ def tokenize_statement_LHS(string,separators=""):
     # identical.
     #
     # BNF is sorta
-    # assignment ::= LHS assignment_operator RHS
-    # rule       ::= LHS rule_operator RHS
+    # Statement ::= Assignment | Rule | Directive | Expression
+    # Assignment ::= LHS AssignmentOperator RHS
+    # Rule       ::= LHS RuleOperator RHS
+    # Directive  ::= TODO
+    # Expression ::= TODO
+    #
+    # Directive is stuff like ifdef export vpath define. Directives get
+    # slightly complicated because
+    #   ifdef :  <--- not legal
+    #   ifdef:   <--- legal (verified 3.81, 3.82, 4.0)
+    #   ifdef =  <--- legal
+    #   ifdef=   <--- legal
+    # 
+    # Expression is single function like $(info) $(warning). Not all functions
+    # are valid in statement context. TODO finish directive.mk to discover
+    # which directives are legal in statement context.
+    # A lone expression in GNU make usually triggers the "missing separator"
+    # error.
     #
 
     # a \x of these chars replaced by literal x
@@ -580,7 +606,7 @@ def tokenize_statement_LHS(string,separators=""):
             elif c in set("?+!"):
                 # maybe assignment ?= += !=
                 # cheat and peekahead
-                if string.lookahead()=='=':
+                if string.lookahead()["char"]=='=':
                     string.next()
                     token_list.append(Literal(token.rstrip()))
                     return Expression(token_list),AssignOp(c+'=')
@@ -665,6 +691,7 @@ def tokenize_statement_LHS(string,separators=""):
     elif state==state_in_word :
         # likely a lone word (Parse Error) or a $() call
         # TODO handle parse error
+        assert 0, token
         return Expression(token_list), 
 
     assert 0, (state,string.starting_file_line)
@@ -780,7 +807,7 @@ def tokenize_rule_RHS(string):
             elif c in set("?+!"):
                 # maybe assignment ?= += !=
                 # cheat and peekahead
-                if string.lookahead()=='=':
+                if string.lookahead()["char"]=='=':
                     # definitely an assign; bail out and we'll retokenize as assign
                     return None
                 else:
@@ -893,13 +920,10 @@ def tokenize_assign_RHS(string):
     state_start = 1
     state_dollar = 2
     state_literal = 3
-    state_backslash = 4
-    state_whitespace = 5
-    state_save_white = 6
+    state_whitespace = 4
 
     state = state_start
     token = ""
-    white_token = ""
     token_list = []
 
     for c_obj in string :
@@ -956,24 +980,6 @@ def tokenize_assign_RHS(string):
 
             state = state_literal
 
-        elif state==state_backslash : 
-            
-            # davep 29-Sep-2014 ; XXX moving backslash handling into line-by-line
-            assert 0
-
-            # eat the EOL  (backslash+eol == line continuation)
-            # "Outside of recipe lines, backslash/newlines are converted into a
-            # single space character"
-            if c in eol : 
-                token += " "
-                # eat leading white on next line
-                state = state_whitespace
-            else:
-                # literal backslash + char
-                token += '\\'
-                token += c
-                state = state_literal
-
         else:
             assert 0, state
 
@@ -1003,7 +1009,7 @@ def tokenize_variable_ref(string):
             if c=='$':
                 state=state_dollar
             else :
-                raise ParseError()
+                raise ParseError(c_obj["pos"])
         elif state==state_dollar:
             # looking for '(' or '$' or some char
             if c=='(' or c=='{':
@@ -1032,9 +1038,11 @@ def tokenize_variable_ref(string):
                 # nested expression!  :-O
                 # if lone $$ token, preserve the $$ in the current token string
                 # otherwise, recurse into parsing a $() expression
-                if string.lookahead()=='$':
+                if string.lookahead()["char"]=='$':
                     token += "$"
-                    string.next()
+                    # skip the extra $
+                    c = next(string)
+                    state = state_in_var_ref
                 else:
                     # save token so far
                     token_list.append( Literal(token) )
@@ -1050,182 +1058,13 @@ def tokenize_variable_ref(string):
         else:
             assert 0, state
 
-    raise ParseError()
+    raise ParseError(c_obj["pos"])
 
 def filter_char(c):
     # make printable char
     if ord(c) < ord(' '):
         return hex(ord(c))
     return c
-
-#@depth_checker
-def tokenize_recipe_list(string):
-    # Collect characters together into a token. 
-    # At token boundary, store token as a Literal. Add to token_list. Reset token.
-    # A variable ref is a token boundary, and EOL is a token boundary.
-    # At recipe boundary, create a Recipe from the token_list. 
-    #   Also store Recipe in recipe_list. Reset token_list.
-    # At rule boundary, create a RecipeList from the recipe_list.
-
-    # davep 04-Oct-2014 ; XXX remove this function
-    assert 0
-
-    state_start = 1
-    state_lhs_white = 2
-    state_seeking_next_recipe = 3
-    state_recipe = 4
-    state_space = 5
-    state_dollar = 6
-    state_backslash = 7
-    
-    state = state_start
-    token = ""
-    token_list = []
-    recipe_list = []
-
-    sanity_count = 0
-
-    for c_obj in string :
-        c = c_obj["char"]
-        print("r c={0} state={1} idx={2} ".format(
-                filter_char(c),state,string.idx,token))
-
-        sanity_count += 1
-#        assert sanity_count < 50
-
-        if state==state_start : 
-            # Must arrive here right after the end of the prerequisite list.
-            # Should find either a ; or an EOL
-            # example:
-            #
-            # foo : <eol>
-            # <tab>@echo bar
-            #
-            # foo : ; @echo bar
-            #
-            if c in eol:
-                state = state_seeking_next_recipe 
-            elif c==';':
-                state = state_lhs_white
-            else:
-                string.pushback()
-                state = state_seeking_next_recipe 
-#                raise ParseError("c={0}".format(filter_char(c)))
-                
-        elif state==state_lhs_white :
-            # Whitespace after the <tab> (or .RECIPEPREFIX) until the first
-            # shell-able command is eaten.
-            if not c in whitespace : 
-                string.pushback()
-                state = state_recipe
-            else:
-                # eat the whitespace
-                pass
-
-        elif state==state_recipe :
-            if c in eol : 
-                # save what we've seen so far
-                token_list.append( Literal(token) )
-                recipe_list.append( Recipe( token_list ) )
-                # reset our collecting
-                token = ""
-                token_list = []
-                # TODO handle \r \r\n \n\r \n
-                state = state_seeking_next_recipe
-            elif c=='$':
-                state = state_dollar
-            elif c=='\\':
-                state = state_backslash
-            else:
-                token += c
-
-        elif state==state_seeking_next_recipe : 
-            if c=='#':
-                # eat the comment 
-                string.pushback()
-                comment(string)
-                # continue seeking next recipe
-            elif c==recipe_prefix :
-                # jump back to start to eat any more leading whitespace
-                # (leading whitespace is stripped, trailing whitespace is
-                # preserved)
-                state = state_lhs_white
-            elif c in whitespace: 
-                state = state_space
-            elif c in eol : 
-                # ignore EOL, continue seeking
-                pass
-            else:
-                # Found some other character therefore no next recipe
-                # therefore end of recipe list. Bye!
-                string.pushback()
-                return RecipeList(recipe_list)
-
-        elif state==state_space : 
-            # eat spaces until EOL or !spaces
-            # TODO what happens if .RECIPEPREFIX != <tab>? Is <tab> now
-            # whitespace?
-            if c in eol : 
-                state = state_seeking_next_recipe
-            elif c=='#' :
-                # eat the comment 
-                string.pushback()
-                comment(string)
-                state = state_seeking_next_recipe
-            elif not c in whitespace :
-                # buh-bye!
-                string.pushback()
-                return RecipeList(recipe_list)
-
-        elif state==state_dollar : 
-            if c=='$':
-                # literal $
-                token += "$"
-                state = state_recipe
-            else:
-                # definitely a variable ref of some sort
-                # save token so far; note no rstrip()!
-                token_list.append(Literal(token))
-                # restart token
-                token = ""
-
-                # jump to variable_ref tokenizer
-                # restore "$" + "(" in the string
-                string.pushback()
-                string.pushback()
-
-                # jump to var_ref tokenizer
-                token_list.append( tokenize_variable_ref(string) )
-
-            state=state_recipe
-
-        elif state==state_backslash : 
-            if not c in eol :
-                # literal \ followed by some char
-                token += '\\'
-                token += c
-            else :
-                # save backslash+newline
-                token += '\\' 
-                token += platform_eol
-            state = state_recipe
-
-        else:
-            assert 0,state
-
-    print("end of string state={0}".format(state))
-
-    # end of string
-    # save what we've seen so far
-    if state==state_recipe : 
-        token_list.append( Literal(token) )
-        recipe_list.append( Recipe(token_list) )
-    elif state==state_seeking_next_recipe:
-        pass
-    else:
-        assert 0,state
-
-    return RecipeList( recipe_list )
 
 #@depth_checker
 def tokenize_recipe(string):
@@ -1422,41 +1261,4 @@ class ScannerIterator(object):
         # kill anything after the current position
         self.data = self.data[:self.idx]
         self.max_idx = len(self.data)
-
-def parse_file(infilename):
-    infile = open(infilename)
-    all_lines = infile.readlines()
-    infile.close()
-
-    state_start = 1
-    state_seeking_statement = 2
-    state_in_statement = 3
-    state_in_rule = 4
-    state_in_recipe = 5
-
-    state = state_start 
-
-    line_iter = ScannerIterator(all_lines)
-    for line in line_iter : 
-        # do we end with a continuation character?
-        if state==state_start : 
-            if line[-2]=='\\' :
-                # TODO
-                assert 0
-
-            elif line.startswith("#"):
-                # eat comment
-                pass
-    
-    my_iter = ScannerIterator(s)
-    
-    tokens = tokenize_makefile(my_iter)
-
-    print( "tokens={0}".format(str(tokens)) )
-    print( tokens.makefile() )
-    print("\n")
-
-if __name__=='__main__':
-    for infilename in sys.argv[1:]:
-        parse_file(infilename)
 
