@@ -2,7 +2,7 @@
 #
 # davep 07-Oct-2014 ;
 
-$(info hello, world)
+#$(info hello, world)
 
 $(if "$(FOO)",$(BAR),$(BAZ))
 
@@ -12,7 +12,7 @@ $(info $(.FEATURES))
 
 $(warning warning warning danger danger!)
 
-$(sort foo bar lose)
+#$(sort foo bar lose)
 
 #$(foreach prog
 
