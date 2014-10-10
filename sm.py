@@ -135,6 +135,15 @@ class ParseError(Exception):
 class NestedTooDeep(Exception):
     pass
 
+def filter_char(c):
+    if ord(c) < 32 : 
+        if c=='\t':return "\\t"
+        if c=='\n':return "\\n"
+        return "\\x{0:02x}".format(ord(c))
+    if c=='\\': return '\\\\'
+    if c=='"': return '\\"'
+    return c
+
 def happy_string(s): 
     # Convert a string with unprintable chars and/or weird printing chars into
     # something that can be printed without side effects.
@@ -145,17 +154,7 @@ def happy_string(s):
     #
     # Want to be able to round trip the output of the Symbol hierarchy back
     # into valid Python code.
-    #
-    def mkhappy(c):
-        if ord(c) < 32 : 
-            if c=='\t':return "\\t"
-            if c=='\n':return "\\n"
-            return "\\x{0:02x}".format(ord(c))
-        if c=='\\': return '\\\\'
-        if c=='"': return '\\"'
-        return c
-
-    return "".join( [ mkhappy(c) for c in s ] )
+    return "".join( [ filter_char(c) for c in s ] )
 
 #
 #  Class Hierarchy for Tokens
@@ -458,6 +457,9 @@ def tokenize_statement(string):
     # whitespace. In a rule, the whitespace is ignored. In an assignment, the
     # whitespace is preserved.
 
+    # get the starting position of this string (for error reporting)
+    starting_pos = string.lookahead()["pos"]
+
     # save current position in the token stream
     string.push_state()
     lhs = tokenize_statement_LHS(string)
@@ -502,6 +504,15 @@ def tokenize_statement(string):
         statement = list(lhs)
         statement.append(tokenize_assign_RHS( string ))
         return AssignmentExpression( statement )
+
+    elif isinstance(last_symbol,Expression) :
+        statement_type="expression"
+        print( "last_token={0} ∴ statement is {1}".format(last_symbol,statement_type))
+
+        # The statement is a directive or function call.
+        assert len(string.remain())==0, (len(string.remain(),starting_pos))
+        
+        return Expression(lhs)
 
     else:
         statement_type="????"
@@ -556,6 +567,9 @@ def tokenize_statement_LHS(string,separators=""):
     # a \x of these chars replaced by literal x
     # XXX in both rule and assignment LHS? O_o
 #    backslashable = set("%:,")
+
+    # get the starting position of this string (for error reporting)
+    starting_pos = string.lookahead()["pos"]
 
     for c_obj in string : 
         c = c_obj["char"]
@@ -690,11 +704,10 @@ def tokenize_statement_LHS(string,separators=""):
         return Expression(token_list), RuleOp("::") 
     elif state==state_in_word :
         # likely a lone word (Parse Error) or a $() call
-        # TODO handle parse error
-        assert 0, token
+        # TODO handle parse error (How?)
         return Expression(token_list), 
 
-    assert 0, (state,string.starting_file_line)
+    assert 0, (state,starting_pos)
 
 #@depth_checker
 def tokenize_rule_prereq_or_assign(string):
@@ -831,7 +844,7 @@ def tokenize_rule_RHS(string):
 
             elif c==';' :
                 # recipe tokenizer expects to start with a ';' or a <tab>
-                token.pushback()
+                string.pushback()
                 # end of prerequisites; start of recipe
                 token_list.append(Literal(token))
                 return PrerequisiteList(token_list)
@@ -1060,12 +1073,6 @@ def tokenize_variable_ref(string):
 
     raise ParseError(c_obj["pos"])
 
-def filter_char(c):
-    # make printable char
-    if ord(c) < ord(' '):
-        return hex(ord(c))
-    return c
-
 #@depth_checker
 def tokenize_recipe(string):
     # Collect characters together into a token. 
@@ -1171,44 +1178,6 @@ def tokenize_recipe(string):
         assert 0,(state,string.starting_file_line)
 
     return Recipe( token_list )
-
-def tokenize_makefile(string): 
-
-    state_start = 1
-    state_statement = 2
-
-    state = state_start
-    token_list = []
-
-    for c in string : 
-        print("m c={0} state={1} idx={2}".format(filter_char(c),state,string.idx))
-        if state==state_start :
-            if c in whitespace or c in eol : 
-                # ignore whitespace, blank lines
-                pass
-            elif c=='#':
-                string.pushback()
-                # eat comment
-                comment(string)
-            else :
-                string.pushback()
-                state = state_statement
-
-        elif state==state_statement : 
-            # statement := directive
-            #           := assignment
-            #           := rule
-            #
-            # TODO directive
-            string.pushback()
-            token_list.append( tokenize_statement( string ) )
-            state = state_start
-
-        else:
-            # wtf?
-            assert 0,state
-
-    return Makefile( token_list )
 
 class ScannerIterator(object):
     # string iterator that allows look ahead and push back
