@@ -13,10 +13,10 @@ if sys.version_info.major < 3:
     raise Exception("Requires Python 3.x")
 
 #whitespace = set( ' \t\r\n' )
-whitespace = set( ' \t' )
+whitespace = set(' \t')
 
-assignment_operators = {"=","?=",":=","::=","+=","!="}
-rule_operators = { ":", "::" }
+assignment_operators = {"=", "?=", ":=", "::=", "+=", "!="}
+rule_operators = {":", "::"}
 eol = set("\r\n")
 
 # eventually will need to port this thing to Windows' CR+LF
@@ -260,6 +260,8 @@ class Expression(Symbol):
             s += t.makefile()
         return s
             
+    def __len__(self):
+        return len(self.token_list)
 
 class VarRef(Expression):
     # A variable reference found in the token stream. Save as a nested set of
@@ -509,6 +511,8 @@ def tokenize_statement(string):
         statement_type="expression"
         print( "last_token={0} ∴ statement is {1}".format(last_symbol,statement_type))
 
+        assert len(last_symbol),(str(last_symbol),starting_pos)
+
         # The statement is a directive or function call.
         assert len(string.remain())==0, (len(string.remain(),starting_pos))
         
@@ -632,6 +636,9 @@ def tokenize_statement_LHS(string,separators=""):
                 # strip trailing whitespace
                 token_list.append(Literal(token.rstrip()))
                 return Expression(token_list),AssignOp("=")
+
+            elif c in eol : 
+                assert 0,c
                 
             else :
                 token += c
@@ -698,13 +705,16 @@ def tokenize_statement_LHS(string,separators=""):
     # hit end of string; what was our final state?
     if state==state_colon:
         # ":"
+        assert len(token_list),starting_pos
         return Expression(token_list), RuleOp(":") 
     elif state==state_colon_colon:
         # "::"
+        assert len(token_list),starting_pos
         return Expression(token_list), RuleOp("::") 
     elif state==state_in_word :
         # likely a lone word (Parse Error) or a $() call
         # TODO handle parse error (How?)
+        assert len(token_list),starting_pos
         return Expression(token_list), 
 
     assert 0, (state,starting_pos)
