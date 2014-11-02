@@ -374,25 +374,8 @@ def parse_a_line(line_iter,virt_line):
             # truncate at position of first char of whatever is
             # leftover from the rule
             truncate_pos = remaining_vchars[0]["pos"]
-#            print("truncate_pos={0}".format(truncate_pos))
 
             recipe_str_list = virt_line.truncate(truncate_pos)
-
-
-#            # split the recipe from the rule
-#            first_line_pos = virt_line.virt_lines[0][0]["pos"]
-#            phys_row_to_split = truncate_pos[ROW] - first_line_pos[ROW]
-#            above = virt_line.phys_lines[:phys_row_to_split]
-#            below = virt_line.phys_lines[phys_row_to_split+1:]
-#            line_to_split = virt_line.phys_lines[phys_row_to_split]
-#            left = line_to_split[:truncate_pos[COL]] 
-#            right = line_to_split[truncate_pos[COL]:] 
-#
-#            if left :
-#                above.extend([left])
-#            recipe = [right] + below
-#            print("rule=",above)
-#            print("recipe=",recipe)
 
             # make a new virtual line from the semicolon trailing
             # recipe (using a virtual line because backslashes)
@@ -607,7 +590,7 @@ baz
 #        print( "split={0}".format(s.split("\n")))
 #        print( "lines={0} len={1}".format(lines,len(lines)),end="")
 
-        vline = VirtualLine( lines )
+        vline = VirtualLine( lines, 0 )
         for line in vline.virt_lines : 
             print(line)
         print(vline)
@@ -638,6 +621,7 @@ def main() :
 
     print("makefile=",",\\\n".join( [ "{0}".format(block) for block in block_list ] ) )
 
+    print("\n".join( [ "{0}".format(block.makefile()) for block in block_list ] ) )
 
 if __name__=='__main__':
     main()
