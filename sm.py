@@ -26,122 +26,131 @@ recipe_prefix = "\t"
 
 # 4.8 Special Built-In Target Names
 built_in_targets = {
-        ".PHONY",
-        ".SUFFIXES",
-        ".DEFAULT",
-        ".PRECIOUS",
-        ".INTERMEDIATE",
-        ".SECONDARY",
-        ".SECONDEXPANSION",
-        ".DELETE_ON_ERROR",
-        ".IGNORE",
-        ".LOW_RESOLUTION_TIME",
-        ".SILENT",
-        ".EXPORT_ALL_VARIABLES",
-        ".NOTPARALLEL",
-        ".ONESHELL",
-        ".POSIX",
-    }
+    ".PHONY",
+    ".SUFFIXES",
+    ".DEFAULT",
+    ".PRECIOUS",
+    ".INTERMEDIATE",
+    ".SECONDARY",
+    ".SECONDEXPANSION",
+    ".DELETE_ON_ERROR",
+    ".IGNORE",
+    ".LOW_RESOLUTION_TIME",
+    ".SILENT",
+    ".EXPORT_ALL_VARIABLES",
+    ".NOTPARALLEL",
+    ".ONESHELL",
+    ".POSIX",
+}
 
 # Stuff from Appendix A.
-directive = { 
-              "define", "enddef", "undefine",
-              "ifdef", "ifndef", "else", "endif", 
-              "include", "-include", "sinclude",
-              "override", "export", "unexport",
-              "private",
-              "vpath", 
-            }
-functions = { 
-                "subst",
-                "patsubst",
-                "strip",
-                "findstring",
-                "filter",
-                "filter-out",
-                "sort",
-                "word",
-                "words",
-                "wordlist",
-                "firstword",
-                "lastword",
-                "dir",
-                "notdir",
-                "suffix",
-                "basename",
-                "addsuffix",
-                "addprefix",
-                "join",
-                "wildcard",
-                "realpath",
-                "absname",
-                "error",
-                "warning",
-                "shell",
-                "origin",
-                "flavor",
-                "foreach",
-                "if",
-                "or",
-                "and",
-                "call",
-                "eval",
-                "file",
-                "value",
-            }
+directive = {
+    "define", "enddef", "undefine",
+    "ifdef", "ifndef", "else", "endif",
+    "include", "-include", "sinclude",
+    "override", "export", "unexport",
+    "private",
+    "vpath",
+}
+
+functions = {
+    "subst",
+    "patsubst",
+    "strip",
+    "findstring",
+    "filter",
+    "filter-out",
+    "sort",
+    "word",
+    "words",
+    "wordlist",
+    "firstword",
+    "lastword",
+    "dir",
+    "notdir",
+    "suffix",
+    "basename",
+    "addsuffix",
+    "addprefix",
+    "join",
+    "wildcard",
+    "realpath",
+    "absname",
+    "error",
+    "warning",
+    "shell",
+    "origin",
+    "flavor",
+    "foreach",
+    "if",
+    "or",
+    "and",
+    "call",
+    "eval",
+    "file",
+    "value",
+}
 automatic_variables = {
-                "@",
-                "%",
-                "<",
-                "?",
-                "^",
-                "+",
-                "*",
-                "@D",
-                "@F",
-                "*D",
-                "*F",
-                "%D",
-                "%F",
-                "<D",
-                "<F",
-                "^D",
-                "^F",
-                "+D",
-                "+F",
-                "?D",
-                "?F",
-            }
+    "@",
+    "%",
+    "<",
+    "?",
+    "^",
+    "+",
+    "*",
+    "@D",
+    "@F",
+    "*D",
+    "*F",
+    "%D",
+    "%F",
+    "<D",
+    "<F",
+    "^D",
+    "^F",
+    "+D",
+    "+F",
+    "?D",
+    "?F",
+}
+
 builtin_variables = {
-                "MAKEFILES",
-                "VPATH",
-                "SHELL",
-                "MAKESHELL",
-                "MAKE",
-                "MAKE_VERSION",
-                "MAKE_HOST",
-                "MAKELEVEL",
-                "MAKEFLAGS",
-                "GNUMAKEFLAGS",
-                "MAKECMDGOALS",
-                "CURDIR",
-                "SUFFIXES",
-                ".LIBPATTEREN",
-            }
+    "MAKEFILES",
+    "VPATH",
+    "SHELL",
+    "MAKESHELL",
+    "MAKE",
+    "MAKE_VERSION",
+    "MAKE_HOST",
+    "MAKELEVEL",
+    "MAKEFLAGS",
+    "GNUMAKEFLAGS",
+    "MAKECMDGOALS",
+    "CURDIR",
+    "SUFFIXES",
+    ".LIBPATTEREN",
+}
+
 
 class ParseError(Exception):
     pass
 
+
 class NestedTooDeep(Exception):
     pass
 
+
 def filter_char(c):
-    if ord(c) < 32 : 
-        if c=='\t':return "\\t"
-        if c=='\n':return "\\n"
+    if ord(c) < 32:
+        if c == '\t':
+            return "\\t"
+        if c == '\n':
+            return "\\n"
         return "\\x{0:02x}".format(ord(c))
-    if c=='\\': return '\\\\'
-    if c=='"': return '\\"'
+    if c == '\\': 
+        return '\\\\'
+    if c == '"': 
+        return '\\"'
     return c
 
 def happy_string(s): 
