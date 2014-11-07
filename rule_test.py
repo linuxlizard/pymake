@@ -8,7 +8,7 @@
 
 import sys
 
-from sm import *
+from pymake import *
 
 # require Python 3.x 
 if sys.version_info.major < 3:

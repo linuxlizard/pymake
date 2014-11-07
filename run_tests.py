@@ -7,7 +7,7 @@ import sys
 import subprocess
 import tempfile
 
-import sm
+import pymake
 from vline import VirtualLine
 
 # require Python 3.x 
@@ -68,7 +68,7 @@ def directives_test():
     failed = {}
     passed = {}
 
-    for target in sm.directive : 
+    for target in pymake.directive : 
 
         with tempfile.NamedTemporaryFile("w",prefix="./",delete=True) as outfile : 
             outfile.write( makefile_str.format(target) );

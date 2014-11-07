@@ -15,7 +15,7 @@ import sys
 if sys.version_info.major < 3:
     raise Exception("Requires Python 3.x")
 
-from sm import *
+from pymake import *
 from run_tests import run_tests_list
 
 def run():
@@ -70,9 +70,9 @@ def run():
 
         # this line is a happy train wreck!
         ( r"""   all :\
-        foo#comment\
-        commentcomment
-        ; bar""", RuleExpression( [Expression( [Literal("all")]),RuleOp(":"),PrerequisiteList( [Literal("foo")])]) ),
+        foo2#comment2\
+        comment2comment2
+	bar""", RuleExpression( [Expression( [Literal("all")]),RuleOp(":"),PrerequisiteList( [Literal("foo")])]) ),
 
         # how about backslashes? 
         ( r"""all : test-backslash-semicolon test-backslash-recipes lots-of-fore-whitespace\
@@ -146,7 +146,7 @@ split-prereqs-with-backslashes this-is-a-rule-with-backslashes \
             ("","$(","shell echo target $$$$",")","",":","$(shell echo prereq $$$$)",),)
     )
 
-    run_tests_list(rules_tests,tokenize_assignment_or_rule)
+    run_tests_list(rules_tests,tokenize_statement)
 
 
 if __name__=='__main__':

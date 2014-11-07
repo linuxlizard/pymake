@@ -11,7 +11,7 @@ import sys
 if sys.version_info.major < 3:
     raise Exception("Requires Python 3.x")
 
-from sm import *
+from pymake import *
 from vline import VirtualLine
 
 def run():

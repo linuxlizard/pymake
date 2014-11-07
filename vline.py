@@ -12,7 +12,7 @@ import sys
 import itertools
 
 import hexdump
-from sm import *
+from pymake import *
 
 eol = set("\r\n")
 whitespace = set( ' \t' )

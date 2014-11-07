@@ -13,7 +13,7 @@ if sys.version_info.major < 3:
     raise Exception("Requires Python 3.x")
 
 import hexdump
-from sm import *
+from pymake import *
 from run_tests import run_tests_list
 import vline
 
