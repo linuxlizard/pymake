@@ -53,19 +53,19 @@ def run():
         op2 = AssignOp(s)
         assert op1==op2
 
-    exp1 = RuleExpression( ( Expression( (Literal("all"),) ),
+    exp1 = RuleExpression( [ Expression( (Literal("all"),) ),
                              RuleOp(":"),
-                             PrerequisiteList( () ) )
+                             PrerequisiteList( [] ) ]
                         ) 
-    exp2 = RuleExpression( (  Expression( (Literal("all"),) ),
+    exp2 = RuleExpression( [  Expression( (Literal("all"),) ),
                              RuleOp(":"),
-                             PrerequisiteList( () ) )
+                             PrerequisiteList( [] ) ]
                         ) 
     assert exp1==exp2
 
-    exp2 = RuleExpression( (  Expression( (Literal("all"),) ),
+    exp2 = RuleExpression( [  Expression( (Literal("all"),) ),
                              RuleOp("::"),
-                             PrerequisiteList( () ) )
+                             PrerequisiteList( [] ) ]
                         ) 
     assert exp1!=exp2
 
