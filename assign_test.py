@@ -48,7 +48,8 @@ def run():
 = foo\
 bar\
 baz\
-blahblahblah""", 
+blahblahblah
+""", 
             AssignmentExpression( [Expression( [Literal("slash-o-rama")]),AssignOp("="),Expression( [Literal("foo bar baz blahblahblah")])]) ),
 
         # trailing spaces still preserved?
@@ -84,37 +85,52 @@ r"""more-fun-in-assign\
     \
     lines
 """, 
-            AssignmentExpression( [Expression( [Literal("more-fun-in-assign")]),
-                                    AssignOp("="),
-                                    Expression( [Literal("the leading and trailing white space should be eliminated including black lines")])]) ),
+        AssignmentExpression( [Expression( [Literal("more-fun-in-assign")]),
+                               AssignOp("="),
+                               Expression( [Literal("the leading and trailing white space should be eliminated including blank lines")])]) ),
 
         # literal backslashes in the RHS
         ( r"""literal-backslash\
                 = \
                 foo\bar\baz\
-                blahblahblah""", () ),
+                blahblahblah""", AssignmentExpression([Expression([Literal("literal-backslash")]),AssignOp("="),Expression([Literal("foo\\bar\\baz blahblahblah")])]) ),
 
         # leading spaces discarded, trailing spaces preserved
-        ("foo=     $(baz3) $(baz3) $(baz3)",""),
-        ("foo= this is a test # this is a comment",""),
-        ("foo= this is a test # this is a comment\nbar=baz",""),
+        ("foo=     $(baz3) $(baz3) $(baz3)",
+            AssignmentExpression([Expression([Literal("foo")]),AssignOp("="),Expression([Literal(""),VarRef([Literal("baz3")]),Literal(" "),VarRef([Literal("baz3")]),Literal(" "),VarRef([Literal("baz3")]),Literal("")])])
+        ),
+
+        ("foo= this is a test # this is a comment",
+            AssignmentExpression([Expression([Literal("foo")]),AssignOp("="),Expression([Literal("this is a test ")])])),
 
         # empty is fine, too
-        ( "foo=", ""),
-        ( " foo =     ", "" ),
+        ( "foo=", AssignmentExpression([Expression([Literal("foo")]),AssignOp("="),Expression([Literal("")])])),
+        ( " foo =     ", AssignmentExpression([Expression([Literal("foo")]),AssignOp("="),Expression([Literal("")])]) ),
 
         # assignment done at eol
-        ( "foo=$(CC)\nfoo bar baz=$(LD)\n", "" ), 
+        ( "foo=$(CC)\n", 
+            AssignmentExpression([Expression([Literal("foo")]),AssignOp("="),Expression([Literal(""),VarRef([Literal("CC")]),Literal("")])])
+        ), 
 
-        ( "today != $(shell date)", "" ),
-        ( "this is a test = this is a test", "" ),
+        ( "today != $(shell date)", 
+            AssignmentExpression([Expression([Literal("today")]),AssignOp("!="),Expression([Literal(""),VarRef([Literal("shell date")]),Literal("")])]) 
+        ),
+
+        ( "this is a test = this is a test", 
+            AssignmentExpression([Expression([Literal("this is a test")]),AssignOp("="),Expression([Literal("this is a test")])])
+        ),
 
         # from ffmpeg
-        ( "LDLIBS := $(shell pkg-config --libs $(FFMPEG_LIBS)) $(LDLIBS)", ""),
-        ( " MANPAGES    = $(PROGS-yes:%=doc/%.1)    $(PROGS-yes:%=doc/%-all.1)    $(COMPONENTS-yes:%=doc/%.1)    $(LIBRARIES-yes:%=doc/%.3)", "" ),
+        ( "LDLIBS := $(shell pkg-config --libs $(FFMPEG_LIBS)) $(LDLIBS)", 
+            AssignmentExpression([Expression([Literal("LDLIBS")]),AssignOp(":="),Expression([Literal(""),VarRef([Literal("shell pkg-config --libs "),VarRef([Literal("FFMPEG_LIBS")]),Literal("")]),Literal(" "),VarRef([Literal("LDLIBS")]),Literal("")])])
+        ),
+
+        ( " MANPAGES    = $(PROGS-yes:%=doc/%.1)    $(PROGS-yes:%=doc/%-all.1)    $(COMPONENTS-yes:%=doc/%.1)    $(LIBRARIES-yes:%=doc/%.3)", 
+       AssignmentExpression([Expression([Literal("MANPAGES")]),AssignOp("="),Expression([Literal(""),VarRef([Literal("PROGS-yes:%=doc/%.1")]),Literal("    "),VarRef([Literal("PROGS-yes:%=doc/%-all.1")]),Literal("    "),VarRef([Literal("COMPONENTS-yes:%=doc/%.1")]),Literal("    "),VarRef([Literal("LIBRARIES-yes:%=doc/%.3")]),Literal("")])]) 
+        ),
     )
 
-    run_tests_list(assignment_tests,tokenize_assignment_or_rule)
+    run_tests_list(assignment_tests,tokenize_statement)
 
 
 if __name__=='__main__':
