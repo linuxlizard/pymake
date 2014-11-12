@@ -189,7 +189,6 @@ class Symbol(object):
 
     def __eq__(self,rhs):
         # lhs is self
-        assert self.string==rhs.string, (self.string,rhs.string)
         return self.string==rhs.string
 
     def makefile(self):
@@ -390,8 +389,6 @@ class RecipeList( Expression ) :
         for r in recipe_list :
             assert isinstance(r,Recipe),(r,)
         
-        if len(recipe_list)>0:
-            print("RecipeList()",str(recipe_list[0]))
         Expression.__init__(self,recipe_list)
 
     def makefile(self):
@@ -416,8 +413,8 @@ def comment(string):
     state = state_start
 
     # this could definitely be faster (method in ScannerIterator to eat until EOL?)
-    for c_obj in string : 
-        c = c_obj["char"]
+    for vchar in string : 
+        c = vchar["char"]
         print("c c={0} state={1}".format(filter_char(c),state))
         if state==state_start:
             if c=='#':
@@ -459,7 +456,7 @@ def depth_checker(func):
 
     return check_depth
 
-#@depth_checker
+@depth_checker
 def tokenize_statement(string):
     # at start of scanning, we don't know if this is a rule or an assignment
     # this is a test : foo   -> (this,is,a,test,:,)
@@ -537,8 +534,7 @@ def tokenize_statement(string):
 
         assert 0,last_symbol
 
-
-#@depth_checker
+@depth_checker
 def tokenize_statement_LHS(string,separators=""):
     # Tokenize the LHS of a rule or an assignment statement. A rule uses
     # whitespace as a separator. An assignment statement preserves internal
@@ -581,15 +577,12 @@ def tokenize_statement_LHS(string,separators=""):
     # error.
     #
 
-    # a \x of these chars replaced by literal x
-    # XXX in both rule and assignment LHS? O_o
-#    backslashable = set("%:,")
-
     # get the starting position of this string (for error reporting)
     starting_pos = string.lookahead()["pos"]
+    print("starting_pos=",starting_pos)
 
-    for c_obj in string : 
-        c = c_obj["char"]
+    for vchar in string : 
+        c = vchar["char"]
         print("s c={0} state={1} idx={2} ".format(
                 filter_char(c),state,string.idx,token))
         if state==state_start:
@@ -651,7 +644,8 @@ def tokenize_statement_LHS(string,separators=""):
                 return Expression(token_list),AssignOp("=")
 
             elif c in eol : 
-                assert 0,c
+                # end of line; bail out
+                break
                 
             else :
                 token += c
@@ -681,7 +675,8 @@ def tokenize_statement_LHS(string,separators=""):
                 # line continuation
                 # davep 04-Oct-2014 ; XXX   should not see anymore
                 print("string={0} data={1}".format(type(string),type(string.data)))
-                assert 0, string
+                print(string.data)
+                assert 0, (string, vchar)
             else :
                 # literal '\' + somechar
                 token += '\\'
@@ -733,7 +728,7 @@ def tokenize_statement_LHS(string,separators=""):
 
     assert 0, (state,starting_pos)
 
-#@depth_checker
+@depth_checker
 def tokenize_rule_prereq_or_assign(string):
     # We are on the RHS of a rule's : or ::
     # We may have a set of prerequisites
@@ -770,7 +765,7 @@ def tokenize_rule_prereq_or_assign(string):
 
     return rhs
 
-#@depth_checker
+@depth_checker
 def tokenize_rule_RHS(string):
 
     # RHS ::=                       -->  empty perfectly valid
@@ -792,8 +787,8 @@ def tokenize_rule_RHS(string):
     token = ""
     token_list = []
 
-    for c_obj in string :
-        c = c_obj["char"]
+    for vchar in string :
+        c = vchar["char"]
         print("p c={0} state={1} idx={2}".format(filter_char(c),state,string.idx))
 
         if state==state_start :
@@ -912,7 +907,7 @@ def tokenize_rule_RHS(string):
             else:
                 # implicit pattern rule
                 # TODO
-                assert 0
+                assert 0, vchar
 
         elif state==state_double_colon : 
             # at this point, we found ::
@@ -951,7 +946,7 @@ def tokenize_rule_RHS(string):
 
     return PrerequisiteList(token_list)
 
-#@depth_checker
+@depth_checker
 def tokenize_assign_RHS(string):
 
     state_start = 1
@@ -963,8 +958,8 @@ def tokenize_assign_RHS(string):
     token = ""
     token_list = []
 
-    for c_obj in string :
-        c = c_obj["char"]
+    for vchar in string :
+        c = vchar["char"]
         print("a c={0} state={1} idx={2}".format(
                 filter_char(c),state,string.idx, string.remain()))
         if state==state_start :
@@ -1025,7 +1020,7 @@ def tokenize_assign_RHS(string):
     token_list.append(Literal(token))
     return Expression(token_list)
 
-#@depth_checker
+@depth_checker
 def tokenize_variable_ref(string):
     # Tokenize a variable reference e.g., $(expression) or $c 
     # Handles nested expressions e.g., $( $(foo) )
@@ -1039,14 +1034,14 @@ def tokenize_variable_ref(string):
     token = ""
     token_list = []
 
-    for c_obj in string : 
-        c = c_obj["char"]
+    for vchar in string : 
+        c = vchar["char"]
         print("v c={0} state={1} idx={2}".format(filter_char(c),state,string.idx))
         if state==state_start:
             if c=='$':
                 state=state_dollar
             else :
-                raise ParseError(c_obj["pos"])
+                raise ParseError(vchar["pos"])
         elif state==state_dollar:
             # looking for '(' or '$' or some char
             if c=='(' or c=='{':
@@ -1095,9 +1090,9 @@ def tokenize_variable_ref(string):
         else:
             assert 0, state
 
-    raise ParseError(c_obj["pos"])
+    raise ParseError(vchar["pos"])
 
-#@depth_checker
+@depth_checker
 def tokenize_recipe(string):
     # Collect characters together into a token. 
     # At token boundary, store token as a Literal. Add to token_list. Reset token.
@@ -1119,8 +1114,8 @@ def tokenize_recipe(string):
 
     sanity_count = 0
 
-    for c_obj in string :
-        c = c_obj["char"]
+    for vchar in string :
+        c = vchar["char"]
         print("r c={0} state={1} idx={2} ".format(
                 filter_char(c),state,string.idx,token))
 
@@ -1204,10 +1199,6 @@ def tokenize_recipe(string):
     return Recipe( token_list )
 
 def parse_recipes( file_lines, semicolon_vline=None ) : 
-    # I put stuff like this in here because I lose track of what I'm doing
-#    assert type(file_lines)==type([]),type(file_lines)
-#    assert type(file_lines[0])==type(""),type(file_lines[0])
-#    assert type(semicolon_str)==type(""),type(semicolon_str)
 
     print("parse_recipes()")
     print( file_lines.remain() )
@@ -1281,7 +1272,7 @@ def parse_recipes( file_lines, semicolon_vline=None ) :
             if not line.endswith('\\\n'):
                 # now have an array of lines that need to be one line for the
                 # recipes tokenizer
-                recipe_vline = RecipeVirtualLine(lines_list,file_lines.idx)
+                recipe_vline = vline.RecipeVirtualLine(lines_list,file_lines.idx)
                 recipe = tokenize_recipe(iter(recipe_vline))
                 recipe.set_code(recipe_vline)
                 recipe_list.append(recipe)
@@ -1454,17 +1445,24 @@ def parse_makefile_strlist(file_lines):
     # file_lines should be an array of strings
 
     block_list = parse_lines(file_lines)
+
+    # the following is just test code to printf the results. 
+    #
+    # TODO need to carefully syntax verify the block list.
+    # As of this writing I'm succesfully (mostly) tokenizing makefiles but not
+    # syntax verifying.
+
     for block in block_list : 
         assert isinstance(block,Symbol),(type(block),)
         assert hasattr(block,"code")
-        print("{0}".format(block.code),end="")
+        print("block={0}".format(block.code),end="")
         if isinstance(block,RuleExpression):
             for recipe in block.recipe_list : 
-                print("{0}".format(recipe.code))
-
+                print("recipe={0}".format(recipe.code))
     print("makefile=",",\\\n".join( [ "{0}".format(block) for block in block_list ] ) )
-
+    print("# start makefile")
     print("\n".join( [ "{0}".format(block.makefile()) for block in block_list ] ) )
+    print("# end makefile")
 
 def parse_makefile(infilename) : 
     with open(infilename,'r') as infile :
