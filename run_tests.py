@@ -14,20 +14,29 @@ from vline import VirtualLine
 if sys.version_info.major < 3:
     raise Exception("Requires Python 3.x")
 
-
 def run_tests_list(tests_list,tokenizer):
-    for test in tests_list :
+    for idx,test in enumerate(tests_list) :
         s,validate = test
         print("test={0}".format(test))
-#        my_iter = ScannerIterator(s)
-        vline = VirtualLine([s],0)
+
+        file_lines = s.split("\n")
+        lines = [ line+"\n" for line in file_lines ]
+        # if empty line at end, kill it (supposed to be cleaned out of vline
+        # before sent to parser)
+        if lines[-1]=='\n':
+            lines = lines[:-1]
+        print( "split={0}".format(s.split("\n")))
+        print( "lines={0} len={1}".format(lines,len(lines)),end="")
+
+        vline = VirtualLine(lines,idx)
         my_iter = iter(vline) 
 
+        print("vline={0}".format(str(vline)))
         tokens = tokenizer(my_iter)
         print( "  tokens={0}".format(str(tokens)) )
         print( "validate={0}".format(str(validate)) )
 
-        assert tokens==validate
+        assert tokens==validate, (idx,)
 
         print( tokens.makefile() )
         print("\n")
