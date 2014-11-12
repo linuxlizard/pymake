@@ -65,8 +65,8 @@ def big_recipes_test() :
         # -o\
         # $@\
         # $<
-        ( "\tgcc\\\n-c\\\n -Wall\\\n -o\\\n $@\\\n $<", 
-                RecipeList( [Recipe( [Literal("gcc\\\n-c\\\n -Wall\\\n -o\\\n "),VarRef( [Literal("@")]),Literal("\\\n")])])
+        ( "\tgcc\\\n -c\\\n -Wall\\\n -o\\\n $@\\\n $<", 
+            RecipeList([Recipe([Literal("gcc\\\n -c\\\n -Wall\\\n -o\\\n "),VarRef([Literal("@")]),Literal("\\\n "),VarRef([Literal("<")]),Literal("")])])
         ),
 
         ("""	@echo $@
@@ -178,13 +178,13 @@ end-of-varrefs=yeah this ends varrefs rule for sure
     # these must fail
     fail_tests = ( 
         ( "foo:\n; @echo bar", () )
-    )
 
-#    run_tests_list(recipe_test_list,tokenize_recipe_list)
+        # NEED MOAR TESTS!
+    )
 
     # test make_recipe_block() which splits apart the makefile lines into
     # separate recipe lines
-    for test in recipe_test_list : 
+    for idx,test in enumerate(recipe_test_list) : 
         # tests can be three fields instead of the regular two:
         #   the (optional) recipe after the prerequesites (follows the ";")
         #   the recipe(s) string
@@ -204,12 +204,12 @@ end-of-varrefs=yeah this ends varrefs rule for sure
 
         print('lines=',lines)
 
-        recipe_list = vline.parse_recipes(ScannerIterator(lines),semicolon_string)
+        recipe_list = parse_recipes(ScannerIterator(lines),semicolon_string)
         print("recipe_list={0}".format(str(recipe_list)))
         print("recipe_list=[\n{0}\n]".format(recipe_list.makefile()))
         print("v={0}".format(validation.makefile()))
 
-        assert validation==recipe_list
+        assert validation==recipe_list,(idx,)
 
 
 def single_recipe_test() : 
@@ -241,7 +241,7 @@ def single_recipe_test() :
     run_tests_list( test_list,tokenize_recipe )
 
 def run() : 
-    single_recipe_test()
+#    single_recipe_test()
     big_recipes_test()
 
 if __name__=='__main__':
