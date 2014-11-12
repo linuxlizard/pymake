@@ -32,17 +32,7 @@ $(info makefiles=$(file_list))
 file_list=$(call join_comma_list,$(wildcard *.py))
 $(info pyfiles=$(file_list))
 
-# make a sequence of characters of a certain length
-# $1 - number of elements in sequence
-# $2 - character(s) to sequence
-#
-# works by using $(word) to find the $1'th element in the list
-# if $1'th element not found, recursively call with a list
-#
-# Handy for counted loops.
-define mkseq
-$(if $(word $(1),$(2)),$(2),$(call mkseq,$(1),$(firstword $(2)) $(2)))
-endef
+include mkseq.mk
 
 # make 123 q's
 a=$(call mkseq,123,q)
