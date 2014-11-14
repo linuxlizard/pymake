@@ -4,7 +4,7 @@
 #
 # Run an entire Makefile through the vline pre-processor.
 # Joins backslashed lines into one logical line (whilc preserving physical
-# lines). Removes comments.
+# lines). Removes lines that are only comments (inline comments are preserved).
 #
 # davep 14-Nov-2014
 
@@ -28,5 +28,10 @@ def makefile_pp(infilename):
 if __name__=='__main__':
     infilename = sys.argv[1]
     makefile_strlist = makefile_pp(infilename)
-    print("{0}".format("".join( [ str(s) for s in makefile_strlist ] )),end="")
+
+    # have an array of VirtualLine instances
+    # print the line number + the line
+    for v in makefile_strlist : 
+        # The +1 because vline counts from zero
+        print("{0} {1}".format(v.starting_file_line+1,str(v)),end="")
 
