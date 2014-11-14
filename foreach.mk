@@ -49,5 +49,16 @@ $(info 9 1s=$a)
 # update 6-Nov-2014; see counted.mk
 $(foreach i,$(call mkseq,10,1),$(info loop 10 times i=$i))
 
+# is gcc in our $PATH?
+path=
+#$(info $(foreach p,$(path),$(addsuffix ",$(addprefix ",$(wildcard $p/*)))))
+#$(info $(foreach p,$(path),$(wildcard $p/*)))
+#$(info $(filter gcc,$(notdir $(foreach p,$(path),$(wildcard $p/*)))))
+define inpath
+$(if $(filter $(1),$(notdir $(foreach p,$(subst :, ,$(PATH)),$(wildcard $p/*)))),,$(error $(1) not in path))
+endef
+$(call inpath,gcc)
+$(call inpath,arm-marvell-linux-gcc)
+
 @:;@:
 
