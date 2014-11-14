@@ -47,15 +47,24 @@ built_in_targets = {
     ".POSIX",
 }
 
+#
 # Stuff from Appendix A.
+#
+
+# conditionals separate so can handle nested conditionals
+conditional_directive = {
+    "ifdef", "ifndef", 
+    # newer versions of Make? (TODO verify when these appeared)
+    "ifeq", "ifneq"
+}
+
 directive = {
     "define", "enddef", "undefine",
-    "ifdef", "ifndef", "else", "endif",
+    "else", "endif",
     "include", "-include", "sinclude",
     "override", "export", "unexport",
-    "private",
-    "vpath",
-}
+    "private", "vpath",
+} | conditional_directive
 
 functions = {
     "subst",
@@ -94,6 +103,7 @@ functions = {
     "file",
     "value",
 }
+
 automatic_variables = {
     "@",
     "%",
@@ -456,7 +466,7 @@ def depth_checker(func):
 
     return check_depth
 
-@depth_checker
+#@depth_checker
 def tokenize_statement(string):
     # at start of scanning, we don't know if this is a rule or an assignment
     # this is a test : foo   -> (this,is,a,test,:,)
@@ -468,6 +478,8 @@ def tokenize_statement(string):
     # Only difference between a rule LHS and an assignment LHS is the
     # whitespace. In a rule, the whitespace is ignored. In an assignment, the
     # whitespace is preserved.
+
+    print("tokenize_statement()")
 
     # get the starting position of this string (for error reporting)
     starting_pos = string.lookahead()["pos"]
@@ -505,8 +517,8 @@ def tokenize_statement(string):
         statement.append( tokenize_rule_prereq_or_assign(string) )
 
         # don't look for recipe(s) yet
-
         return RuleExpression( statement ) 
+
     elif isinstance(last_symbol,AssignOp): 
         statement_type = "assignment"
 
@@ -534,11 +546,13 @@ def tokenize_statement(string):
 
         assert 0,last_symbol
 
-@depth_checker
+#@depth_checker
 def tokenize_statement_LHS(string,separators=""):
     # Tokenize the LHS of a rule or an assignment statement. A rule uses
     # whitespace as a separator. An assignment statement preserves internal
     # whitespace but leading/trailing whitespace is stripped.
+
+    print("tokenize_statement_LHS()")
 
     state_start = 1
     state_in_word = 2
@@ -723,12 +737,12 @@ def tokenize_statement_LHS(string,separators=""):
     elif state==state_in_word :
         # likely a lone word (Parse Error) or a $() call
         # TODO handle parse error (How?)
-        assert len(token_list),starting_pos
+        assert len(token_list),(starting_pos,token)
         return Expression(token_list), 
 
     assert 0, (state,starting_pos)
 
-@depth_checker
+#@depth_checker
 def tokenize_rule_prereq_or_assign(string):
     # We are on the RHS of a rule's : or ::
     # We may have a set of prerequisites
@@ -737,6 +751,8 @@ def tokenize_rule_prereq_or_assign(string):
     #
     # End of the rule's RHS is ';' or EOL.  The ';' may be followed by a
     # recipe.
+
+    print("tokenize_rule_prereq_or_assign()")
 
     # save current position in the token stream
     string.push_state()
@@ -765,7 +781,7 @@ def tokenize_rule_prereq_or_assign(string):
 
     return rhs
 
-@depth_checker
+#@depth_checker
 def tokenize_rule_RHS(string):
 
     # RHS ::=                       -->  empty perfectly valid
@@ -775,6 +791,9 @@ def tokenize_rule_RHS(string):
     #     ::= assignment            -->  target specific assignment 
     #
     # RHS terminated by comment, EOL, ';'
+
+    print("tokenize_rule_RHS()")
+
     state_start = 1
     state_word = 2
     state_colon = 3
@@ -946,8 +965,9 @@ def tokenize_rule_RHS(string):
 
     return PrerequisiteList(token_list)
 
-@depth_checker
+#@depth_checker
 def tokenize_assign_RHS(string):
+    print("tokenize_assign_RHS()")
 
     state_start = 1
     state_dollar = 2
@@ -1020,11 +1040,13 @@ def tokenize_assign_RHS(string):
     token_list.append(Literal(token))
     return Expression(token_list)
 
-@depth_checker
+#@depth_checker
 def tokenize_variable_ref(string):
     # Tokenize a variable reference e.g., $(expression) or $c 
     # Handles nested expressions e.g., $( $(foo) )
     # Returns a VarExp object.
+
+    print("tokenize_variable_ref()")
 
     state_start = 1
     state_dollar = 2
@@ -1092,7 +1114,7 @@ def tokenize_variable_ref(string):
 
     raise ParseError(vchar["pos"])
 
-@depth_checker
+#@depth_checker
 def tokenize_recipe(string):
     # Collect characters together into a token. 
     # At token boundary, store token as a Literal. Add to token_list. Reset token.
@@ -1201,7 +1223,7 @@ def tokenize_recipe(string):
 def parse_recipes( file_lines, semicolon_vline=None ) : 
 
     print("parse_recipes()")
-    print( file_lines.remain() )
+#    print( file_lines.remain() )
 
     state_start = 1
     state_comment_backslash = 2
@@ -1225,7 +1247,7 @@ def parse_recipes( file_lines, semicolon_vline=None ) :
     for line in file_lines : 
 #        print("")
         print( "l state={0}".format(state))
-        print( hexdump.dump(line,16), end="" )
+#        print( hexdump.dump(line,16), end="" )
 
         if state==state_start : 
             if line.startswith(recipe_prefix):
@@ -1288,15 +1310,141 @@ def parse_recipes( file_lines, semicolon_vline=None ) :
 
     return RecipeList(recipe_list)
 
-def parse_a_line(line_iter,virt_line): 
+def get_directive(s):
+    # split apart a line seeking a directive
+    fields = s.strip().split(" ")
+    return fields[0]
+
+def seek_directive(s):
+    # split apart a line seeking a directive
+    d = get_directive(s)
+    if d in directive:
+        return d
+    return None
+
+class ConditionalDirective(object):
+    # Contains the if expression, zero to many else expressions.
+    # All code blocks in the expressions are contained as raw text.
+    # GNU Make doesn't parse the contents of a conditional block unless the
+    # conditional is true.
+    #
+
+    class IfBlock(object):
+        def __init__(self,expression,string_list):
+            self.phys_lines = string_list
+
+    class ElseBlock(IfBlock):
+        pass
+
+    def __init__(self):
+        # anything?
+        pass
+
+    def if_block(self,expression,string_list):
+        pass
+        
+
+    def else_block(self,expression,string_list):
+        pass
+
+#@depth_checker
+def handle_conditional_directive(directive_str,line_iter,virt_line):
+    # GNU make doesn't parse the stuff inside the conditional unless the
+    # conditional expression evaluates to True. Read line by line, looking for
+    # directives
+
+    print( "handle_conditional_directive() \"{0}\" line={1}".format(
+        directive_str,line_iter.idx))
+
+    state_start = 1
+    state_else = 2
+    state_endif = 3
+
+    state = state_start
+
+    line_block = []
+
+#    if_block = ConditionalDirective(virt_line)
+
+    for line_str in line_iter : 
+        # directive is the first substring surrounded by whitespace
+        virt_line = vline.VirtualLine(line_list,starting_line_number)
+        d = get_directive(line_str)
+
+        print( "c state={0}".format(state))
+
+        if state==state_start : 
+            if d in conditional_directive : 
+                # recursive function is recursive
+                token = handle_conditional_directive(directive_str,line_iter,virt_line)
+            elif d=="else" : 
+                state = state_else 
+            elif d=="endif":
+                state = state_endif
+            else : 
+                # save the line into the block
+                line_block.append(line_str)
+
+        elif state==state_else : 
+            if d in conditional_directive : 
+                # recursive function is recursive
+                token = handle_conditional_directive(directive_str,line_iter,virt_line)
+            elif d=="else" : 
+                raise ParseError("too many else")
+            elif d=="endif":
+                state = state_endif
+            else : 
+                # save the line into the block
+                line_block.append(line_str)
+
+        else : 
+            assert 0,state
+
+
+        if state==state_endif : 
+            # close the if/else/endif collection
+            pass
+
+    return if_block
+
+#@depth_checker
+def handle_define_directive(directive_str,line_iter,virt_line):
+    assert 0, "TODO"
+
+directive_lut = { 
+    "define" : handle_define_directive,
+    # TODO add rest of opening directives
+}
+for k in conditional_directive :
+    directive_lut[k]=handle_conditional_directive
+
+#@depth_checker
+def tokenize_directive(directive_str,line_iter,virt_line):
+    print("tokenize_directive() \"{0}\"".format(directive_str))
+
+    # TODO probably need a lot of parse checking here eventually
+
+    return directive_lut[directive_str](directive_str,line_iter,virt_line)
+
+#@depth_checker
+def tokenize_vline(line_iter,virt_line): 
     # pull apart a single line into token/symbol(s)
     #
     # line_iter - the iterator across the entire file 
     #             (a Rule includes the RecipeList so need to get the entire file)
     # virt_line - the current line we need to tokenize (a VirtualLine)
 
+    print("tokenize_vline()")
+
     assert isinstance(line_iter,ScannerIterator),(type(line_iter),)
     assert isinstance(virt_line,vline.VirtualLine),(type(virt_line),)
+
+    # Is this a directive statement (e.g., ifdef ifeq define)?
+    # Read the raw line (not the virtual line) looking for first whitespace
+    # surrounded string being a directive.
+    directive_str = seek_directive(virt_line.phys_lines[0])
+    if directive_str:
+        return tokenize_directive(directive_str,line_iter,virt_line)
 
     statement_iter = iter(virt_line)
     token = tokenize_statement(statement_iter)
@@ -1358,15 +1506,18 @@ def parse_a_line(line_iter,virt_line):
 
     return token
 
-def parse_lines(file_lines): 
-    # File_lines is an array of strings.
-    # Each string should be terminated by an EOL.
-    # Handle cases where line is continued after the EOL by a \+EOL
-    # (backslash).
-
-    # I put stuff like this in here because I lose track of what I'm doing
-    assert type(file_lines)==type([])
-    assert type(file_lines[0])==type("")
+def get_vline(line_iter): 
+    # GENERATOR
+    #
+    # line_iter is an iterator that supports pushback
+    # iterates across an array of strings, the makefile
+    #
+    # The line_iter can also be passed around to other tokenizers (e.g., the
+    # recipe tokenizer). So this function cannot assume its the only line_iter
+    # user.
+    #
+    # Each string should be terminated by an EOL.  Handle cases where line is
+    # continued after the EOL by a \+EOL (backslash).
 
     state_start = 1
     state_backslash = 2
@@ -1374,19 +1525,13 @@ def parse_lines(file_lines):
     
     state = state_start 
 
-    # array of Symbols we have parsed in the file
-    code_block_list = []
-
-    # we need an iterator across our lines that supports pushback
-    line_iter = ScannerIterator(file_lines)
-
     # can't use enumerate() because the line_iter will also be used inside
     # parse_recipes(). 
     for line in line_iter :
         # line_iter.idx is the *next* line number counting from zero 
         line_number = line_iter.idx-1
-        print("line_num={0} state={1}".format(line_number,state))
-        print("{0}".format(hexdump.dump(line),end=""))
+#        print("line_num={0} state={1}".format(line_number,state))
+#        print("{0}".format(hexdump.dump(line),end=""))
 
         if state==state_start : 
             start_line_stripped = line.strip()
@@ -1430,45 +1575,48 @@ def parse_lines(file_lines):
             virt_line = vline.VirtualLine(line_list,starting_line_number)
             del line_list # detach the ref (VirtualLine keeps the array)
 
-            # now take apart the line into symbol/tokens
-            token = parse_a_line(line_iter,virt_line)
-
-            # save the parsed symbol with its code 
-            code_block_list.append( token ) 
+            # caller can also use line_iter
+            yield virt_line
 
             # back around the horn
             state = state_start
 
-    return code_block_list 
+    return None
 
-def parse_makefile_strlist(file_lines):
+def parse_makefile_from_strlist(file_lines):
     # file_lines should be an array of strings
 
-    block_list = parse_lines(file_lines)
+    line_iter = ScannerIterator(file_lines)
+    vline_iter = get_vline(line_iter)
+
+    # The vline_iter will modify line_iter. But line_iter should be at the
+    # proper place at all times. In other words, there are two readers from
+    # line_iter: the vline_iter and tokenize_vline()
+    token_list = [ tokenize_vline(line_iter,vline) for vline in vline_iter ] 
 
     # the following is just test code to printf the results. 
     #
-    # TODO need to carefully syntax verify the block list.
-    # As of this writing I'm succesfully (mostly) tokenizing makefiles but not
+    # TODO need to carefully syntax verify (need a parser!) the block list.  As
+    # of this writing I'm succesfully (mostly) tokenizing makefiles but not
     # syntax verifying.
 
-    for block in block_list : 
+    for block in token_list : 
         assert isinstance(block,Symbol),(type(block),)
         assert hasattr(block,"code")
         print("block={0}".format(block.code),end="")
         if isinstance(block,RuleExpression):
             for recipe in block.recipe_list : 
                 print("recipe={0}".format(recipe.code))
-    print("makefile=",",\\\n".join( [ "{0}".format(block) for block in block_list ] ) )
+    print("makefile=",",\\\n".join( [ "{0}".format(block) for block in token_list ] ) )
     print("# start makefile")
-    print("\n".join( [ "{0}".format(block.makefile()) for block in block_list ] ) )
+    print("\n".join( [ "{0}".format(block.makefile()) for block in token_list ] ) )
     print("# end makefile")
 
 def parse_makefile(infilename) : 
     with open(infilename,'r') as infile :
         file_lines = infile.readlines()
 
-    parse_makefile_strlist(file_lines)
+    parse_makefile_from_strlist(file_lines)
 
 def usage():
     # TODO
