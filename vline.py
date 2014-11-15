@@ -15,6 +15,7 @@ import hexdump
 from scanner import ScannerIterator
 
 eol = set("\r\n")
+# can't use string.whitespace because want to preserve line endings
 whitespace = set( ' \t' )
 
 # require Python 3.x 
@@ -38,6 +39,24 @@ def is_line_continuation(line):
 # indices into VirtualLine's characters' position.
 VCHAR_ROW = 0
 VCHAR_COL = 1
+
+# using a class for the virtual char so can interchange string with VirtualLine
+# in ScannerIterator
+class VChar(object):
+    def __init__(self,char,pos):
+        self.vchar = { "char" : char, 
+                       "pos"  : pos,
+                       "hide" : False } 
+
+    def __getitem__(self,key):
+        return self.vchar[key]
+    
+    def __setitem__(self,key,value):
+        self.vchar[key] = value
+
+    def __str__(self):
+        # created this class pretty much just for this method :-/
+        return self.vchar["char"]
 
 class VirtualLine(object):
 
@@ -74,9 +93,10 @@ class VirtualLine(object):
                 # pos is the (row,col) of the char in the file
                 # hide indicates a hidden character (don't feed to the
                 # tokenizer, don't highlight in View)
-                vchar = { "char" : char, 
-                          "pos"  : (row_idx+self.starting_file_line,col_idx),
-                          "hide" : False } 
+#                vchar = { "char" : char, 
+#                          "pos"  : (row_idx+self.starting_file_line,col_idx),
+#                          "hide" : False } 
+                vchar = VChar(char,(row_idx+self.starting_file_line,col_idx))
                 vline.append(vchar)
             self.virt_lines.append(vline)
 
@@ -153,7 +173,9 @@ class VirtualLine(object):
 
     def __iter__(self):
         # This iterator we will feed the characters that are still visible to
-        # the tokenizer.
+        # the tokenizer. Using ScannerIterator so we have pushback. The
+        # itertools.chain() joins all the virt_lines together into one
+        # contiguous array
         self.virt_iterator = ScannerIterator( [ c for c in itertools.chain(*self.virt_lines) if not c["hide"] ] )
         setattr(self.virt_iterator,"starting_file_line",self.starting_file_line)
         return self.virt_iterator
@@ -204,29 +226,10 @@ class VirtualLine(object):
         # stupid human check
         assert recipe_lines[0][0]==';'
 
-#        # split the recipe from the rule
-#        first_line_pos = self.virt_lines[0][0]["pos"]
-#        phys_row_to_split = truncate_pos[VCHAR_ROW] - first_line_pos[VCHAR_ROW]
-#        above = self.phys_lines[:phys_row_to_split]
-#        below = self.phys_lines[phys_row_to_split+1:]
-#        line_to_split = self.phys_lines[phys_row_to_split]
-#        left = line_to_split[:truncate_pos[VCHAR_COL]] 
-#        right = line_to_split[truncate_pos[VCHAR_COL]:] 
-#
-#        if left :
-#            above.extend([left])
-#        below = [right] + below
-#        print("above=",above)
-#        print("below=",below)
-
-        # truncate my virtual line 
-        # TODO
-
         # truncate the iterator (stop the iterator)
         self.virt_iterator.stop()
 
         return recipe_lines
-
 
 class RecipeVirtualLine(VirtualLine):
     # This is a block containing recipe(s). Don't collapse around backslashes. 
