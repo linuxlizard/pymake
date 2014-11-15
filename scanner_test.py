@@ -6,6 +6,7 @@
 
 import sys
 from scanner import ScannerIterator
+from vline import VirtualLine
 
 def main() : 
     s = ScannerIterator( "hello, world" )
@@ -77,6 +78,13 @@ def main() :
         pass
     else:
         assert 0
+    del s
+
+    vline = VirtualLine(["   hello,world"],0)
+    viter = iter(vline)
+    viter.lstrip()
+    print(str(viter.remain()))
+    assert viter.remain()=="hello,world", str(viter)
 
 if __name__=='__main__':
     main()

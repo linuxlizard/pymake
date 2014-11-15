@@ -61,7 +61,7 @@ class ScannerIterator(object):
 
     def lstrip(self):
         # strip left leading whitespace (like "".strip)
-        while self.data[self.idx] in string.whitespace :
+        while str(self.data[self.idx]) in string.whitespace :
             self.next()
 
         # allow chaining
