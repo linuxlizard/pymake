@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import sys
+import string
 
 # require Python 3.x because reasons
 if sys.version_info.major < 3:
@@ -40,10 +41,10 @@ class ScannerIterator(object):
 
     def push_state(self):
         self.state_stack.append(self.idx)
-        print( "push stack=", self.state_stack )
+#        print( "push stack=", self.state_stack )
 
     def pop_state(self):
-        print( "pop stack=", self.state_stack )
+#        print( "pop stack=", self.state_stack )
         self.idx = self.state_stack.pop()
 
     def remain(self):
@@ -57,4 +58,33 @@ class ScannerIterator(object):
         # kill anything after the current position
         self.data = self.data[:self.idx]
         self.max_idx = len(self.data)
+
+    def lstrip(self):
+        # strip left leading whitespace (like "".strip)
+        while self.data[self.idx] in string.whitespace :
+            self.next()
+
+        # allow chaining
+        return self
+
+    def eat(self,s):
+        # consume a string from the leading part of the data
+        # for example:  eat("hello") from "hello, world" will result in 
+        # ", world"
+        #
+        # Requires the string be found in the data, like string's index method.
+        # Requires the string start exactly at the current position.
+
+        errmsg = "{0} not found in {1}".format(s,self)
+        for c in s :
+            if self.idx >= self.max_idx:
+                raise ValueError(errmsg)
+
+            if self.data[self.idx] == c :
+                self.next()
+            else :
+                raise ValueError(errmsg)
+
+        # allow chaining
+        return self
 
