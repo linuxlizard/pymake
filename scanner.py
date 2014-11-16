@@ -61,8 +61,11 @@ class ScannerIterator(object):
 
     def lstrip(self):
         # strip left leading whitespace (like "".strip)
-        while str(self.data[self.idx]) in string.whitespace :
-            self.next()
+        try : 
+            while str(self.data[self.idx]) in string.whitespace :
+                self.next()
+        except IndexError:
+            raise StopIteration
 
         # allow chaining
         return self
@@ -75,14 +78,16 @@ class ScannerIterator(object):
         # Requires the string be found in the data, like string's index method.
         # Requires the string start exactly at the current position.
 
-        errmsg = "{0} not found in {1}".format(s,self)
+        errmsg = "\"{0}\" not found in {1}".format(s,self)
         for c in s :
             if self.idx >= self.max_idx:
+                # full substring not found so error!
                 raise ValueError(errmsg)
 
-            if self.data[self.idx] == c :
+            if str(self.data[self.idx]) == c :
                 self.next()
             else :
+                # full substring not found so error!
                 raise ValueError(errmsg)
 
         # allow chaining
