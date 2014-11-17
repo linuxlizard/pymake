@@ -16,6 +16,12 @@ import hexdump
 from scanner import ScannerIterator
 import vline
 
+# for now, focus on 3.81 compatibility
+class Version(object):
+    major = 3
+    minor = 81
+version = Version()
+
 #whitespace = set( ' \t\r\n' )
 whitespace = set(' \t')
 
@@ -147,12 +153,29 @@ builtin_variables = {
 
 
 class ParseError(Exception):
-    pass
+    filename = None   # filename containing the error
+    pos = (-1,-1)  # row/col of positin, zero based
+    code = None      # code line that caused the error (a VirtualLine)
+    description = "(No description!)" # useful description of the error
 
+    def __init__(self,*args,**kwargs):
+        super(ParseError,self).__init__(*args)
+        if "pos" in kwargs : 
+            self.pos = pos
+        if "code" in kwargs:
+            self.code = code
+        if "filename" in kwargs:
+            self.filename = filename
+
+    def __str__(self):
+        return "parse error: filename=\"{0}\" pos={1} code=\"{2}\": {3}".format(
+                self.filename,self.pos,str(self.code).strip(),self.description)
 
 class NestedTooDeep(Exception):
     pass
 
+class TODO(Exception):
+    pass
 
 def filter_char(c):
     if ord(c) < 32:
@@ -234,6 +257,7 @@ class RuleOp(Operator):
 class Expression(Symbol):
     # An expression is a list of symbols.
     def __init__(self, token_list ):
+        assert isinstance(token_list,list),type(token_list)
         self.token_list = token_list
 
         # sanity check
@@ -246,11 +270,7 @@ class Expression(Symbol):
     def __str__(self):
         # return a ()'d list of our tokens
         s = "{0}([".format(self.__class__.__name__)
-        if 0:
-            for t in self.token_list :
-                s += str(t)
-        else:
-            s += ",".join( [ str(t) for t in self.token_list ] )
+        s += ",".join( [ str(t) for t in self.token_list ] )
         s += "])"
         return s
 
@@ -387,10 +407,6 @@ class PrerequisiteList(Expression):
 
 class Recipe(Expression):
     # A single line of a recipe
-
-#    def makefile(self):
-#        s = "".join( [ t.makefile() for t in self.token_list ] )
-#        return s
     pass
 
 class RecipeList( Expression ) : 
@@ -407,6 +423,29 @@ class RecipeList( Expression ) :
         if len(self.token_list):
             s = "\t"+"\n\t".join( [ t.makefile() for t in self.token_list ] )
         return s
+
+class Directive(Symbol):
+    pass
+
+class ExportDirective(Directive):
+    def __init__(self,expression=None):
+        if expression : 
+            if isinstance(expression,AssignmentExpression) :
+                pass
+            else :
+                raise ParseError()
+
+        super(ExportDirective,self).__init__(self.__class__.__name__)
+        self.expression = expression
+
+    def __str__(self):
+        if self.expression : 
+            return "{0}({1})".format(self.string,str(self.expression))
+        else:
+            return "{0}()".format(self.string)
+
+class UnExportDirective(ExportDirective):
+    pass
 
 #class Makefile(Expression) : 
 #    # a collection of statements, directives, rules
@@ -522,7 +561,7 @@ def tokenize_statement(string):
     elif isinstance(last_symbol,AssignOp): 
         statement_type = "assignment"
 
-        print( "last_token={0} ∴ statement is {1}".format(last_symbol,statement_type))
+#        print( "last_token={0} ∴ statement is {1}".format(last_symbol,statement_type))
 
         # The statement is an assignment. Tokenize rest of line as an assignment.
         statement = list(lhs)
@@ -531,7 +570,7 @@ def tokenize_statement(string):
 
     elif isinstance(last_symbol,Expression) :
         statement_type="expression"
-        print( "last_token={0} ∴ statement is {1}".format(last_symbol,statement_type))
+#        print( "last_token={0} ∴ statement is {1}".format(last_symbol,statement_type))
 
         assert len(last_symbol),(str(last_symbol),starting_pos)
 
@@ -852,8 +891,7 @@ def tokenize_rule_RHS(string):
 
             elif c=='|':
                 # We have hit token indicating order-only prerequisite.
-                # TODO
-                assert 0
+                raise TODO()
 
             elif c in set("?+!"):
                 # maybe assignment ?= += !=
@@ -925,8 +963,7 @@ def tokenize_rule_RHS(string):
                 return None
             else:
                 # implicit pattern rule
-                # TODO
-                assert 0, vchar
+                raise TODO()
 
         elif state==state_double_colon : 
             # at this point, we found ::
@@ -937,8 +974,7 @@ def tokenize_rule_RHS(string):
             else:
                 # is this an implicit pattern rule?
                 # or a parse error?
-                # TODO
-                assert 0
+                raise TODO()
 
         elif state==state_backslash : 
             if not c in eol : 
@@ -1342,7 +1378,6 @@ class ConditionalDirective(object):
 
     def if_block(self,expression,string_list):
         pass
-        
 
     def else_block(self,expression,string_list):
         pass
@@ -1411,8 +1446,48 @@ def handle_conditional_directive(directive_str,line_iter,virt_line):
 def handle_define_directive(directive_str,line_iter,virt_line):
     assert 0, "TODO"
 
+def handle_export_directive( directive_str, line_iter, virt_line ) : 
+    # export <expression>
+    # TODO 
+    # make 3.81 "export define" not allowed ("missing separator")
+    # make 3.82 works
+    # make 4.0  works
+    print("handle \"{0}\"".format(directive_str))
+    if not(version.major==3 and version.minor==81) : 
+        raise TODO()
+
+    viter = iter(virt_line)
+    # eat any leading whitespace, eat the directive, eat any more whitespace
+    # we'll get StopIteration if we eat everything (lone export)
+    try : 
+        viter.lstrip().eat(directive_str).lstrip()
+    except StopIteration:
+        # lone "export" which means all variables exported by default
+        expression = None
+    else:
+        # now feed to the tokenizer
+        expression = tokenize_statement(viter)
+
+    constructor = { "export" : ExportDirective,
+                    "unexport" : UnExportDirective,
+                  }
+
+    try : 
+        export_expression = constructor[directive_str](expression)
+    except ParseError as err:
+        err.code = virt_line
+        err.pos = virt_line.starting_pos()
+        raise err
+
+    print(export_expression)
+
+    return export_expression
+
 directive_lut = { 
     "define" : handle_define_directive,
+    "export" : handle_export_directive,
+    "unexport" : handle_export_directive,
+
     # TODO add rest of opening directives
 }
 for k in conditional_directive :
@@ -1420,7 +1495,8 @@ for k in conditional_directive :
 
 #@depth_checker
 def tokenize_directive(directive_str,line_iter,virt_line):
-    print("tokenize_directive() \"{0}\"".format(directive_str))
+    print("tokenize_directive() \"{0}\" at line={1}".format(
+            directive_str,virt_line.starting_file_line))
 
     # TODO probably need a lot of parse checking here eventually
 
@@ -1442,7 +1518,7 @@ def tokenize_vline(line_iter,virt_line):
     # Is this a directive statement (e.g., ifdef ifeq define)?
     # Read the raw line (not the virtual line) looking for first whitespace
     # surrounded string being a directive.
-    directive_str = seek_directive(virt_line.phys_lines[0])
+    directive_str = seek_directive(str(virt_line))
     if directive_str:
         return tokenize_directive(directive_str,line_iter,virt_line)
 
@@ -1616,7 +1692,12 @@ def parse_makefile(infilename) :
     with open(infilename,'r') as infile :
         file_lines = infile.readlines()
 
-    parse_makefile_from_strlist(file_lines)
+    try : 
+        parse_makefile_from_strlist(file_lines)
+    except ParseError as err:
+        err.filename = infilename
+        print(err,file=sys.stderr)
+        raise
 
 def usage():
     # TODO
@@ -1628,5 +1709,9 @@ if __name__=='__main__':
         sys.exit(1)
 
     infilename = sys.argv[1]
-    parse_makefile(infilename)
+    try : 
+        parse_makefile(infilename)
+    except ParseError:
+        sys.exit(1)
+
 
