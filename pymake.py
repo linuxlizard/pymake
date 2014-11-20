@@ -16,6 +16,9 @@ import hexdump
 from scanner import ScannerIterator
 import vline
 
+# test/debug flags
+assert_on_parse_error = False  # assert() in ParseError() constructor
+
 # for now, focus on 3.81 compatibility
 class Version(object):
     major = 3
@@ -159,16 +162,23 @@ class ParseError(Exception):
     description = "(No description!)" # useful description of the error
 
     def __init__(self,*args,**kwargs):
+        if assert_on_parse_error : 
+            # handy for stopping immediately to diagnose a parse error
+            # (especially when the parse error is unexpected or wrong)
+            assert 0
+
         super(ParseError,self).__init__(*args)
         if "pos" in kwargs : 
-            self.pos = pos
+            self.pos = kwargs["pos"]
         if "code" in kwargs:
-            self.code = code
+            self.code = kwargs["code"]
         if "filename" in kwargs:
-            self.filename = filename
+            self.filename = kwargs["filename"]
+        if "description" in kwargs:
+            self.description = kwargs["description"]
 
     def __str__(self):
-        return "parse error: filename=\"{0}\" pos={1} code=\"{2}\": {3}".format(
+        return "parse error: filename=\"{0}\" pos={1} src=\"{2}\": {3}".format(
                 self.filename,self.pos,str(self.code).strip(),self.description)
 
 class NestedTooDeep(Exception):
@@ -257,7 +267,9 @@ class RuleOp(Operator):
 class Expression(Symbol):
     # An expression is a list of symbols.
     def __init__(self, token_list ):
-        assert isinstance(token_list,list),type(token_list)
+        # expect a list/array/tuple (something with len())
+        assert len(token_list)>=0, (type(token_list),token_list)
+
         self.token_list = token_list
 
         # sanity check
@@ -428,12 +440,10 @@ class Directive(Symbol):
     pass
 
 class ExportDirective(Directive):
+    directive_str = "export"
     def __init__(self,expression=None):
         if expression : 
-            if isinstance(expression,AssignmentExpression) :
-                pass
-            else :
-                raise ParseError()
+            assert isinstance(expression,Expression) 
 
         super(ExportDirective,self).__init__(self.__class__.__name__)
         self.expression = expression
@@ -444,8 +454,30 @@ class ExportDirective(Directive):
         else:
             return "{0}()".format(self.string)
 
+    def makefile(self):
+        if self.expression : 
+            return "{0} {1}".format(self.directive_str, self.expression.makefile() )
+        else : 
+            return "{0}".format(self.directive_str)
+
 class UnExportDirective(ExportDirective):
-    pass
+    directive_str = "unexport"
+
+class IncludeDirective(Directive):
+    directive_str = "include"
+    def __init__(self,expression):
+        super(IncludeDirective,self).__init__(self.__class__.__name__)
+        self.expression = expression
+
+    def __str__(self):
+        return "{0}({1})".format(self.string,str(self.expression))
+
+    def makefile(self):
+        return "{0} {1}".format(self.directive_str, self.expression.makefile() )
+
+class SIncludeDirective(IncludeDirective):
+    # handles sinclude and -include directives
+    directive_str = "-include"
 
 #class Makefile(Expression) : 
 #    # a collection of statements, directives, rules
@@ -518,15 +550,16 @@ def tokenize_statement(string):
     # whitespace. In a rule, the whitespace is ignored. In an assignment, the
     # whitespace is preserved.
 
-    print("tokenize_statement()")
-
     # get the starting position of this string (for error reporting)
     starting_pos = string.lookahead()["pos"]
+
+    print("tokenize_statement() pos={0}".format(starting_pos))
 
     # save current position in the token stream
     string.push_state()
     lhs = tokenize_statement_LHS(string)
     
+    # should get back a list of stuff in the Symbol class hierarchy
     assert type(lhs)==type(()), (type(lhs),)
     for token in lhs : 
         assert isinstance(token,Symbol),(type(token),token)
@@ -535,7 +568,7 @@ def tokenize_statement(string):
     # tokenize_statement_LHS() stopped.
     last_symbol = lhs[-1]
 
-    print(lhs[-1],len(lhs))
+    print("lhs={0} len={1}".format(lhs[-1],len(lhs)))
 
     if isinstance(last_symbol,RuleOp): 
         statement_type = "rule"
@@ -561,7 +594,7 @@ def tokenize_statement(string):
     elif isinstance(last_symbol,AssignOp): 
         statement_type = "assignment"
 
-#        print( "last_token={0} ∴ statement is {1}".format(last_symbol,statement_type))
+        print( "last_token={0} ∴ statement is {1}".format(last_symbol,statement_type))
 
         # The statement is an assignment. Tokenize rest of line as an assignment.
         statement = list(lhs)
@@ -570,14 +603,25 @@ def tokenize_statement(string):
 
     elif isinstance(last_symbol,Expression) :
         statement_type="expression"
-#        print( "last_token={0} ∴ statement is {1}".format(last_symbol,statement_type))
+        print( "last_token={0} ∴ statement is {1}".format(last_symbol,statement_type))
 
-        assert len(last_symbol),(str(last_symbol),starting_pos)
+        # davep 17-Nov-2014 ; the following code makes no sense 
+        # Wind up in this case when have a non-rule and non-assignment.
+        # Will get here with $(varref) e.g., $(info) $(shell) $(call) 
+        # Also get here with an 'export' RHS.
+        # Will get here when parsing multi-line 'define'.
+        # Need to find clean way to return clean Expression and catch parse
+        # error
 
-        # The statement is a directive or function call.
+        # The statement is a directive or bare words or function call. We
+        # better have consumed the whole thing.
         assert len(string.remain())==0, (len(string.remain(),starting_pos))
         
-        return Expression(lhs)
+        # Should be one big Expression. We'll dig into the Expression during
+        # the 2nd pass.
+        assert len(lhs)==1,(len(lhs),str(lhs),starting_pos)
+
+        return lhs[0]
 
     else:
         statement_type="????"
@@ -698,6 +742,9 @@ def tokenize_statement_LHS(string,separators=""):
 
             elif c in eol : 
                 # end of line; bail out
+                if token : 
+                    # capture any leftover when the line ended
+                    token_list.append(Literal(token))
                 break
                 
             else :
@@ -766,17 +813,24 @@ def tokenize_statement_LHS(string,separators=""):
 
     # hit end of string; what was our final state?
     if state==state_colon:
+        # Found a Rule
         # ":"
         assert len(token_list),starting_pos
         return Expression(token_list), RuleOp(":") 
     elif state==state_colon_colon:
+        # Found a Rule
         # "::"
         assert len(token_list),starting_pos
         return Expression(token_list), RuleOp("::") 
     elif state==state_in_word :
-        # likely a lone word (Parse Error) or a $() call
-        # TODO handle parse error (How?)
-        assert len(token_list),(starting_pos,token)
+        # Found a ????
+        # likely word(s) or a $() call. For example:
+        # a b c d
+        # $(info hello world)
+        # davep 17-Nov-2014 ; using this function to tokenize 'export' RHS
+        # which could be just a list of variables e.g., export CC LD RM 
+        # Return a raw expression that will have to be tokenize/parsed
+        # downstream.
         return Expression(token_list), 
 
     assert 0, (state,starting_pos)
@@ -1148,7 +1202,7 @@ def tokenize_variable_ref(string):
         else:
             assert 0, state
 
-    raise ParseError(vchar["pos"])
+    raise ParseError(pos=vchar["pos"])
 
 #@depth_checker
 def tokenize_recipe(string):
@@ -1391,6 +1445,8 @@ def handle_conditional_directive(directive_str,line_iter,virt_line):
     print( "handle_conditional_directive() \"{0}\" line={1}".format(
         directive_str,line_iter.idx))
 
+    raise TODO()
+
     state_start = 1
     state_else = 2
     state_endif = 3
@@ -1446,6 +1502,44 @@ def handle_conditional_directive(directive_str,line_iter,virt_line):
 def handle_define_directive(directive_str,line_iter,virt_line):
     assert 0, "TODO"
 
+directive_constructor = { 
+    "export" : ExportDirective,
+    "unexport" : UnExportDirective,
+    "include" : IncludeDirective,
+    "sinclude" : SIncludeDirective,
+    "-include" : SIncludeDirective,
+}
+
+def tokenize_directive_expression( directive_str, virt_line ) : 
+    # tokenize:
+    #   export, unexport, include, -include, sinclude, override, private
+    #
+    # Handy function for directives that are just the directive followed by an
+    # expression. 
+
+    viter = iter(virt_line)
+    # eat any leading whitespace, eat the directive, eat any more whitespace
+    # we'll get StopIteration if we eat everything (directive with no
+    # expression)
+    try : 
+        viter.lstrip().eat(directive_str).lstrip()
+    except StopIteration:
+        # No expression with this directive. For example, lone "export" which
+        # means all variables exported by default
+        expression = None
+    else:
+        # now feed to the tokenizer
+        expression = tokenize_statement(viter)
+
+    try : 
+        directive_instance = directive_constructor[directive_str](expression)
+    except ParseError as err:
+        err.code = virt_line
+        err.pos = virt_line.starting_pos()
+        raise err
+
+    return directive_instance
+
 def handle_export_directive( directive_str, line_iter, virt_line ) : 
     # export <expression>
     # TODO 
@@ -1456,42 +1550,26 @@ def handle_export_directive( directive_str, line_iter, virt_line ) :
     if not(version.major==3 and version.minor==81) : 
         raise TODO()
 
-    viter = iter(virt_line)
-    # eat any leading whitespace, eat the directive, eat any more whitespace
-    # we'll get StopIteration if we eat everything (lone export)
-    try : 
-        viter.lstrip().eat(directive_str).lstrip()
-    except StopIteration:
-        # lone "export" which means all variables exported by default
-        expression = None
-    else:
-        # now feed to the tokenizer
-        expression = tokenize_statement(viter)
+    return tokenize_directive_expression(directive_str,virt_line)
 
-    constructor = { "export" : ExportDirective,
-                    "unexport" : UnExportDirective,
-                  }
+def handle_include_directive( directive_str, line_iter, virt_line ) : 
+    print("handle \"{0}\"".format(directive_str))
 
-    try : 
-        export_expression = constructor[directive_str](expression)
-    except ParseError as err:
-        err.code = virt_line
-        err.pos = virt_line.starting_pos()
-        raise err
+    include_instance = tokenize_directive_expression(directive_str,virt_line)
 
-    print(export_expression)
+    # must have an expression (no bare 'include' allowed)
+    if not include_instance.expression : 
+        raise ParseError(pos=virt_line.starting_pos(),
+                        description="include directive requires a filename")
 
-    return export_expression
+    # The following looks like an assignment expression. 
+    #
+    # include = foo bar baz 
+    #
+    # But Make treats it as an include of four files: =,foo,bar,baz 
 
-directive_lut = { 
-    "define" : handle_define_directive,
-    "export" : handle_export_directive,
-    "unexport" : handle_export_directive,
-
-    # TODO add rest of opening directives
-}
-for k in conditional_directive :
-    directive_lut[k]=handle_conditional_directive
+    print(include_instance)
+    return include_instance
 
 #@depth_checker
 def tokenize_directive(directive_str,line_iter,virt_line):
@@ -1499,6 +1577,20 @@ def tokenize_directive(directive_str,line_iter,virt_line):
             directive_str,virt_line.starting_file_line))
 
     # TODO probably need a lot of parse checking here eventually
+
+    directive_lut = { 
+        "define" : handle_define_directive,
+        "export" : handle_export_directive,
+        "unexport" : handle_export_directive,
+        "include" : handle_include_directive,
+        "-include" : handle_include_directive,
+        "sinclude" : handle_include_directive,
+
+        # TODO add rest of opening directives
+    }
+
+    for k in conditional_directive :
+        directive_lut[k]=handle_conditional_directive
 
     return directive_lut[directive_str](directive_str,line_iter,virt_line)
 
