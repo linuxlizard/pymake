@@ -68,12 +68,13 @@ class VChar(object):
             raise KeyError(key)
 
     def __str__(self):
-        # created this class pretty much just for this method :-/
+        # created this class pretty much just for this method, e.g., 
+        #   while str(self.data[self.idx]) in string.whitespace :
         return self.char
 
     @staticmethod
     def string_from_vchars(vchar_list):
-        # convert array of vchar into a Python strip
+        # convert array of vchar into a Python string
         return "".join([v.char for v in vchar_list])
 
 class VirtualLine(object):
@@ -258,7 +259,14 @@ class VirtualLine(object):
 #    def from_vchar_list(cls,vchar_list,starting_file_line):
 #        # create a VirtualLine instance from an array of VChar instances
 #        vline = cls([],starts_at_file_line)
-#        TODO 
+#        TODO  -- not sure I need this and it looks like it'll be very hard so
+#        leave it out for now
+
+    @classmethod
+    def from_string(cls,python_string):
+        # create a VirtualLine instance from a single string (convenience
+        # method for test/debug code)
+        return cls([python_string],0)
 
 class RecipeVirtualLine(VirtualLine):
     # This is a block containing recipe(s). Don't collapse around backslashes. 
