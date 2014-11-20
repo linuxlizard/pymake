@@ -8,7 +8,8 @@
 #
 # davep 07-Oct-2014 
 
-$(info hello, world)
+$(info hello, world) $(info hello, world)
+$(info hello, world)            $(info hello, world)
 
 $(info Hello, world)$(info Hello, World) 
 
