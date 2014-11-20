@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
 
+# Scanner (as in scanner for tokenizer/parser)
+# Needed an iterator that supports pushback and state save/restore.
+# (fancy shmancy https://en.wikipedia.org/wiki/Pushdown_automaton)
+
 import sys
 import string
 
