@@ -268,6 +268,10 @@ class VirtualLine(object):
         # method for test/debug code)
         return cls([python_string],0)
 
+    def get_phys_line(self):
+        # rebuild a single physical line (needed when tokenizing recipes)
+        return "".join(self.phys_lines) 
+
 class RecipeVirtualLine(VirtualLine):
     # This is a block containing recipe(s). Don't collapse around backslashes. 
     def collapse_virtual_line(self):

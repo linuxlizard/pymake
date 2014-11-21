@@ -479,13 +479,13 @@ class UnExportDirective(ExportDirective):
 class IncludeDirective(Directive):
     name = "include"
 
-class SIncludeDirective(IncludeDirective):
-    # handles -include directives
-    name = "sinclude"
-
-class DashIncludeDirective(IncludeDirective):
+class MinusIncludeDirective(IncludeDirective):
     # handles -include directives
     name = "-include"
+
+class SIncludeDirective(MinusIncludeDirective):
+    # handles sinclude directives (another name for -include)
+    name = "sinclude"
 
 class VpathDirective(Directive):
     name = "vpath"
@@ -504,6 +504,12 @@ class OverrideDirective(Directive):
 
         super(OverrideDirective,self).__init__(expression)
         
+class IfdefDirective(Directive):
+    name = "ifdef"
+
+class IfndefDirective(Directive):
+    name = "ifndef"
+
 #class Makefile(Expression) : 
 #    # a collection of statements, directives, rules
 #
@@ -1335,7 +1341,7 @@ def tokenize_recipe(string):
 
     return Recipe( token_list )
 
-def parse_recipes( file_lines, semicolon_vline=None ) : 
+def parse_recipes( vline_iter, semicolon_vline=None ) : 
 
     print("parse_recipes()")
 #    print( file_lines.remain() )
@@ -1359,10 +1365,12 @@ def parse_recipes( file_lines, semicolon_vline=None ) :
         recipe.set_code( semicolon_vline )
         recipe_list.append(recipe)
 
-    for line in file_lines : 
-#        print("")
-        print( "l state={0}".format(state))
-#        print( hexdump.dump(line,16), end="" )
+    for vline in vline_iter : 
+        print( "r state={0}".format(state))
+
+        # backslash in recipes are treated differently so need to work on the
+        # raw physical lines here
+        line = vline.get_phys_line()
 
         if state==state_start : 
             if line.startswith(recipe_prefix):
@@ -1374,7 +1382,6 @@ def parse_recipes( file_lines, semicolon_vline=None ) :
                     # single line
                     recipe_vline = vline.RecipeVirtualLine([line],file_lines.idx)
                     recipe = tokenize_recipe(iter(recipe_vline))
-#                    recipe = tokenize_recipe(ScannerIterator(line))
                     print("recipe={0}".format(recipe.makefile()))
                     recipe.set_code(recipe_vline)
                     recipe_list.append(recipe)
@@ -1393,7 +1400,7 @@ def parse_recipes( file_lines, semicolon_vline=None ) :
                 else:
                     # found a line that doesn't belong to the recipe;
                     # done with recipe list
-                    file_lines.pushback()
+                    vline_iter.pushback()
                     break
 
         elif state==state_comment_backslash : 
@@ -1425,12 +1432,12 @@ def parse_recipes( file_lines, semicolon_vline=None ) :
 
     return RecipeList(recipe_list)
 
-def get_directive(s):
-    # split apart a line seeking a directive
-    fields = s.strip().split(" ")
-    return fields[0]
-
 def seek_directive(s):
+    def get_directive(s):
+        # (did I need this function outside seek???)
+        # split apart a line seeking a directive
+        fields = s.strip().split(" ")
+        return fields[0]
     # split apart a line seeking a directive
     d = get_directive(s)
     if d in directive:
@@ -1438,15 +1445,15 @@ def seek_directive(s):
     return None
 
 #@depth_checker
-def handle_conditional_directive(directive_str,line_iter,virt_line):
+def handle_conditional_directive(directive,line_iter):
     # GNU make doesn't parse the stuff inside the conditional unless the
-    # conditional expression evaluates to True. Read line by line, looking for
-    # directives
+    # conditional expression evaluates to True. Read line by line, looking for # directives
+
+    # call should have sent us a Directive instance (stupid human check)
+    assert isinstance(directive,Directive), type(directive)
 
     print( "handle_conditional_directive() \"{0}\" line={1}".format(
-        directive_str,line_iter.idx))
-
-    raise TODO()
+        directive.name,line_iter.idx))
 
     state_start = 1
     state_else = 2
@@ -1456,47 +1463,51 @@ def handle_conditional_directive(directive_str,line_iter,virt_line):
 
     line_block = []
 
-#    if_block = ConditionalDirective(virt_line)
+    print("line_iter={0}".format(type(line_iter)))
 
-    for line_str in line_iter : 
+    for virt_line in line_iter : 
+        print( "c state={0} {1}".format(state,type(virt_line)))
+        print("={0}".format(str(virt_line)),end="")
+
+        # search for nested directive in the physical line (consolidates the
+        # line continuations)
+        phys_line = str(virt_line)
+
         # directive is the first substring surrounded by whitespace
-        virt_line = vline.VirtualLine(line_list,starting_line_number)
-        d = get_directive(line_str)
-
-        print( "c state={0}".format(state))
+        directive_str = seek_directive(phys_line)
 
         if state==state_start : 
-            if d in conditional_directive : 
+            if directive_str in conditional_directive : 
                 # recursive function is recursive
-                token = handle_conditional_directive(directive_str,line_iter,virt_line)
-            elif d=="else" : 
+                token = tokenize_directive(directive_str,line_iter,virt_line)
+            elif directive_str=="else" : 
                 state = state_else 
-            elif d=="endif":
+            elif directive_str=="endif":
                 state = state_endif
             else : 
                 # save the line into the block
-                line_block.append(line_str)
+                line_block.append(virt_line)
 
         elif state==state_else : 
-            if d in conditional_directive : 
+            if directive_str in conditional_directive : 
                 # recursive function is recursive
-                token = handle_conditional_directive(directive_str,line_iter,virt_line)
-            elif d=="else" : 
+                token = tokenize_directive(directive_str,line_iter,virt_line)
+            elif directive_str=="else" : 
                 raise ParseError("too many else")
-            elif d=="endif":
+            elif directive_str=="endif":
                 state = state_endif
             else : 
                 # save the line into the block
-                line_block.append(line_str)
+                line_block.append(virt_line)
 
         else : 
             assert 0,state
-
 
         if state==state_endif : 
             # close the if/else/endif collection
             pass
 
+    sys.exit(0)
     return if_block
 
 #@depth_checker
@@ -1543,6 +1554,13 @@ def tokenize_directive(directive_str,line_iter,virt_line):
                        "tokenizer" : tokenize_statement,
                      },
 
+        "ifdef" : { "constructor" : IfdefDirective,
+                    "tokenizer"   : tokenize_assign_RHS,
+                  },
+        "ifndef" : { "constructor" : IfndefDirective,
+                     "tokenizer"   : tokenize_assign_RHS,
+                   },
+
         # TODO add rest of opening directives
     }
 
@@ -1578,32 +1596,32 @@ def tokenize_directive(directive_str,line_iter,virt_line):
         err.pos = virt_line.starting_pos()
         raise err
 
+    if directive_str in conditional_directive :
+        handle_conditional_directive(directive_instance,line_iter)
+
     return directive_instance
 
 #@depth_checker
-def tokenize_vline(line_iter,virt_line): 
+def tokenize_vline(virt_line,vline_iter): 
     # pull apart a single line into token/symbol(s)
     #
-    # line_iter - the iterator across the entire file 
-    #             (a Rule includes the RecipeList so need to get the entire file)
     # virt_line - the current line we need to tokenize (a VirtualLine)
+    # vline_iter - a Generatore across the entire file (returns VirtualLine
+    #               instances) 
 
     print("tokenize_vline()")
-
-    assert isinstance(line_iter,ScannerIterator),(type(line_iter),)
-    assert isinstance(virt_line,vline.VirtualLine),(type(virt_line),)
 
     # Is this a directive statement (e.g., ifdef ifeq define)?
     # Read the raw line (not the virtual line) looking for first whitespace
     # surrounded string being a directive.
     directive_str = seek_directive(str(virt_line))
     if directive_str:
-        token = tokenize_directive(directive_str,line_iter,virt_line)
+        token = tokenize_directive(directive_str,vline_iter,virt_line)
         token.set_code(virt_line)
         return token
 
-    statement_iter = iter(virt_line)
-    token = tokenize_statement(statement_iter)
+    string_iter = iter(virt_line)
+    token = tokenize_statement(string_iter)
 
     # If we found a rule, we need to change how we're handling the
     # lines. (Recipes have different whitespace and backslash rules.)
@@ -1632,7 +1650,7 @@ def tokenize_vline(line_iter,virt_line):
         #
         # The recipe is "@echo baz\\\nI am more recipe hur hur hur\n"
         # and that's what needs to exec'd.
-        remaining_vchars = statement_iter.remain()
+        remaining_vchars = string_iter.remain()
         if len(remaining_vchars)>0:
             # truncate at position of first char of whatever is
             # leftover from the rule
@@ -1647,9 +1665,9 @@ def tokenize_vline(line_iter,virt_line):
             print("dangling={0}".format(dangling_recipe.virt_lines))
             print("dangling={0}".format(dangling_recipe.phys_lines))
 
-            recipe_list = parse_recipes( line_iter, dangling_recipe )
+            recipe_list = parse_recipes( vline_iter, dangling_recipe )
         else :
-            recipe_list = parse_recipes( line_iter )
+            recipe_list = parse_recipes( vline_iter )
 
         assert isinstance(recipe_list,RecipeList)
 
@@ -1747,8 +1765,8 @@ def parse_makefile_from_strlist(file_lines):
 
     # The vline_iter will modify line_iter. But line_iter should be at the
     # proper place at all times. In other words, there are two readers from
-    # line_iter: the vline_iter and tokenize_vline()
-    token_list = [ tokenize_vline(line_iter,vline) for vline in vline_iter ] 
+    # line_iter: this function and tokenize_vline()
+    token_list = [ tokenize_vline(vline,vline_iter) for vline in vline_iter ] 
 
     # the following is just test code to printf the results. 
     #
