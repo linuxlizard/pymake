@@ -71,8 +71,10 @@ directive = {
     "define", "enddef", "undefine",
     "else", "endif",
     "include", "-include", "sinclude",
-    "override", "export", "unexport",
-    "private", "vpath",
+    "override", 
+    "export", "unexport",
+    "private", 
+    "vpath",
 } | conditional_directive
 
 functions = {
@@ -1498,121 +1500,22 @@ def handle_conditional_directive(directive_str,line_iter,virt_line):
     return if_block
 
 #@depth_checker
-#def handle_define_directive(directive_str,line_iter,virt_line):
-#    assert 0, "TODO"
-#
-#directive_constructor = { 
-#    "export" : ExportDirective,
-#    "unexport" : UnExportDirective,
-#    "include" : IncludeDirective,
-#    "sinclude" : SIncludeDirective,
-#    "-include" : SIncludeDirective,
-#}
-#
-#def tokenize_directive_expression( directive_str, virt_line ) : 
-#    # tokenize:
-#    #   export, unexport, include, -include, sinclude, override, private
-#    #
-#    # Handy function for directives that are just the directive followed by an
-#    # expression. 
-#
-#    viter = iter(virt_line)
-#    # eat any leading whitespace, eat the directive, eat any more whitespace
-#    # we'll get StopIteration if we eat everything (directive with no
-#    # expression)
-#    try : 
-#        viter.lstrip().eat(directive_str).lstrip()
-#    except StopIteration:
-#        # No expression with this directive. For example, lone "export" which
-#        # means all variables exported by default
-#        expression = None
-#    else:
-#        # now feed to the tokenizer
-#        expression = tokenize_statement(viter)
-#
-#    try : 
-#        directive_instance = directive_constructor[directive_str](expression)
-#    except ParseError as err:
-#        err.code = virt_line
-#        err.pos = virt_line.starting_pos()
-#        raise err
-#
-#    return directive_instance
-#
-#def handle_export_directive( directive_str, line_iter, virt_line ) : 
-#    # export <expression>
-#    # TODO 
-#    # make 3.81 "export define" not allowed ("missing separator")
-#    # make 3.82 works
-#    # make 4.0  works
-#    print("handle \"{0}\"".format(directive_str))
-#    if not(version.major==3 and version.minor==81) : 
-#        raise TODO()
-#
-#    return tokenize_directive_expression(directive_str,virt_line)
-#
-#def handle_include_directive( directive_str, line_iter, virt_line ) : 
-#    print("handle \"{0}\"".format(directive_str))
-#
-#    include_instance = tokenize_directive_expression(directive_str,virt_line)
-#
-#    # must have an expression (bare 'include' is allowed)
-#    if not include_instance.expression : 
-#        raise ParseError(pos=virt_line.starting_pos(),
-#                        description="include directive requires a filename")
-#
-#    # The following looks like an assignment expression. 
-#    #
-#    # include = foo bar baz 
-#    #
-#    # But Make treats it as an include of four files: =,foo,bar,baz 
-#
-#    print(include_instance)
-#    return include_instance
-#
-class DirectiveTokenizer(object):
-    name = "(should not see this)"
-    def __init__(self, directive, virt_line ):
-        self.directive = directive
-        self.virt_line = virt_line
-        self.expression = None
-
-    def tokenize(self):
-        self.viter = iter(self.virt_line)
-        # eat any leading whitespace, eat the directive, eat any more whitespace
-        # we'll get StopIteration if we eat everything (directive with no
-        # expression)
-        try : 
-            self.viter.lstrip().eat(self.directive).lstrip()
-        except StopIteration:
-            # No expression with this directive. For example, lone "export" which
-            # means all variables exported by default
-            self.expression = None
-        else:
-            # now feed to the tokenizer
-            self.expression = self.run_tokenize_sm()
-
-        # now create a Symbol instance
-        try : 
-            directive_instance = self.run_constructor()
-        except ParseError as err:
-            err.code = self.virt_line
-            err.pos = self.virt_line.starting_pos()
-            raise err
-       
-    def run_tokenize_sm(self):
-        return tokenize_statement(self.viter)
-        
-    def run_constructor(self):
-        # override in a child method!
-        assert 0
-
-#@depth_checker
 def tokenize_directive(directive_str,line_iter,virt_line):
     print("tokenize_directive() \"{0}\" at line={1}".format(
             directive_str,virt_line.starting_file_line))
 
     # TODO probably need a lot of parse checking here eventually
+    # (Most parse checking is in the Directive constructor)
+    #
+    # 'private' is weird. Only applies to implicit pattern rules? 
+    #
+    # if* conditional will require very careful handling. The content of the
+    # conditional branches aren't parsed until the conditional is evaluated.
+    #
+    # export/unexport/override all apply to define blocks as well. So if find
+    # an {export,unexport,override} need to check for a define block before
+    # passing to tokenizer.
+    #
 
     directive_lut = { 
         "export" : { "constructor" : ExportDirective,
@@ -1655,7 +1558,7 @@ def tokenize_directive(directive_str,line_iter,virt_line):
 
     # eat any leading whitespace, eat the directive, eat any more whitespace
     # we'll get StopIteration if we eat everything (directive with no
-    # expression)
+    # expression such as lone "export" or "vpath")
     try : 
         viter.lstrip().eat(directive_str).lstrip()
     except StopIteration:
@@ -1766,7 +1669,7 @@ def get_vline(line_iter):
     # iterates across an array of strings, the makefile
     #
     # The line_iter can also be passed around to other tokenizers (e.g., the
-    # recipe tokenizer). So this function cannot assume its the only line_iter
+    # recipe tokenizer). So this function cannot assume it's the only line_iter
     # user.
     #
     # Each string should be terminated by an EOL.  Handle cases where line is
