@@ -17,6 +17,7 @@ if sys.version_info.major < 3:
 
 import hexdump
 from scanner import ScannerIterator
+from printable import printable_char, printable_string
 
 eol = set("\r\n")
 # can't use string.whitespace because want to preserve line endings
@@ -82,6 +83,8 @@ class VirtualLine(object):
     def __init__(self,phys_lines_list, starts_at_file_line ):
         # need an array of strings (2-D array of characters)
         assert type(phys_lines_list)==type([])
+        for p in phys_lines_list :
+            assert isinstance(p,str),type(p)
 
         # save a pristine copy of the original list 
         self.phys_lines = phys_lines_list
@@ -271,6 +274,15 @@ class VirtualLine(object):
     def get_phys_line(self):
         # rebuild a single physical line (needed when tokenizing recipes)
         return "".join(self.phys_lines) 
+
+    def python(self):
+        # Return a Python expression representing this virtual line.
+        # Used in str() methods from Symbol class hierarchy to round trip the
+        # code.
+        s = "VirtualLine(["
+        s += ",".join( ["\"{0}\"".format(printable_string(p)) for p in self.phys_lines] )
+        s += "],{0})".format(self.starting_file_line)
+        return s
 
 class RecipeVirtualLine(VirtualLine):
     # This is a block containing recipe(s). Don't collapse around backslashes. 
