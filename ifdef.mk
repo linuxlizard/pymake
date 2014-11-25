@@ -1,8 +1,22 @@
+ifdef=foo
+$(info $(ifdef)=foo)
+ifneq ($(ifdef)$(info hello, from, weird, place),foo)
+$(error $(ifdef)!=foo)
+endif
+
+ifdef FOO
+this is junk
+the following else is ignored because of this backslash\
+else
+else
+$(info this is valid)
+endif
+
 FOO=bar
 ifdef FOO
 $(info $(FOO))
 else
-$(error need foo )
+$(error need FOO)
 endif
 
 # directives backslashable?
@@ -17,6 +31,11 @@ endif
 ifdef NOTDEF
 This is basically a block comment.
 Make ignores anything inside an undefed block
+    ifdef STILL_NOTDEF
+    Except more directives have to correctly be detected
+    and parsed. Nested directives!
+    else
+    endif
 endif
 
 ifeq (a,b)
