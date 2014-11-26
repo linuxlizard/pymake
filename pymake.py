@@ -15,7 +15,39 @@ if sys.version_info.major < 3:
 import hexdump
 from scanner import ScannerIterator
 import vline
+from vline import VirtualLine
 from printable import printable_char, printable_string
+
+__all__ = [ "Version",
+            "ParseError",
+            "Symbol",
+            "Literal",
+            "Operator",
+            "AssignOp",
+            "RuleOp",
+            "Expression",
+            "VarRef",
+            "AssignmentExpression",
+            "RuleExpression",
+            "PrerequisiteList",
+            "Recipe",
+            "RecipeList",
+            "Directive",
+            "ExportDirective",
+            "UnExportDirective",
+            "IncludeDirective",
+            "MinusIncludeDirective",
+            "SIncludeDirective",
+            "VpathDirective",
+            "OverrideDirective",
+            "LineBlock",
+            "ConditionalDirective",
+            "IfdefDirective",
+            "IfndefDirective",
+            "IfeqDirective",
+            "IfneqDirective",
+            "Makefile",
+]
 
 # test/debug flags
 assert_on_parse_error = False  # assert() in ParseError() constructor
@@ -60,13 +92,15 @@ built_in_targets = {
 # Stuff from Appendix A.
 #
 
-# conditionals separate so can handle nested conditionals
+# Conditionals separate because conditionals can be multi-line and require some
+# complex handling.
 conditional_directive = {
     "ifdef", "ifndef", 
     # newer versions of Make? (TODO verify when these appeared)
     "ifeq", "ifneq"
 }
 
+# all directives
 directive = {
     "define", "enddef", "undefine",
     "else", "endif",
@@ -172,8 +206,8 @@ class ParseError(Exception):
         super().__init__(*args)
         if "pos" in kwargs : 
             self.pos = kwargs["pos"]
-        if "code" in kwargs:
-            self.code = kwargs["code"]
+        if "vline" in kwargs:
+            self.vline = kwargs["vline"]
         if "filename" in kwargs:
             self.filename = kwargs["filename"]
         if "description" in kwargs:
@@ -181,7 +215,7 @@ class ParseError(Exception):
 
     def __str__(self):
         return "parse error: filename=\"{0}\" pos={1} src=\"{2}\": {3}".format(
-                self.filename,self.pos,str(self.code).strip(),self.description)
+                self.filename,self.pos,str(self.vline).strip(),self.description)
 
 class NestedTooDeep(Exception):
     pass
@@ -226,6 +260,11 @@ class Symbol(object):
 
         self.code = vline
 
+    @staticmethod
+    def validate(token_list):
+        for t in token_list : 
+            assert isinstance(t,Symbol), (type(t), t)
+
 class Literal(Symbol):
     # A literal found in the token stream. Store as a string.
     pass
@@ -249,10 +288,7 @@ class Expression(Symbol):
 
         self.token_list = token_list
 
-        # sanity check
-        for t in self.token_list :
-#            print("t={0}".format( t ) )
-            assert isinstance(t,Symbol), (type(t),t)
+        Symbol.validate(token_list)
 
         Symbol.__init__(self)
 
@@ -341,6 +377,7 @@ class RuleExpression(Expression):
 
     def __init__(self, token_list):
         # add sanity check in constructor
+        Symbol.validate(token_list)
 
         assert len(token_list)==3 or len(token_list)==4, len(token_list)
 
@@ -493,18 +530,17 @@ class LineBlock(Symbol):
     # endif  
     #
 
-    def _validate(self,vline_list):
-        # code_block is an array of VirtualLine
-        for v in vline_list : 
-            assert isinstance(v,vline.VirtualLine),(type(v,))
-
     def __init__(self,vline_list):
-        self._validate(vline_list)
+        VirtualLine.validate(vline_list)
         self.vline_list = vline_list
         super().__init__()
 
-    def makefile(self):
-        return "".join( [ str(v) for v in self.vline_list ] )
+    def makefile(self,depth=0):
+        VirtualLine.validate(self.vline_list)
+        
+        prefix = " " * depth
+        s = "".join( [ prefix+str(v).lstrip() for v in self.vline_list ] )
+        return s
 
     def __str__(self):
         # This class contains an array of VirtualLine instances. Need to
@@ -567,9 +603,12 @@ class ConditionalDirective(Directive):
         self._validate(self.if_blocks)
 
         if len(args): 
+            print("args={0} else={1}".format(args,args[-1]))
             # last of args must be the else_blocks[]
             self._validate(args[-1])
             self.else_blocks = args[-1]
+            if self.else_blocks:
+                self.haz_else = True
 
             # TODO add elseif 
 
@@ -597,27 +636,37 @@ class ConditionalDirective(Directive):
         s += ")"
         return s
 
-    def makefile(self):
-        m = super().makefile()
+    def makefile(self,depth=0):
+#        print("makefile() depth={0}".format(depth))
+        prefix=" "*depth
+        m = prefix
+        m += super().makefile()
         m += "\n"
 
+        # Automatically indent the output to make visual inspection easier.
+        # Don't like the automatic indents? Comment this out. :-P
+#        depth += 4
+
         if self.if_blocks:
-            m += "".join([ s.makefile() for s in self.if_blocks])
+            m += "".join([ s.makefile(depth) for s in self.if_blocks])
 
         # TODO 
 #        for i in range(len(self.elif_blocks)):
 #            for j in range(len(self.elif_blocks[i])):
 #                m += str(self.elif_blocks[i][j])
 
-        print("{0} m={1}".format(id(self),printable_string(m)))
+#        print("{0} m={1}".format(id(self),printable_string(m)))
         if self.haz_else:
-            m += "else\n"
+            m += prefix + "else\n"
         if self.else_blocks:
-            m += "\n".join([ s.makefile() for s in self.else_blocks])
-            print("{0} m={1}".format(id(self),printable_string(m)))
+            m += "\n".join([ s.makefile(depth) for s in self.else_blocks])
+#            print("{0} m={1}".format(id(self),printable_string(m)))
 
-        m += "endif\n"
-        print("{0} m={1}".format(id(self),printable_string(m)))
+        if prefix: 
+            m += prefix + "endif\n"
+        else:
+            m += "endif"
+#        print("{0} m={1}".format(id(self),printable_string(m)))
         return m
 
     def add_if_block( self, code_block ) : 
@@ -635,7 +684,7 @@ class ConditionalDirective(Directive):
         # if abc
         #   foo
         # else if xyz 
-        #   bar <--- handle this stuff
+        #   bar <--- this stuff
         # else
         #   baz 
         # endif
@@ -649,7 +698,7 @@ class ConditionalDirective(Directive):
         # else if xyz   
         #   bar
         # else
-        #   baz <--- handle this stuff
+        #   baz <--- this stuff
         # endif
         self._validate([else_block])
         self.else_blocks.append( else_block )
@@ -666,13 +715,25 @@ class IfeqDirective(ConditionalDirective):
 class IfneqDirective(ConditionalDirective):
     name = "ifneq"
 
-#class Makefile(Expression) : 
-#    # a collection of statements, directives, rules
-#
-#    def makefile(self):
-#        # newline separated
-#        s = "\n".join( [ t.makefile() for t in self.token_list ] )
-#        return s
+class Makefile(object) : 
+    # A collection of statements, directives, rules.
+    # Note this class is separate from the Symbol hierarchy.
+
+    def __init__(self,token_list):
+        Symbol.validate(token_list)
+        self.token_list = token_list
+
+    def __str__(self):
+        return "Makefile([{0}])".format(",\n".join( [ str(block) for block in self.token_list ] ) )
+#        return "Makefile([{0}])".format(",\n".join( [ "{0}".format(block) for block in self.token_list ] ) )
+
+    def makefile(self):
+        # newline separated
+        s = "\n".join( [ "{0}".format(token.makefile()) for token in self.token_list ] )
+        return s
+
+    def __iter__(self):
+        return iter(self.token_list)
 
 def comment(string):
     state_start = 1
@@ -901,6 +962,9 @@ def tokenize_statement_LHS(string,separators=""):
                 state = state_dollar
 
             elif c=='#':
+                # capture anything we might have seen 
+                if token : 
+                    token_list.append(Literal(token))
                 # eat the comment 
                 string.pushback()
                 comment(string)
@@ -1152,7 +1216,8 @@ def tokenize_rule_RHS(string):
                 string.pushback()
                 comment(string)
                 # save the token we've captured
-                token_list.append(Literal(token))
+                if token :
+                    token_list.append(Literal(token))
                 # start seeking next boundary
                 state = state_start
 
@@ -1341,6 +1406,7 @@ def tokenize_variable_ref(string):
                 state=state_dollar
             else :
                 raise ParseError(vchar["pos"])
+
         elif state==state_dollar:
             # looking for '(' or '$' or some char
             if c=='(' or c=='{':
@@ -1590,14 +1656,31 @@ def parse_recipes( line_iter, semicolon_vline=None ) :
 def seek_directive(s):
     def get_directive(s):
         # (did I need this function outside seek???)
-        # split apart a line seeking a directive
-        fields = s.strip().split(" ")
+        # Split apart a line seeking a directive. Handle stuff like:
+        #   else   <--- legal (duh)
+        #   else#  <--- legal
+        #
+        fields = s.strip().split(" ")[0].split("#")
         return fields[0]
     # split apart a line seeking a directive
     d = get_directive(s)
     if d in directive:
         return d
     return None
+
+def seek_elseif(s):
+    # Look for an "else if" directive (e.g., else ifdef, else ifeq, etc)
+    #
+    # Luckily Make seems to require whitespace after the else conditional
+    #   else ifeq(  <--- fail
+    #   else ifeq#  <--- incorrect syntax
+    #   else ifeq ( <--- ok
+    fields = s.strip().split()
+    print(fields)
+
+    assert fields[0]=="else",fields[0]
+    if len(fields)>1 and fields[1] in conditional_directive : 
+        return fields[1]
 
 #@depth_checker
 def handle_conditional_directive(directive_inst,vline_iter,line_iter):
@@ -1635,6 +1718,15 @@ def handle_conditional_directive(directive_inst,vline_iter,line_iter):
     # Passed to LineBlock constructor.
     line_block = []
 
+    def save_if(line_block):
+        if len(line_block) :
+            directive_inst.add_if_block( LineBlock(line_block) )
+        return []
+    def save_else(line_block):
+        if len(line_block) :
+            directive_inst.add_else_block( LineBlock(line_block) )
+        return []
+
     for virt_line in vline_iter : 
         print("c state={0}".format(state))
 #        print("={0}".format(str(virt_line)),end="")
@@ -1644,7 +1736,7 @@ def handle_conditional_directive(directive_inst,vline_iter,line_iter):
         phys_line = str(virt_line)
 
         # directive is the first substring surrounded by whitespace
-        # or None if substring is not in global set directive
+        # or None if substring is not a directive
         directive_str = seek_directive(phys_line)
 
         if directive_str : 
@@ -1654,38 +1746,34 @@ def handle_conditional_directive(directive_inst,vline_iter,line_iter):
         if state==state_start : 
             if directive_str in conditional_directive : 
                 # save the block of stuff we've read
-                if len(line_block) :
-                    directive_inst.add_if_block( LineBlock(line_block) )
-                    del line_block  # detach the ref
-                    line_block = []  # start over
+                line_block = save_if(line_block)
 
                 # recursive function is recursive
                 token = tokenize_directive(directive_str,virt_line,vline_iter,line_iter)
                 directive_inst.add_if_block( token )
                 
-
             elif directive_str=="else" : 
-                # TODO handle else if 
-
                 # save the block of stuff we've read
-                if len(line_block):
-                    directive_inst.add_if_block( LineBlock(line_block) )
-                    del line_block  # detach the ref
-                    line_block = []  # start over
+                line_block = save_if(line_block)
 
-                # This Conditional has an else case. But it might be empty so
-                # set the Magic Flag that tells .makefile() to print the "else"
-                # (even if else_blocks are empty). 
-                directive_inst.haz_else = True
+                print("phys_line={0}".format(printable_string(phys_line)))
 
-                state = state_else 
+                # handle "else if"
+                elseif = seek_elseif(phys_line)
+                if elseif : 
+                    raise TODO("nested at line={0} {1}".format(
+                            virt_line.starting_file_line,
+                            printable_string(str(virt_line))))
+                else : 
+                    # This Conditional has an else case. But it might be empty so
+                    # set the Magic Flag that tells .makefile() to print the "else"
+                    # (even if else_blocks are empty). 
+                    directive_inst.haz_else = True
+                    state = state_else 
 
             elif directive_str=="endif":
                 # save the block of stuff we've read
-                if len(line_block):
-                    directive_inst.add_if_block(LineBlock(line_block))
-                    del line_block   # detatch the ref
-                    line_block = [] # start over
+                line_block = save_if(line_block)
 
                 state = state_endif
 
@@ -1696,10 +1784,7 @@ def handle_conditional_directive(directive_inst,vline_iter,line_iter):
         elif state==state_else : 
             if directive_str in conditional_directive : 
                 # save the block of stuff we've read
-                if len(line_block) :
-                    directive_inst.add_else_block( LineBlock(line_block) )
-                    del line_block  # detach the ref
-                    line_block = []  # start over
+                line_block = save_else(line_block)
 
                 # recursive function is recursive
                 token = tokenize_directive(directive_str,virt_line,vline_iter,line_iter)
@@ -1707,15 +1792,13 @@ def handle_conditional_directive(directive_inst,vline_iter,line_iter):
 
             elif directive_str=="else" : 
                 # TODO handle else if
+                print("phys_line={0}".format(printable_string(phys_line)))
                 raise TODO("nested at line={0} {1}".format(
                             virt_line.starting_file_line,str(virt_line)))
 
             elif directive_str=="endif":
                 # save the block of stuff we've read
-                if len(line_block):
-                    directive_inst.add_else_block(LineBlock(line_block))
-                    del line_block   # detatch the ref
-                    line_block = [] # start over
+                line_block = save_else(line_block)
 
                 state = state_endif
 
@@ -1796,13 +1879,7 @@ def tokenize_directive(directive_str,virt_line,vline_iter,line_iter):
 
     d = directive_lut[directive_str]
     
-    # tokenize:
-    #   export, unexport, include, -include, sinclude, override, vpath
-    #
-    # Handy function for directives that are just the directive followed by an
-    # expression. 
-
-    # ScannerIterator across characters in the virtual line
+    # ScannerIterator across characters in the virtual line (supports pushback)
     viter = iter(virt_line)
 
     # eat any leading whitespace, eat the directive, eat any more whitespace
@@ -1820,10 +1897,11 @@ def tokenize_directive(directive_str,virt_line,vline_iter,line_iter):
 
     print("{0} expression={1}".format(directive_str,expression))
 
+    # construct a Directive instance
     try : 
         directive_instance = d["constructor"](expression)
     except ParseError as err:
-        err.code = virt_line
+        err.vline = virt_line
         err.pos = virt_line.starting_pos()
         raise err
 
@@ -1986,7 +2064,7 @@ def get_vline(line_iter):
 
             # make a virtual line (joins together backslashed lines into one
             # line visible through an iterator)
-            virt_line = vline.VirtualLine(line_list,starting_line_number)
+            virt_line = VirtualLine(line_list,starting_line_number)
             del line_list # detach the ref (VirtualLine keeps the array)
 
             # caller can also use line_iter
@@ -1998,7 +2076,8 @@ def get_vline(line_iter):
     return None
 
 def parse_makefile_from_strlist(file_lines):
-    # file_lines is an array of strings.
+    # file_lines is an array of Python strings.
+    # The newlines must be preserved.
 
     # ScannerIterator across the file_lines array (to support pushback of an
     # entire line). 
@@ -2008,54 +2087,53 @@ def parse_makefile_from_strlist(file_lines):
     # lines, joining backslashed lines into VirtualLine instances.
     vline_iter = get_vline(line_iter)
 
-    # The vline_iter will modify line_iter. But line_iter should be at the
+    # The vline_iter will read from line_iter. But line_iter should be at the
     # proper place at all times. In other words, there are two readers from
     # line_iter: this function and tokenize_vline()
+    # Recipes need to read from line_iter (different backslash rules).
+    # Rest of tokenizer reads from vline_iter.
     token_list = [ tokenize(vline,vline_iter,line_iter) for vline in vline_iter ] 
 
-    # the following is just test code to printf the results. 
-    #
-    # TODO need to carefully syntax verify (need a parser!) the block list.  As
-    # of this writing I'm succesfully (mostly) tokenizing makefiles but not
-    # syntax verifying.
+    return Makefile(token_list)
 
-#    for block in token_list : 
-#        assert isinstance(block,Symbol),(type(block),)
-#        assert hasattr(block,"code")
-#        if isinstance(block,RuleExpression):
-#            for recipe in block.recipe_list : 
-#                print("recipe={0}".format(recipe.code))
-    print("makefile=",",\\\n".join( [ "{0}".format(block) for block in token_list ] ) )
-    makefile = "".join( [ "{0}".format(block.makefile()) for block in token_list ] )
-    print("# start makefile")
-    print(makefile,end="")
-    print("# end makefile")
-
-    dumpmakefile="""
-print("# start makefile")
-print("".join( [ "{0}".format(m.makefile()) for m in makefile ] ) )
-print("# end makefile")
-"""
-
-    with open("out.py","w") as outfile:
-        print("#!/usr/bin/env python3",file=outfile)
-        print("from pymake import *",file=outfile)
-        print("makefile=",",\\\n".join( [ "{0}".format(block) for block in token_list ] ),file=outfile )
-        print("print(\"{0}\".format(makefile))",file=outfile)
-        print(dumpmakefile,file=outfile)
-        
+def parse_makefile_string(s):
+    import io
+    with io.StringIO(s) as infile:
+        file_lines = infile.readlines()
+    try : 
+        return parse_makefile_from_strlist(file_lines)
+    except ParseError as err:
+        err.filename = "<string id={0}>".format(id(s)) 
+        print(err,file=sys.stderr)
+        raise
 
 def parse_makefile(infilename) : 
     with open(infilename,'r') as infile :
         file_lines = infile.readlines()
 
     try : 
-        parse_makefile_from_strlist(file_lines)
+        return parse_makefile_from_strlist(file_lines)
     except ParseError as err:
         err.filename = infilename
         print(err,file=sys.stderr)
         raise
 
+def round_trip(makefile):
+    dumpmakefile="""
+print("# start makefile")
+print("\\n".join( [ "{0}".format(m.makefile()) for m in makefile ] ) )
+print("# end makefile")
+"""
+
+    with open("out.py","w") as outfile:
+        print("#!/usr/bin/env python3",file=outfile)
+        print("from pymake import *",file=outfile)
+        print("from vline import VirtualLine",file=outfile)
+        print("makefile="+str(makefile),file=outfile)
+#        print("makefile=",",\\\n".join( [ "{0}".format(block) for block in makefile ] ),file=outfile )
+#        print("print(\"{0}\".format(makefile))",file=outfile)
+        print(dumpmakefile,file=outfile)
+        
 def usage():
     # TODO
     print("usage: TODO")
@@ -2067,8 +2145,17 @@ if __name__=='__main__':
 
     infilename = sys.argv[1]
     try : 
-        parse_makefile(infilename)
+        makefile = parse_makefile(infilename)
     except ParseError:
         sys.exit(1)
 
+    # the following is just test code to printf the results. 
+#    print("makefile=",",\\\n".join( [ "{0}".format(block) for block in makefile ] ) )
+    print("makefile={0}".format(makefile))
+
+    print("# start makefile")
+    print(makefile.makefile())
+    print("# end makefile")
+
+    round_trip(makefile)
 
