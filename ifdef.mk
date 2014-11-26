@@ -1,3 +1,35 @@
+ifdef FOO
+a=b
+endif
+
+ifdef FOO
+    ifdef BAR
+        ifdef BAZ
+        endif
+    endif
+endif
+
+ifdef FOO
+this is junk
+this else is ignored because of this backslash\
+else
+else
+$(info this is valid)
+endif
+
+$(info $(.FEATURES))
+
+ifdef FOO
+This is illegal junk.\
+more junk
+    ifdef BAR # foo bar baz
+        This is junk. Cannot be parsed as Makefile. 
+    endif
+else ifdef BAR
+$(info BAR is defined)
+else
+$(info Neither FOR nor BAR are defined)
+endif
 ifdef=foo
 $(info $(ifdef)=foo)
 ifneq ($(ifdef)$(info hello, from, weird, place),foo)
@@ -88,6 +120,11 @@ else ifeq ($(foo),3)
     $(info foo is three)
 else
     $(info I do not know foo)
+endif
+
+# whitespace required? yes. This is an error.
+ifeq ($(foo),1)
+else ifeq($(foo),2)
 endif
 
 # ifeq hiding in trailing backslash \
