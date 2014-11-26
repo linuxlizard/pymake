@@ -3,6 +3,7 @@
 # conditional directives
 # davep 22-Nov-2024 
 
+import pymake
 from pymake import (Literal, Expression, ConditionalDirective, IfdefDirective,
                     LineBlock)
 from vline import VirtualLine
@@ -30,7 +31,7 @@ def test2():
     print(c)
     m = c.makefile()
     print(m)
-    assert m=='ifdef FOO\na=b\nendif'
+    assert m=='ifdef FOO\n    a=b\nendif',m
 
 def test3():
     # ifdef FOO
@@ -47,7 +48,7 @@ def test3():
     print(c)
     m = c.makefile()
     print(m)
-    assert m=='ifdef FOO\na=b\nelse\na=d\nendif'
+    assert m=='ifdef FOO\n    a=b\nelse\n    a=d\nendif',m
 
 def test4():
     # ifdef FOO
@@ -62,7 +63,7 @@ def test4():
     print(c)
     m = c.makefile()
     print(m)
-    assert m=='ifdef FOO\na=b\nelse\nendif'
+    assert m=='ifdef FOO\n    a=b\nelse\nendif'
 
 def test5():
     # ifdef FOO
@@ -77,7 +78,7 @@ def test5():
     print(c)
     m = c.makefile()
     print(m)
-    assert m=='ifdef FOO\nelse\na=d\nendif'
+    assert m=='ifdef FOO\nelse\n    a=d\nendif'
 
 def test6():
     # ifdef FOO
@@ -100,19 +101,20 @@ def test6():
 #    s = eval(str(s))
     m = c.makefile()
     print(m)
-#    ifdef = IfdefDirective(Expression([Literal("FOO")]),[LineBlock([VirtualLine(["a=b"],0),VirtualLine(["c=d"],0),VirtualLine(["e=f"],0)])],[])
-#    assert ifdef==c
 
-    assert m=='ifdef FOO\na=b\nc=d\ne=f\nendif'
+    assert m=='ifdef FOO\n    a=b\n    c=d\n    e=f\nendif'
 
-def main():
-    test1()
-    test2()
-    test3()
-    test4()
-    test5()
-    test6()
+def test7():
+    s = """\
+ifdef FOO
+a=b
+else#foobarbaz
+a=c
+endif
+"""
+    makefile = pymake.parse_makefile_string(s)
 
 if __name__=='__main__':
-    main()
+    from run_tests import runlocals
+    runlocals(locals())
 
