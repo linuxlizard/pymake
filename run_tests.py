@@ -2,6 +2,9 @@
 
 # Run all the regression tests.
 # davep 27-Sep-2014
+#
+# Moved most responsibility to run_tests.sh
+# davep 26-Nov-2014
 
 import sys
 import subprocess
@@ -40,23 +43,6 @@ def run_tests_list(tests_list,tokenizer):
 
         print( tokens.makefile() )
         print("\n")
-
-def run_all_tests():
-    import assign_test
-    import internals_test
-    import recipe_test
-    import rule_test
-    import statement_test
-    import varref_test
-    import comment_test
-
-    assign_test.run()
-    internals_test.run()
-    recipe_test.run()
-    rule_test.run()
-    varref_test.run()
-    statement_test.run()
-    comment_test.run()
 
 def directives_test(): 
     # Build makefiles with directives as rule and as assignment statement.
@@ -104,7 +90,22 @@ def directives_test():
     for s in passed:
         print("passed {0} {1}".format(s,passed[s]))
 
-if __name__=='__main__':
-#    directives_test()
-    run_all_tests()
+def runlocals(locals):
+    # Run all functions named "testNN". Created to be imported into a script
+    # and will run all functions named test1(), test2(), ... testN()
+    import itertools
+    counter = itertools.count(1)
+    for i in counter :
+        f = "test{0}".format(i)
+        if not f in locals:
+            break
+        print("{0}()".format(f))
+        locals[f]()
+
+def run_makefile_string(in_string,expected_string):
+    # parse a Makefile from a string. 
+    # Compare resulting makefile to expected string.
+    makefile = pymake.parse_makefile_string(in_string)
+    m = makefile.makefile()
+    assert m==expected_string,m
 
