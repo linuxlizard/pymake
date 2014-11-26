@@ -1,0 +1,3 @@
+ifdef$(FOO)
+endif
+
