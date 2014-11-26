@@ -1,6 +1,11 @@
 a=b c d e f g
 
+export#foofoofoo
+
 export CC=gcc
+
+export f#foofoofoo
+export f #foofoofoo
 
 # export expression (note the backslash that makes my life diffcult)
 export\
@@ -22,6 +27,7 @@ export $(CC) $(LD) $(RM)
 # multiple directives?
 # nope. Looks like only export only allows exporession on RHS
 export override LD=ld
+$(info $(override LD)=ld)
 #ifneq ("$(override LD)","ld")
 #$(error export override error)
 #endif
