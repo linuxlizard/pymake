@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 
 # "Virtual Block" -- a 2D array of characters with visible/not visible
-# attribute. 
+# attribute.
 #
 # Created to handle joining backslash'd lines together for the tokenizer. Has
-# evolved into something that will be useful for the makefile View. 
+# evolved into something that will be useful for the makefile View.
 #
 # davep 01-Oct-2014
 
@@ -21,55 +21,60 @@ from printable import printable_char, printable_string
 
 eol = set("\r\n")
 # can't use string.whitespace because want to preserve line endings
-whitespace = set( ' \t' )
+whitespace = set(' \t')
 
 # indices into VirtualLine's characters' position.
 VCHAR_ROW = 0
 VCHAR_COL = 1
 
+
 def is_line_continuation(line):
-    # does this line end with "\" + eol? 
+    # does this line end with "\" + eol?
     # (hiding in own function so can eventually handle "\"+CR+LF)
-    
+
     # if we don't end in an EOL, definitely not a continuation
-    if len(line) and not line[-1] in eol : 
+    if len(line) and not line[-1] in eol:
         return False
 
     # back up past the EOL then verify the next char is \
     pos = len(line)-1
-    while pos >=0 and line[pos] in eol : 
+    while pos >= 0 and line[pos] in eol:
         pos -= 1
-    return pos>=0 and line[pos]=='\\'
+    return pos >= 0 and line[pos] == '\\'
+
 
 # using a class for the virtual char so can interchange string with VirtualLine
 # in ScannerIterator
 class VChar(object):
-    def __init__(self,char,pos):
+    def __init__(self, char, pos):
         self.char = char
         self.pos = pos
         self.hide = False
 
-    def __getitem__(self,key):
-        if key=="char" : return self.char
-        if key=="pos" : return self.pos
-        if key=="hide" : return self.hide
+    def __getitem__(self, key):
+        if key == "char":
+            return self.char
+        if key == "pos":
+            return self.pos
+        if key == "hide":
+            return self.hide
         raise KeyError(key)
-    
-    def __setitem__(self,key,value):
-        if key=="char" : 
-            assert type(value)==type('42'),value
-            self.char=value
-        elif key=="pos" : 
-            assert type(value)==type(42),value
-            self.pos=value
-        elif key=="hide" : 
-            assert type(value)==type(True),value
-            self.hide=value
-        else :
+
+    def __setitem__(self, key, value):
+        if key == "char":
+            assert isinstance(value, str), value
+            self.char = value
+        elif key == "pos":
+            assert isinstance(value, int), value
+            self.pos = value
+        elif key == "hide":
+            assert isinstance(value, bool), value
+            self.hide = value
+        else:
             raise KeyError(key)
 
     def __str__(self):
-        # created this class pretty much just for this method, e.g., 
+        # created this class pretty much just for this method, e.g.,
         #   while str(self.data[self.idx]) in string.whitespace :
         return self.char
 
@@ -78,15 +83,16 @@ class VChar(object):
         # convert array of vchar into a Python string
         return "".join([v.char for v in vchar_list])
 
+
 class VirtualLine(object):
 
-    def __init__(self,phys_lines_list, starts_at_file_line ):
+    def __init__(self, phys_lines_list, starts_at_file_line):
         # need an array of strings (2-D array of characters)
-        assert type(phys_lines_list)==type([])
-        for p in phys_lines_list :
-            assert isinstance(p,str),type(p)
+        assert isinstance(phys_lines_list, list)
+        for p in phys_lines_list:
+            assert isinstance(p, str), type(p)
 
-        # save a pristine copy of the original list 
+        # save a pristine copy of the original list
         self.phys_lines = phys_lines_list
 
         # this is where this line blob started in the original source file
@@ -97,7 +103,7 @@ class VirtualLine(object):
         self.make_virtual_line()
 
         # Based on the \ line continuation rules, collapse 2-D array into a new
-        # 1-D "virtual" array of characters that will be sent to the tokenizer. 
+        # 1-D "virtual" array of characters that will be sent to the tokenizer.
         self.collapse_virtual_line()
 
     def make_virtual_line(self):
@@ -105,19 +111,16 @@ class VirtualLine(object):
         # strings).
         #
         # The new 2-D array will be the characters with their row,col in the
-        # 2-D array. 
+        # 2-D array.
 
         self.virt_lines = []
-        for row_idx,line in enumerate(self.phys_lines) : 
+        for row_idx, line in enumerate(self.phys_lines):
             vline = []
-            for col_idx,char in enumerate(line):
+            for col_idx, char in enumerate(line):
                 # char is the original character
                 # pos is the (row,col) of the char in the file
                 # hide indicates a hidden character (don't feed to the
                 # tokenizer, don't highlight in View)
-#                vchar = { "char" : char, 
-#                          "pos"  : (row_idx+self.starting_file_line,col_idx),
-#                          "hide" : False } 
                 vchar = VChar(char,(row_idx+self.starting_file_line,col_idx))
                 vline.append(vchar)
             self.virt_lines.append(vline)
@@ -126,10 +129,10 @@ class VirtualLine(object):
         # collapse continuation lines according to the whitepace rules around
         # the backslash (The rules will change if we're inside a recipe list or
         # if .POSIX is enabled or or or or ...)
-        
+
         # if only a single line, don't bother
-        if len(self.phys_lines)==1 : 
-            assert not is_line_continuation(self.phys_lines[0]), self.phys_lines[0] 
+        if len(self.phys_lines)==1 :
+            assert not is_line_continuation(self.phys_lines[0]), self.phys_lines[0]
             return
 
         row = 0
@@ -148,7 +151,7 @@ class VirtualLine(object):
         # """
         # becomes "this is a test"
         #
-        while row < len(self.virt_lines)-1 : 
+        while row < len(self.virt_lines)-1 :
 #            print("row={0} {1}".format(row, hexdump.dump(self.phys_lines[row],16)),end="")
 
             # start at eol
@@ -161,7 +164,7 @@ class VirtualLine(object):
 
             # replace \ with <space>
             assert self.virt_lines[row][col]["char"]=='\\', (row,col,self.virt_lines[row][col]["char"])
-            self.virt_lines[row][col]["char"] = ' ' 
+            self.virt_lines[row][col]["char"] = ' '
 
             # are we now a blank line?
             if self.virt_lines[row][col-1]["hide"] :
@@ -170,14 +173,14 @@ class VirtualLine(object):
             col -= 1
 
             # eat whitespace backwards
-            while col >= 0 and self.virt_lines[row][col]["char"] in whitespace : 
+            while col >= 0 and self.virt_lines[row][col]["char"] in whitespace :
                 self.virt_lines[row][col]["hide"] = True
                 col -= 1
 
             # eat whitespace forward on next line
             row += 1
             col = 0
-            while col < len(self.virt_lines[row]) and self.virt_lines[row][col]["char"] in whitespace : 
+            while col < len(self.virt_lines[row]) and self.virt_lines[row][col]["char"] in whitespace :
                 self.virt_lines[row][col]["hide"] = True
                 col += 1
 
@@ -205,10 +208,10 @@ class VirtualLine(object):
     def truncate(self,truncate_pos):
         # Created to allow the parser to cut off a block at a token boundary.
         # Need to parse something like:
-        # foo : bar ; baz 
+        # foo : bar ; baz
         # into a rule and a recipe but we won't know where the rule ends and
         # the (maybe) recipes begin until we fully tokenize the rule.
-        # foo : bar ; baz 
+        # foo : bar ; baz
         #           ^-----truncate here
         # (Only need this rarely)
 
@@ -218,15 +221,15 @@ class VirtualLine(object):
             above = splitme[:row_to_split]
             below = splitme[row_to_split+1:]
             line_to_split = splitme[row_to_split]
-            left = line_to_split[:col_to_split] 
-            right = line_to_split[col_to_split:] 
+            left = line_to_split[:col_to_split]
+            right = line_to_split[col_to_split:]
 
             if left :
                 above.extend([left])
             below = [right] + below
 
             return (above,below)
-            
+
         # split the recipe from the rule
         first_line_pos = self.virt_lines[0][0]["pos"]
         row_to_split = truncate_pos[VCHAR_ROW] - first_line_pos[VCHAR_ROW]
@@ -271,9 +274,14 @@ class VirtualLine(object):
         # method for test/debug code)
         return cls([python_string],0)
 
+    @staticmethod
+    def validate(vline_list):
+        for v in vline_list : 
+            assert isinstance(v,VirtualLine), (type(v), v)
+
     def get_phys_line(self):
         # rebuild a single physical line (needed when tokenizing recipes)
-        return "".join(self.phys_lines) 
+        return "".join(self.phys_lines)
 
     def python(self):
         # Return a Python expression representing this virtual line.
@@ -285,7 +293,7 @@ class VirtualLine(object):
         return s
 
 class RecipeVirtualLine(VirtualLine):
-    # This is a block containing recipe(s). Don't collapse around backslashes. 
+    # This is a block containing recipe(s). Don't collapse around backslashes.
     def collapse_virtual_line(self):
         pass
 
