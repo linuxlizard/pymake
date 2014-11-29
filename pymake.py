@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 
 # Parse GNU Make with state machine. 
 # Trying hand crafted state machines over pyparsing. GNU Make has very strange
@@ -821,7 +822,10 @@ def tokenize_statement(string):
     if isinstance(last_symbol,RuleOp): 
         statement_type = "rule"
 
-        print( "last_token={0} ∴ statement is {1}".format(last_symbol,statement_type))
+        # I'm including Unicode literal in the string to force myself to learn
+        # Python3 Unicode handling
+        print( "last_token={0} \u2234 statement is {1}".format(last_symbol,statement_type).encode("utf-8"))
+#        print( "last_token={0} ∴ statement is {1}".format(last_symbol,statement_type).encode("utf-8"))
         print("re-run as rule")
 
         # jump back to starting position
@@ -842,7 +846,8 @@ def tokenize_statement(string):
     elif isinstance(last_symbol,AssignOp): 
         statement_type = "assignment"
 
-        print( "last_token={0} ∴ statement is {1}".format(last_symbol,statement_type))
+        print( "last_token={0} \u2234 statement is {1}".format(last_symbol,statement_type).encode("utf-8"))
+#        print( "last_token={0} ∴ statement is {1}".format(last_symbol,statement_type).encode("utf-8"))
 
         # The statement is an assignment. Tokenize rest of line as an assignment.
         statement = list(lhs)
@@ -851,7 +856,8 @@ def tokenize_statement(string):
 
     elif isinstance(last_symbol,Expression) :
         statement_type="expression"
-        print( "last_token={0} ∴ statement is {1}".format(last_symbol,statement_type))
+        print( "last_token={0} \u2234 statement is {1}".format(last_symbol,statement_type).encode("utf-8"))
+#        print( "last_token={0} ∴ statement is {1}".format(last_symbol,statement_type))
 
         # davep 17-Nov-2014 ; the following code makes no sense 
         # Wind up in this case when have a non-rule and non-assignment.
@@ -873,7 +879,8 @@ def tokenize_statement(string):
 
     else:
         statement_type="????"
-        print( "last_token={0} ∴ statement is {1}".format(last_symbol,statement_type))
+        print( "last_token={0} \u2234 statement is {1}".format(last_symbol,statement_type).encode("utf-8"))
+#        print( "last_token={0} ∴ statement is {1}".format(last_symbol,statement_type))
 
         assert 0,last_symbol
 
