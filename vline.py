@@ -100,13 +100,13 @@ class VirtualLine(object):
 
         # create a single array of all the characters with their position in
         # the 2-d array
-        self.make_virtual_line()
+        self._make_virtual_line()
 
         # Based on the \ line continuation rules, collapse 2-D array into a new
         # 1-D "virtual" array of characters that will be sent to the tokenizer.
-        self.collapse_virtual_line()
+        self._collapse_virtual_line()
 
-    def make_virtual_line(self):
+    def _make_virtual_line(self):
         # Create a 2-D array of vchar (hash) from our 2-D array (array of
         # strings).
         #
@@ -125,7 +125,7 @@ class VirtualLine(object):
                 vline.append(vchar)
             self.virt_lines.append(vline)
 
-    def collapse_virtual_line(self):
+    def _collapse_virtual_line(self):
         # collapse continuation lines according to the whitepace rules around
         # the backslash (The rules will change if we're inside a recipe list or
         # if .POSIX is enabled or or or or ...)
@@ -196,14 +196,24 @@ class VirtualLine(object):
         i = itertools.chain(*self.virt_lines)
         return "".join( [ c["char"] for c in i if not c["hide"] ] )
 
+#    def __iter__(self):
+#        # This iterator we will feed the characters that are still visible to
+#        # the tokenizer. Using ScannerIterator so we have pushback. The
+#        # itertools.chain() joins all the virt_lines together into one
+#        # contiguous array
+#        self.virt_iterator = ScannerIterator( [ c for c in itertools.chain(*self.virt_lines) if not c["hide"] ] )
+#        setattr(self.virt_iterator,"starting_file_line",self.starting_file_line)
+#        print("VirtualLine.__iter__ self.virt_iterator={0}".format(self.virt_iterator))
+#        return self.virt_iterator
+
     def __iter__(self):
         # This iterator we will feed the characters that are still visible to
         # the tokenizer. Using ScannerIterator so we have pushback. The
         # itertools.chain() joins all the virt_lines together into one
         # contiguous array
-        self.virt_iterator = ScannerIterator( [ c for c in itertools.chain(*self.virt_lines) if not c["hide"] ] )
-        setattr(self.virt_iterator,"starting_file_line",self.starting_file_line)
-        return self.virt_iterator
+        virt_iterator = ScannerIterator( [ c for c in itertools.chain(*self.virt_lines) if not c["hide"] ] )
+        setattr(virt_iterator,"starting_file_line",self.starting_file_line)
+        return virt_iterator
 
     def truncate(self,truncate_pos):
         # Created to allow the parser to cut off a block at a token boundary.
@@ -252,7 +262,7 @@ class VirtualLine(object):
         assert recipe_lines[0][0]==';'
 
         # truncate the iterator (stop the iterator)
-        self.virt_iterator.stop()
+#        self.virt_iterator.stop()
 
         return recipe_lines
 
@@ -294,6 +304,6 @@ class VirtualLine(object):
 
 class RecipeVirtualLine(VirtualLine):
     # This is a block containing recipe(s). Don't collapse around backslashes.
-    def collapse_virtual_line(self):
+    def _collapse_virtual_line(self):
         pass
 
