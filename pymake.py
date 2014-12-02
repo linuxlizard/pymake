@@ -628,7 +628,7 @@ class ConditionalDirective(Directive):
             "[" + "".join([ str(s) for s in self.if_blocks] ) + "]",
 
             # else if blocks (if any)
-            # TODO
+            "[" + "".join([ str(s) for s in self.elif_blocks] ) + "]",
 
             # else blocks (if any)
             "[" + "".join([ str(s) for s in self.else_blocks] ) + "]",
@@ -638,36 +638,34 @@ class ConditionalDirective(Directive):
         return s
 
     def makefile(self,depth=0):
-#        print("makefile() depth={0}".format(depth))
-        prefix=" "*depth
+        print("makefile() depth={0}".format(depth))
+        prefix="."*depth
         m = prefix
         m += super().makefile()
         m += "\n"
 
         # Automatically indent the output to make visual inspection easier.
         # Don't like the automatic indents? Comment this out. :-P
-#        depth += 4
+        depth += 4
 
         if self.if_blocks:
             m += "".join([ s.makefile(depth) for s in self.if_blocks])
 
-        # TODO 
-#        for i in range(len(self.elif_blocks)):
-#            for j in range(len(self.elif_blocks[i])):
-#                m += str(self.elif_blocks[i][j])
+        if self.elif_blocks:
+            m += "\n".join([ "else "+s.makefile(depth) for s in self.elif_blocks])
 
-#        print("{0} m={1}".format(id(self),printable_string(m)))
+        print("{0} m={1}".format(id(self),printable_string(m)))
         if self.haz_else:
             m += prefix + "else\n"
         if self.else_blocks:
             m += "\n".join([ s.makefile(depth) for s in self.else_blocks])
-#            print("{0} m={1}".format(id(self),printable_string(m)))
+            print("{0} m={1}".format(id(self),printable_string(m)))
 
         if prefix: 
             m += prefix + "endif\n"
         else:
-            m += "endif"
-#        print("{0} m={1}".format(id(self),printable_string(m)))
+            m += "qendif\n"
+        print("{0} m={1}".format(id(self),printable_string(m)))
         return m
 
     def add_if_block( self, code_block ) : 
@@ -681,17 +679,16 @@ class ConditionalDirective(Directive):
         self._validate([code_block])
         self.if_blocks.append(code_block)
 
-    def add_else_if_block(self,else_condition_block):
+    def add_else_if_block(self,else_if_block):
         # if abc
         #   foo
-        # else if xyz 
+        # else if xyz <---- this and 
         #   bar <--- this stuff
         # else
         #   baz 
         # endif
-        raise TODO()
-        self._validate([block_list])
-        self.else_expressions.append( else_expression )
+        self._validate([else_if_block])
+        self.elif_blocks.append( else_if_block )
 
     def add_else_block(self,else_block):
         # if abc
@@ -824,7 +821,7 @@ def tokenize_statement(string):
 
         # I'm including Unicode literal in the string to force myself to learn
         # Python3 Unicode handling
-        print( "last_token={0} \u2234 statement is {1}".format(last_symbol,statement_type).encode("utf-8"))
+        print( u"last_token={0} \u2234 statement is {1}".format(last_symbol,statement_type).encode("utf-8"))
 #        print( "last_token={0} ∴ statement is {1}".format(last_symbol,statement_type).encode("utf-8"))
         print("re-run as rule")
 
@@ -846,7 +843,7 @@ def tokenize_statement(string):
     elif isinstance(last_symbol,AssignOp): 
         statement_type = "assignment"
 
-        print( "last_token={0} \u2234 statement is {1}".format(last_symbol,statement_type).encode("utf-8"))
+        print( u"last_token={0} \u2234 statement is {1}".format(last_symbol,statement_type).encode("utf-8"))
 #        print( "last_token={0} ∴ statement is {1}".format(last_symbol,statement_type).encode("utf-8"))
 
         # The statement is an assignment. Tokenize rest of line as an assignment.
@@ -856,7 +853,7 @@ def tokenize_statement(string):
 
     elif isinstance(last_symbol,Expression) :
         statement_type="expression"
-        print( "last_token={0} \u2234 statement is {1}".format(last_symbol,statement_type).encode("utf-8"))
+        print( u"last_token={0} \u2234 statement is {1}".format(last_symbol,statement_type).encode("utf-8"))
 #        print( "last_token={0} ∴ statement is {1}".format(last_symbol,statement_type))
 
         # davep 17-Nov-2014 ; the following code makes no sense 
@@ -1667,7 +1664,7 @@ def seek_directive(s):
         #   else   <--- legal (duh)
         #   else#  <--- legal
         #
-        fields = s.strip().split(" ")[0].split("#")
+        fields = s.strip().split()[0].split("#")
         return fields[0]
     # split apart a line seeking a directive
     d = get_directive(s)
@@ -1675,19 +1672,43 @@ def seek_directive(s):
         return d
     return None
 
-def seek_elseif(s):
+def seek_elseif(virt_line):
     # Look for an "else if" directive (e.g., else ifdef, else ifeq, etc)
     #
     # Luckily Make seems to require whitespace after the else conditional
     #   else ifeq(  <--- fail
     #   else ifeq#  <--- incorrect syntax
     #   else ifeq ( <--- ok
-    fields = s.strip().split()
-    print(fields)
+    #
+    # Returns the physical string (not virtual line) with the "else" removed
+    # else ifdef FOO    -> ifdef FOO
+    # else ifeq ($a,$b) -> ifeq ($a,$b)
+    # The returning value will be passed to the tokenizer recursively.
 
-    assert fields[0]=="else",fields[0]
-    if len(fields)>1 and fields[1] in conditional_directive : 
-        return fields[1]
+    VirtualLine.validate([virt_line])
+
+    # ("When in doubt, use brute force.")
+    phys_line = str(virt_line)
+    phys_line = phys_line.lstrip()
+    assert phys_line.startswith("else"),phys_line
+    phys_line = phys_line[4:].lstrip()
+    if not phys_line or phys_line[0]=='#' :
+        # rest of line is empty or a comment
+        return None
+
+    d = seek_directive(phys_line)
+    if d in conditional_directive :
+        print("found elseif condition=\"{0}\"".format(d))
+        return d,VirtualLine.from_string(phys_line)
+
+    # found junk after else
+    # .e.g, 
+    #   else export iamnotlegal
+    #   else $(info I am not legal)
+    # (TODO need a better error message)
+    errmsg = "Extra stuff after else"
+    raise ParseError(vline=virt_line,pos=virt_line.starting_pos(),
+                description=errmsg)
 
 #@depth_checker
 def handle_conditional_directive(directive_inst,vline_iter,line_iter):
@@ -1729,6 +1750,7 @@ def handle_conditional_directive(directive_inst,vline_iter,line_iter):
         if len(line_block) :
             directive_inst.add_if_block( LineBlock(line_block) )
         return []
+
     def save_else(line_block):
         if len(line_block) :
             directive_inst.add_else_block( LineBlock(line_block) )
@@ -1766,11 +1788,13 @@ def handle_conditional_directive(directive_inst,vline_iter,line_iter):
                 print("phys_line={0}".format(printable_string(phys_line)))
 
                 # handle "else if"
-                elseif = seek_elseif(phys_line)
+                elseif = seek_elseif(virt_line)
                 if elseif : 
-                    raise TODO("nested at line={0} {1}".format(
-                            virt_line.starting_file_line,
-                            printable_string(str(virt_line))))
+                    directive_str, virt_line = elseif
+                    # recursive function is recursive
+                    token = tokenize_directive(directive_str,virt_line,vline_iter,line_iter)
+                    directive_inst.add_else_if_block( token )
+
                 else : 
                     # This Conditional has an else case. But it might be empty so
                     # set the Magic Flag that tells .makefile() to print the "else"
