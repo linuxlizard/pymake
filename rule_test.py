@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/urun/bin/env python3
 
 # Regression tests for pymake.py
 #
@@ -8,195 +8,192 @@
 
 import sys
 
+import hexdump
+import pymake
 from pymake import *
+from vline import VirtualLine
 
 # require Python 3.x 
 if sys.version_info.major < 3:
     raise Exception("Requires Python 3.x")
 
-def rule_test() :
+def test1() :
     # parse a full rule! 
     rule_test_list = ( 
         # normal rules
         ( "all : this is a test", RuleExpression(
-                                    ( Expression( (Literal("all"),) ),
+                                    [ Expression( [Literal("all")] ),
                                       RuleOp(":"),
                                       PrerequisiteList( 
-                                        ( Literal("this"),Literal("is"),Literal("a"),Literal("test"), )
+                                        [ Literal("this"),Literal("is"),Literal("a"),Literal("test"), ]
                                       ),
-                                    ),
+                                    ],
                                   ),
                             ),
 
         ( "all : ", RuleExpression(
-                        ( Expression( (Literal("all"),) ),
+                        [ Expression( (Literal("all"),) ),
                           RuleOp(":"),
-                          PrerequisiteList( 
-                                ( Literal(""), ) 
-                          ),
-                        ),
+                          PrerequisiteList( [] ),
+                        ],
                     ),
                 ),
 
         # no whitespace
         ( "all:", RuleExpression(
-                        ( Expression( (Literal("all"),) ),
+                        [ Expression( (Literal("all"),) ),
                           RuleOp(":"),
-                          PrerequisiteList( 
-                                ( Literal(""), ) 
-                          ),
-                        ),
+                          PrerequisiteList( [] ),
+                        ],
                     ),
                 ),
         # lots of whitespace
         ( "          all          :                                      ", 
                     RuleExpression(
-                        ( Expression( (Literal("all"),) ),
+                        [ Expression( (Literal("all"),) ),
                           RuleOp(":"),
-                          PrerequisiteList( 
-                                ( Literal(""), ) 
-                          ),
-                        ),
+                          PrerequisiteList( [] ),
+                        ],
                     ),
                 ),
         # target specific variables
         ( "all : CC=gcc",
                           RuleExpression(
-                                ( Expression( (Literal("all"),) ),
+                                [ Expression( [Literal("all")] ),
                                   RuleOp(":"),
                                   AssignmentExpression( 
-                                    ( Expression( (Literal("CC"),) ),
+                                    [ Expression( [Literal("CC")] ),
                                       AssignOp("="),
-                                      Expression( (Literal("gcc"),) ),
-                                    ),
+                                      Expression( [Literal("gcc")] ),
+                                    ],
                                   ),
-                                ),
+                                ],
                           ),
                      ),
 
         ( "all : CC=|gcc", 
                           RuleExpression(
-                                ( Expression( (Literal("all"),) ),
+                                [ Expression( [Literal("all")] ),
                                   RuleOp(":"),
                                   AssignmentExpression( 
-                                    ( Expression( (Literal("CC"),) ),
+                                    [ Expression( [Literal("CC")] ),
                                       AssignOp("="),
-                                      Expression( (Literal("|gcc"),) ),
-                                    ),
+                                      Expression( [Literal("|gcc")] ),
+                                    ],
                                   ),
-                                ),
+                                ],
                           ),
                      ),
 
         ( "all : CC=:gcc", 
                           RuleExpression(
-                                ( Expression( (Literal("all"),) ),
+                                [ Expression( [Literal("all")] ),
                                   RuleOp(":"),
                                   AssignmentExpression( 
-                                    ( Expression( (Literal("CC"),) ),
+                                    ( Expression( [Literal("CC")] ),
                                       AssignOp("="),
-                                      Expression( (Literal(":gcc"),) ),
+                                      Expression( [Literal(":gcc")] ),
                                     ),
                                   ),
-                                ),
+                                ],
                           ),
                      ),
 
         ( "all : CC:=gcc",
                           RuleExpression(
-                                ( Expression( (Literal("all"),) ),
+                                [ Expression( [Literal("all")] ),
                                   RuleOp(":"),
                                   AssignmentExpression( 
-                                    ( Expression( (Literal("CC"),) ),
+                                    ( Expression( [Literal("CC")] ),
                                       AssignOp(":="),
-                                      Expression( (Literal("gcc"),) ),
+                                      Expression( [Literal("gcc")] ),
                                     ),
                                   ),
-                                ),
+                                ],
                           ),
                      ),
 
         ( "all : CC::=gcc", 
                           RuleExpression(
-                                ( Expression( (Literal("all"),) ),
+                                [ Expression( [Literal("all")] ),
                                   RuleOp(":"),
                                   AssignmentExpression( 
-                                    ( Expression( (Literal("CC"),) ),
+                                    ( Expression( [Literal("CC")] ),
                                       AssignOp("::="),
-                                      Expression( (Literal("gcc"),) ),
+                                      Expression( [Literal("gcc")] ),
                                     ),
                                   ),
-                                ),
+                                ],
                           ),
                      ),
 
         ( "all : CC+=gcc",
                           RuleExpression(
-                                ( Expression( (Literal("all"),) ),
+                                [ Expression( [Literal("all")] ),
                                   RuleOp(":"),
                                   AssignmentExpression( 
-                                    ( Expression( (Literal("CC"),) ),
+                                    ( Expression( [Literal("CC")] ),
                                       AssignOp("+="),
-                                      Expression( (Literal("gcc"),) ),
+                                      Expression( [Literal("gcc")] ),
                                     ),
                                   ),
-                                ),
+                                ],
                           ),
                      ),
 
         # *= not in assignment_operators
         ( "all : CC*=gcc",
                           RuleExpression(
-                                ( Expression( (Literal("all"),) ),
+                                [ Expression( [Literal("all")] ),
                                   RuleOp(":"),
                                   AssignmentExpression( 
-                                    ( Expression( (Literal("CC*"),) ),
+                                    ( Expression( [Literal("CC*")] ),
                                       AssignOp("="),
-                                      Expression( (Literal("gcc"),) ),
+                                      Expression( [Literal("gcc")] ),
                                     ),
                                   ),
-                                ),
+                                ],
                           ),
                      ),
 
         ( "all : CC!=gcc", 
                           RuleExpression(
-                                ( Expression( (Literal("all"),) ),
+                                [ Expression( [Literal("all")] ),
                                   RuleOp(":"),
                                   AssignmentExpression( 
-                                    ( Expression( (Literal("CC"),) ),
+                                    ( Expression( [Literal("CC")] ),
                                       AssignOp("!="),
-                                      Expression( (Literal("gcc"),) ),
+                                      Expression( [Literal("gcc")] ),
                                     ),
                                   ),
-                                ),
+                                ],
                           ),
                      ),
 
         # trailing spaces should be preserved
         ( "all : CC=gcc  # this is a comment",
                           RuleExpression(
-                                ( Expression( (Literal("all"),) ),
+                                [ Expression( [Literal("all")] ),
                                   RuleOp(":"),
                                   AssignmentExpression( 
-                                    ( Expression( (Literal("CC"),) ),
+                                    ( Expression( [Literal("CC")] ),
                                       AssignOp("="),
                                       # trailing spaces are preserved
-                                      Expression( (Literal("gcc  "),) ),
+                                      Expression( [Literal("gcc  ")] ),
                                     ),
                                   ),
-                                ),
+                                ],
                           ),
                      ),
 
         ( "hello there all you rabbits : hello there all you rabbits", 
                           RuleExpression(
-                                ( Expression( (Literal("hello"),Literal("there"),Literal("all"),Literal("you"),Literal("rabbits"), ), ),
+                                [ Expression( [Literal("hello"),Literal("there"),Literal("all"),Literal("you"),Literal("rabbits")], ),
                                   RuleOp(":"),
                                   PrerequisiteList( 
-                                    ( Literal("hello"),Literal("there"),Literal("all"),Literal("you"),Literal("rabbits"), ),
+                                    [ Literal("hello"),Literal("there"),Literal("all"),Literal("you"),Literal("rabbits")],
                                   ),
-                                ),
+                                ],
                           ),
                      ),
 
@@ -254,11 +251,12 @@ def rule_test() :
         # source, validate
         s,v = test[0],test[1]
         print("test={0}".format(s))
-        my_iter = ScannerIterator(s)
+        my_iter = iter( VirtualLine.from_string(s) )
 
-        tokens = tokenize_assignment_or_rule(my_iter)
+        tokens = pymake.tokenize_statement(my_iter)
+        print("test={0}".format(s))
         print( "tokens={0}".format(str(tokens)) )
-#        print( "     v={0}".format(str(v)) )
+        print( "     v={0}".format(str(v)) )
 
         assert tokens==v
 
@@ -268,6 +266,8 @@ def rule_test() :
         print()
 
 
+
+def test2():
     # these should all fail
     fail_tests = ( 
         # some chars aren't valid in the rule name
@@ -275,62 +275,61 @@ def rule_test() :
         ( "rule-with-; : ", () ),
 
     )
+    # 
+    # TODO
+    #
 
-#    # Can we round trip? (the following is the output of the tokenizer) Does it build?
-#    tokens=RuleExpression( [Expression( [Literal(""),VarRef( [Literal("hello "),VarRef( [Literal("there "),VarRef( [Literal("all "),VarRef( [Literal("you")]),Literal(" rabbits")]),Literal("")]),Literal("")]),Literal("")]),RuleOp(":"),PrerequisiteList( [Literal(""),VarRef( [Literal("hello")]),Literal(""),Literal("there"),Literal("all"),Literal("you"),Literal("rabbits")])]) 
-#
-#    print(tokens.makefile())
+def run(s,r=None):
+    makefile = pymake.parse_makefile_string(s)
+    m = makefile.makefile()
+    print("# start makefile")
+    print(m)
+    print("# end makefile")
+    print(hexdump.dump(s,16),end="")
+    print(hexdump.dump(m,16),end="")
+    if r :
+        print(hexdump.dump(r,16),end="")
+        assert r==m+"\n"
+    else:
+        assert s==m+"\n"
 
-def rule_rhs_test():
-    rule_rhs_test_list = (
-        # e.g., foo:
-        ( "", () ),
-        ( "   # this is foo", () ),
+def test3():
+    s = """\
+a b c d : e
+"""
+    run(s,"a b c d:e\n")
 
-        # e.g., foo:all
-        ( "all", () ),
+    s = """\
+a : b
+"""
+    run(s,"a:b\n")
 
-        # e.g., foo : this is a test
-        ( "this is a test", () ),
+    s = """\
+a:b c d e f g
+"""
+    run(s)
 
-        ( "*.h", () ),
+    s = """\
+a:$(info hello) b c d e f g
+"""
+    run(s)
 
-        ( "$(objects)", () ),
-        ( "Makefile $(objects) link.ld", () ),
-        ( "$(SRCS) $(AUX)", () ),
-        ( ".c .o .h", () ),
+    s = """\
+a:$(info hello)b c d e f g
+"""
+    run(s)
 
-        # target specific assignment
-        ( "CC=mycc", () ),
-        ( "CC=mycc #this is a comment", () ),
-        ( "CC=mycc ; @echo this is part of the string not a recipe", () ),
-        ( "CC:=mycc", () ),
-        ( "CC::=mycc", () ),
-        ( "CC+=mycc", () ),
-        ( "CC?=mycc", () ),
-        ( "CC!=mycc", () ),
+    s = """\
+a:b   c   d   e   f   g
+"""
+    run(s,"a : b c d e f g\n")
 
-        # static pattern rule TODO
-#        ( ": %.o: %.c", () ),
-
-        # order only prereq TODO 
-#        ( "| $(OBJDIR)", () ),
-#        ( "$(SRC) | $(OBJDIR)", () ),
-
-    )
-
-    for test in rule_rhs_test_list : 
-        s,v = test
-        print("test={0}".format(s))
-        my_iter = ScannerIterator(s)
-
-        tokens = tokenize_rule_prereq_or_assign(my_iter)
-        print( "tokens={0}".format(str(tokens)) )
-
-def run():
-    rule_rhs_test()
-    rule_test()
+    s = """\
+a : $(info hello)b c d e f g
+"""
+    run(s)
 
 if __name__=='__main__':
-    run()
+    from run_tests import runlocals
+    runlocals(locals())
 
