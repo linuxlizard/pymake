@@ -7,6 +7,9 @@ import pymake
 from pymake import (Literal, Expression, ConditionalBlock,
                     ConditionalDirective, IfdefDirective, LineBlock)
 from vline import VirtualLine
+import run_tests
+
+run = run_tests.run_makefile_string
 
 def test1():
     # ifdef FOO 
@@ -17,8 +20,14 @@ def test1():
     b.add_conditional(c)
     print(b)
     m = b.makefile()
-    print(m)
-    assert m=='ifdef FOO\nendif'
+    print(m,end="")
+    assert m=='ifdef FOO\nendif\n'
+
+    s = str(b)
+    print("s=",s)
+    m2=eval(s).makefile()
+    assert m2=='ifdef FOO\nendif\n'
+    print(m2,end="")
 
 def test2():
     # ifdef FOO
@@ -34,7 +43,7 @@ def test2():
     print(b)
     m = b.makefile()
     print(m)
-    assert m=='ifdef FOO\na=b\nendif',m
+    assert m=='ifdef FOO\na=b\nendif\n',m
 
 def test3():
     # ifdef FOO
@@ -58,7 +67,7 @@ def test3():
     print(b)
     m = b.makefile()
     print(m)
-    assert m=='ifdef FOO\na=b\nelse\na=d\nendif',m
+    assert m=='ifdef FOO\na=b\nelse\na=d\nendif\n',m
 
 def test4():
     # ifdef FOO
@@ -76,7 +85,7 @@ def test4():
     print(b)
     m = b.makefile()
     print(m)
-    assert m=='ifdef FOO\na=b\nelse\nendif'
+    assert m=='ifdef FOO\na=b\nelse\nendif\n'
 
 def test5():
     # ifdef FOO
@@ -94,7 +103,7 @@ def test5():
     print(b)
     m = b.makefile()
     print(m)
-    assert m=='ifdef FOO\nelse\na=d\nendif'
+    assert m=='ifdef FOO\nelse\na=d\nendif\n'
 
 def test6():
     # ifdef FOO
@@ -120,7 +129,7 @@ def test6():
     m = b.makefile()
     print(m)
 
-    assert m=='ifdef FOO\na=b\nc=d\ne=f\nendif'
+    assert m=='ifdef FOO\na=b\nc=d\ne=f\nendif\n'
 
 def test7():
     s = """\
@@ -130,13 +139,11 @@ else#foobarbaz
 a=c
 endif
 """
-    makefile = pymake.parse_makefile_string(s)
-    print("# start makefile")
-    print(makefile.makefile())
-    print("# end makefile")
+    run(s,"ifdef FOO\na=b\nelse\na=c\nendif\n")
 
 if __name__=='__main__':
-    from run_tests import runlocals
-    runlocals(locals())
+#    from run_tests import runlocals
+#    runlocals(locals())
+    test1()
 
 
