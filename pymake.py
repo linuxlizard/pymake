@@ -354,6 +354,9 @@ class AssignmentExpression(Expression):
 
         Expression.__init__(self,token_list)
 
+    def makefile(self):
+        return super().makefile() + "\n"
+
 class RuleExpression(Expression):
     # Rules are tokenized in multiple steps. First the target + prerequisites
     # are tokenized and put into an instance of this RuleExpression. Then the
@@ -405,16 +408,20 @@ class RuleExpression(Expression):
         # 
         # first the targets
         s = " ".join( [ t.makefile() for t in self.token_list[0].token_list ] )
+
         # operator
         s += self.token_list[1].makefile()
+
         # prerequisite(s)
         s += self.token_list[2].makefile()
 
+        # recipe(s)
         recipe_list = self.token_list[3].makefile()
         if recipe_list : 
             s += "\n"
             s += recipe_list
-        return s
+            assert s[-1]=='\n'
+        return s+"\n"
 
     def add_recipe_list( self, recipe_list ) : 
         assert isinstance(recipe_list,RecipeList)
@@ -441,6 +448,11 @@ class PrerequisiteList(Expression):
     def makefile(self):
         # space separated
         s = " ".join( [ t.makefile() for t in self.token_list ] )
+
+        # davep 03-Dec-2014 ; new rule; all makefile() results must have
+        # trailing \n
+#        assert s[-1]=='\n',s
+
         return s
 
 class Recipe(Expression):
@@ -460,6 +472,7 @@ class RecipeList( Expression ) :
         s = ""
         if len(self.token_list):
             s = "\t"+"\n\t".join( [ t.makefile() for t in self.token_list ] )
+            s += "\n"
         return s
 
 class Directive(Symbol):
@@ -564,7 +577,6 @@ class ConditionalBlock(Directive):
     name = "(should not see this)"
 
     def __init__(self, *args ) :
-        # require an expression
         super().__init__()
 
         self.cond_expr = []
@@ -577,7 +589,6 @@ class ConditionalBlock(Directive):
         self.cond_blocks.append( [] )
 
     def add_block( self, block ):
-#        assert len(self.cond_expr) == len(self.cond_blocks)
         assert isinstance(block,(ConditionalBlock,LineBlock)),(type(block),)
         self.cond_blocks[-1].append(block)
 
@@ -792,8 +803,9 @@ class Makefile(object) :
 #        return "Makefile([{0}])".format(",\n".join( [ "{0}".format(block) for block in self.token_list ] ) )
 
     def makefile(self):
-        # newline separated
-        s = "\n".join( [ "{0}".format(token.makefile()) for token in self.token_list ] )
+        # each token.makefile() should have a trailing \n so whole string will
+        # be newline separated
+        s = "".join( [ "{0}".format(token.makefile()) for token in self.token_list ] )
         return s
 
     def __iter__(self):
@@ -1779,145 +1791,6 @@ def seek_elseif(virt_line):
                 description=errmsg)
 
 #@depth_checker
-def old_handle_conditional_directive(directive_inst,vline_iter,line_iter):
-    # GNU make doesn't parse the stuff inside the conditional unless the
-    # conditional expression evaluates to True. But Make does allow nested
-    # conditionals. Read line by line, looking for nested conditional
-    # directives
-    #
-    # directive_inst - an instance of DirectiveExpression
-    # vline_iter - <generator>across VirtualLine instances (does NOT support
-    #               pushback)
-    # line_iter - ScannerIterator instance of physical lines from the phile
-    #               (does support pushback)
-    #
-    # vline_iter is from get_vline() and reads from line_iter underneath. The
-    # line_iter and vline_iter will operate in lockstep.
-    #
-    # It's very confusing. But need to pass around both the iterators because
-    # the backslash rules change depending on where we are. And the contents of
-    # the conditional directives aren't parsed unless the condition is true.
-
-    # call should have sent us a Directive instance (stupid human check)
-    assert isinstance(directive_inst,Directive), type(directive_inst)
-
-    state_start = 1
-    state_elseif = 2
-    state_else = 3
-    state_endif = 4
-
-    state = state_start
-
-    # gather file lines; will be VirtualLine instances
-    # Passed to LineBlock constructor.
-    line_block = []
-
-    def save_if(line_block):
-        if len(line_block) :
-            directive_inst.add_if_block( LineBlock(line_block) )
-        return []
-
-    def save_else(line_block):
-        if len(line_block) :
-            directive_inst.add_else_block( LineBlock(line_block) )
-        return []
-
-    for virt_line in vline_iter : 
-        print("c state={0}".format(state))
-#        print("={0}".format(str(virt_line)),end="")
-
-        # search for nested directive in the physical line (consolidates the
-        # line continuations)
-        phys_line = str(virt_line)
-
-        # directive is the first substring surrounded by whitespace
-        # or None if substring is not a directive
-        directive_str = seek_directive(phys_line)
-
-        if directive_str : 
-            print("found directive {0} line={1}".format(
-                    directive_str,virt_line.starting_file_line))
-
-        if state==state_start : 
-            if directive_str in conditional_directive : 
-                # save the block of stuff we've read
-                line_block = save_if(line_block)
-
-                # recursive function is recursive
-                token = tokenize_directive(directive_str,virt_line,vline_iter,line_iter)
-                directive_inst.add_if_block( token )
-                
-            elif directive_str=="else" : 
-                # save the block of stuff we've read
-                line_block = save_if(line_block)
-
-                print("phys_line={0}".format(printable_string(phys_line)))
-
-                # handle "else if"
-                elseif = seek_elseif(virt_line)
-                if elseif : 
-                    directive_str, virt_line = elseif
-                    # recursive function is recursive
-                    token = tokenize_directive(directive_str,virt_line,vline_iter,line_iter)
-                    directive_inst.add_else_if_block( token )
-                    state = state_elseif
-                else : 
-                    # This Conditional has an else case. But it might be empty so
-                    # set the Magic Flag that tells .makefile() to print the "else"
-                    # (even if else_blocks are empty). 
-                    directive_inst.haz_else = True
-                    state = state_else 
-
-            elif directive_str=="endif":
-                # save the block of stuff we've read
-                line_block = save_if(line_block)
-
-                state = state_endif
-
-            else : 
-                # save the line into the block
-                line_block.append(virt_line)
-
-        elif state==state_elseif:
-            assert 0
-
-        elif state==state_else : 
-            if directive_str in conditional_directive : 
-                # save the block of stuff we've read
-                line_block = save_else(line_block)
-
-                # recursive function is recursive
-                token = tokenize_directive(directive_str,virt_line,vline_iter,line_iter)
-                directive_inst.add_else_block( token )
-
-            elif directive_str=="else" : 
-                # TODO handle else if
-                print("phys_line={0}".format(printable_string(phys_line)))
-                raise TODO("nested at line={0} {1}".format(
-                            virt_line.starting_file_line,str(virt_line)))
-
-            elif directive_str=="endif":
-                # save the block of stuff we've read
-                line_block = save_else(line_block)
-
-                state = state_endif
-
-            else : 
-                # save the line into the block
-                line_block.append(virt_line)
-
-        else : 
-            # wtf?
-            assert 0,state
-
-        if state==state_endif : 
-            # close the if/else/endif collection
-            break
-
-    print(str(directive_inst))
-    return directive_inst
-
-#@depth_checker
 def handle_conditional_directive(directive_inst,vline_iter,line_iter):
     # GNU make doesn't parse the stuff inside the conditional unless the
     # conditional expression evaluates to True. But Make does allow nested
@@ -1927,7 +1800,7 @@ def handle_conditional_directive(directive_inst,vline_iter,line_iter):
     # directive_inst - an instance of DirectiveExpression
     # vline_iter - <generator>across VirtualLine instances (does NOT support
     #               pushback)
-    # line_iter - ScannerIterator instance of physical lines from the phile
+    # line_iter - ScannerIterator instance of physical lines from the file
     #               (does support pushback)
     #
     # vline_iter is from get_vline() and reads from line_iter underneath. The
@@ -1960,6 +1833,10 @@ def handle_conditional_directive(directive_inst,vline_iter,line_iter):
         if len(line_block) :
             cond_block.add_block( LineBlock(line_block) )
         return []
+
+    # save where this directive block begins so we can report errors about big
+    # if/else/endif problems (such as missing endif)
+    starting_pos = directive_inst.code.starting_pos()
 
     for virt_line in vline_iter : 
         print("c state={0}".format(state))
@@ -2026,8 +1903,10 @@ def handle_conditional_directive(directive_inst,vline_iter,line_iter):
             # close the if/else/endif collection
             break
 
-    print(cond_block)
-    print(cond_block.makefile())
+    # did we hit bottom of file before finding our end?
+    if state != state_endif :
+        errmsg = "missing endif"
+        raise ParseError(pos=starting_pos, description=errmsg)
     
     return cond_block
 
@@ -2091,6 +1970,11 @@ def tokenize_directive(directive_str,virt_line,vline_iter,line_iter):
         # TODO add rest of opening directives
     }
 
+    if directive_str=="else" or directive_str=="endif" :
+        errmsg = "extraneous " + directive_str
+        raise ParseError(vline=virt_line,pos=virt_line.starting_pos(),
+                    description=errmsg)
+
     d = directive_lut[directive_str]
     
     # ScannerIterator across characters in the virtual line (supports pushback)
@@ -2118,6 +2002,8 @@ def tokenize_directive(directive_str,virt_line,vline_iter,line_iter):
         err.vline = virt_line
         err.pos = virt_line.starting_pos()
         raise err
+
+    directive_instance.set_code(virt_line)
 
     # gather the contents of the conditional block (raw lines
     # and maybe nested conditions)
@@ -2148,7 +2034,6 @@ def tokenize(virt_line,vline_iter,line_iter):
     directive_str = seek_directive(str(virt_line))
     if directive_str:
         token = tokenize_directive(directive_str,virt_line,vline_iter,line_iter)
-        token.set_code(virt_line)
         return token
 
     # tokenize character by character across a VirtualLine
@@ -2368,7 +2253,7 @@ if __name__=='__main__':
     print("makefile={0}".format(makefile))
 
     print("# start makefile")
-    print(makefile.makefile())
+    print(makefile.makefile(),end="")
     print("# end makefile")
 
     round_trip(makefile)
