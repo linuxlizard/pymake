@@ -12,6 +12,7 @@ import hexdump
 import pymake
 from pymake import *
 from vline import VirtualLine
+import run_tests
 
 # require Python 3.x 
 if sys.version_info.major < 3:
@@ -279,19 +280,7 @@ def test2():
     # TODO
     #
 
-def run(s,r=None):
-    makefile = pymake.parse_makefile_string(s)
-    m = makefile.makefile()
-    print("# start makefile")
-    print(m)
-    print("# end makefile")
-    print(hexdump.dump(s,16),end="")
-    print(hexdump.dump(m,16),end="")
-    if r :
-        print(hexdump.dump(r,16),end="")
-        assert r==m+"\n"
-    else:
-        assert s==m+"\n"
+run = run_tests.run_makefile_string
 
 def test3():
     s = """\
@@ -307,17 +296,17 @@ a : b
     s = """\
 a:b c d e f g
 """
-    run(s)
+    run(s,s)
 
     s = """\
 a:$(info hello) b c d e f g
 """
-    run(s)
+    run(s,s)
 
     s = """\
 a:$(info hello)b c d e f g
 """
-    run(s)
+    run(s,s)
 
     s = """\
 a:b   c   d   e   f   g
@@ -327,7 +316,7 @@ a:b   c   d   e   f   g
     s = """\
 a : $(info hello)b c d e f g
 """
-    run(s)
+    run(s,s)
 
 if __name__=='__main__':
     from run_tests import runlocals
