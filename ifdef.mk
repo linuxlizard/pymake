@@ -10,6 +10,10 @@ ifdef FOO
 endif
 
 ifdef FOO
+else#comment
+endif
+
+ifdef FOO
 this is junk
 this else is ignored because of this backslash\
 else
@@ -124,7 +128,7 @@ endif
 
 # whitespace required? yes. This is an error.
 ifeq ($(foo),1)
-else ifeq($(foo),2)
+else ifeq ($(foo),2)
 endif
 
 # ifeq hiding in trailing backslash \
