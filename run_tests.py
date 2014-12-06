@@ -10,9 +10,11 @@ import sys
 import subprocess
 import tempfile
 
+from pymake import *
 import pymake
 from vline import VirtualLine
 import hexdump
+from printable import printable_string
 
 # require Python 3.x 
 if sys.version_info.major < 3:
@@ -110,15 +112,22 @@ def run_makefile_string(in_string,expected_string):
     m = makefile.makefile()
 
     print("# start makefile")
-    print(m,end="")
+    print(m)
     print("# end makefile")
 
     print(hexdump.dump(in_string,16),end="")
     print(hexdump.dump(expected_string,16),end="")
     print(hexdump.dump(m,16),end="")
 
-    # davep 03-Dec-2014 ; new rule -- all makefile() strings must have trailing \n 
-    assert m[-1]=="\n"
-
+    print("m=\"{0}\"".format(printable_string(m)))
+    print("e=\"{0}\"".format(printable_string(expected_string)))
     assert m==expected_string
+
+    # round trip
+    expr = str(makefile)
+    print(expr)
+    m2 = eval(expr).makefile()
+    print(m2)
+    assert m2==expected_string,m2
+
 
