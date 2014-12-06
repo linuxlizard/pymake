@@ -42,11 +42,13 @@ __all__ = [ "Version",
             "VpathDirective",
             "OverrideDirective",
             "LineBlock",
+            "ConditionalBlock",
             "ConditionalDirective",
             "IfdefDirective",
             "IfndefDirective",
             "IfeqDirective",
             "IfneqDirective",
+            "DefineDirective",
             "Makefile",
 ]
 
@@ -61,6 +63,7 @@ class Version(object):
 #whitespace = set( ' \t\r\n' )
 whitespace = set(' \t')
 
+# davep 04-Dec-2014 ; FIXME ::= != not in Make 3.81, 3.82 (Introduced in 4.0)
 assignment_operators = {"=", "?=", ":=", "::=", "+=", "!="}
 rule_operators = {":", "::"}
 eol = set("\r\n")
@@ -354,9 +357,6 @@ class AssignmentExpression(Expression):
 
         Expression.__init__(self,token_list)
 
-    def makefile(self):
-        return super().makefile() + "\n"
-
 class RuleExpression(Expression):
     # Rules are tokenized in multiple steps. First the target + prerequisites
     # are tokenized and put into an instance of this RuleExpression. Then the
@@ -421,7 +421,7 @@ class RuleExpression(Expression):
             s += "\n"
             s += recipe_list
             assert s[-1]=='\n'
-        return s+"\n"
+        return s
 
     def add_recipe_list( self, recipe_list ) : 
         assert isinstance(recipe_list,RecipeList)
@@ -449,10 +449,6 @@ class PrerequisiteList(Expression):
         # space separated
         s = " ".join( [ t.makefile() for t in self.token_list ] )
 
-        # davep 03-Dec-2014 ; new rule; all makefile() results must have
-        # trailing \n
-#        assert s[-1]=='\n',s
-
         return s
 
 class Recipe(Expression):
@@ -478,7 +474,7 @@ class RecipeList( Expression ) :
 class Directive(Symbol):
     name = "should not see this"
 
-    # A Directive instance contains an Expression instance.
+    # A Directive instance contains an Expression instance ("has a").
     # A Directive instance is _not_ an Expression instance ("not is-a").
 
     def __init__(self,expression=None):
@@ -545,8 +541,10 @@ class OverrideDirective(Directive):
         super().__init__(expression)
         
 class LineBlock(Symbol):
-    # Pile of unparsed code inside a conditional directive. The text is
-    # unexamined until the condition is evaluated true.
+    # Pile of unparsed code inside a conditional directive or a define
+    # multi-line macro. The text is unexamined until the condition is evaluated
+    # true (for conditional) or until the macro is $(call)ed (for multi-line
+    # macro).
     #
     # ifdef FOO
     #    LineBlock
@@ -554,17 +552,21 @@ class LineBlock(Symbol):
     #    LineBlock
     # endif  
     #
+    # or
+    #
+    # define foo
+    #   LineBlock
+    # endef
 
     def __init__(self,vline_list):
         VirtualLine.validate(vline_list)
         self.vline_list = vline_list
         super().__init__()
 
-    def makefile(self,depth=0):
+    def makefile(self):
         VirtualLine.validate(self.vline_list)
         
-        prefix = " " * depth
-        s = "".join( [ prefix+str(v).lstrip() for v in self.vline_list ] )
+        s = "".join( [ str(v) for v in self.vline_list ] )
         return s
 
     def __str__(self):
@@ -576,16 +578,81 @@ class LineBlock(Symbol):
 class ConditionalBlock(Directive):
     name = "(should not see this)"
 
-    def __init__(self, *args ) :
+    # A ConditionalBlock represents a conditional and all its contents
+    # (if/elseif/else/endif). 
+    #
+    # A ConditionalDirective instance is the conditional expression (ifdef
+    # Expression, ifndef Expression, etc).
+    #
+    # A LineBlock instance represents a blob of unparsed text (will be parsed
+    # if the condition evaluates True).
+    #
+    # if expression
+    # elif expression
+    # else 
+    # endif
+    #
+    # if abc      <--- cond_expr[0]
+    #   foo         <--- cond_blocks[0][0]
+    #   bar         <--- cond_blocks[0][1]
+    #   baz         <--- cond_blocks[0][2]
+    # else if xyz <--- cond_expr[1]
+    #   abc         <--- cond_blocks[1][0]
+    #   def         <--- cond_blocks[1][1]
+    #   ghi         <--- cond_blocks[1][2]
+    # else        <--- NOT a member of cond_expr
+    #   xyzzy       <--- cond_blocks[2][0]
+    # endif
+    #
+    # len(self_expr) == len(cond_blocks) or\
+    # len(self_expr) == len(cond_blocks)-1
+    #
+    # The stuff inside the cond_blocks[] is {LineBlock|ConditionalBlock}
+    # Is an array of unparsed text (LineBlock) intermixed with more nested
+    # conditionals (ConditionalBlock).
+
+    def __init__(self, conditional_blocks=None, else_blocks=None ) :
         super().__init__()
 
-        self.cond_expr = []
+        # cond_expr is an array of ConditionalDirective
+        #
+        # cond_blocks is an array of arrays. Each cond_block[n] array is an
+        # array of either LineBlock or ConditionalBlock
+        self.cond_exprs = []
         self.cond_blocks = []
 
+        # now process args
+        # Args will be an array of tuples.
+        # Each tuple will be:
+        #   (ConditionalExpression,[LineBlock|ConditionalBlock]*)
+        # tuple[0] is the ConditionalExpression
+        # tuple[1] is an array of zero or more LineBlock/ConditionalBlocks that
+        #          represent the contents of the conditional case.
+        # The final else (for which there is no ConditionalExpression) is just
+        # a ConditionalExpression following the array.
+        
+        if conditional_blocks : 
+            for block_tuple in conditional_blocks : 
+                cond_expr,cond_block_list = block_tuple
+                self.add_conditional( cond_expr )
+                for b in cond_block_list : 
+                    self.add_block( b )
+
+        # were we given an else_block?
+        # (an empty [] else block is treated like an empty else condition)
+        # ifdef FOO
+        #   blah blah blah
+        # else <--- still want the else to print
+        # endif
+        if not else_blocks is None : 
+            self.start_else()
+            for b in else_blocks: 
+                self.add_block( b )
+        
     def add_conditional( self, cond_expr ) :
-        assert len(self.cond_expr) == len(self.cond_blocks)
+        assert len(self.cond_exprs) == len(self.cond_blocks)
         assert isinstance(cond_expr, ConditionalDirective), (type(cond_expr),)
-        self.cond_expr.append(cond_expr)
+        self.cond_exprs.append(cond_expr)
         self.cond_blocks.append( [] )
 
     def add_block( self, block ):
@@ -593,191 +660,66 @@ class ConditionalBlock(Directive):
         self.cond_blocks[-1].append(block)
 
     def start_else( self ) : 
-        assert len(self.cond_expr) == len(self.cond_blocks)
+        assert len(self.cond_exprs) == len(self.cond_blocks)
         self.cond_blocks.append( [] )
-        assert len(self.cond_expr)+1 == len(self.cond_blocks)
+        assert len(self.cond_exprs)+1 == len(self.cond_blocks)
 
     def makefile(self):
+        # sanity check; need at least one conditional
+        assert self.cond_exprs
+
         s = ""
         e = ""
-        for expr,block in zip(self.cond_expr,self.cond_blocks):
+        
+        # jump through weird hoop to add tailing \n on ConditionalBlock sub-blocks
+        # (my rule is the final \n is caller's responsibility)
+        def prn(b):
+            if isinstance(b,ConditionalBlock) :
+                return b.makefile()+"\n"
+            else:
+                return b.makefile()
+
+        # if/elseif blocks
+        for expr,block in zip(self.cond_exprs,self.cond_blocks):
             s += e + expr.makefile()+"\n"
-            for b in block :
-                s += b.makefile()
+            s += "".join([prn(b) for b in block])
             e = "else "
-        if len(self.cond_expr) != len(self.cond_blocks) :
-            # else block
-            assert len(self.cond_expr)+1 == len(self.cond_blocks)
+        # else block
+        if len(self.cond_exprs) != len(self.cond_blocks) :
+            assert len(self.cond_exprs)+1 == len(self.cond_blocks)
             s += "else\n"
-            for b in self.cond_blocks[-1]:
-                s += b.makefile()
+            s += "".join([prn(b) for b in self.cond_blocks[-1]])
             
-        s += "endif\n"
+        s += "endif"
         return s
 
     def __str__(self):
         s = "{0}(".format(self.__class__.__name__)
         
-        for expr,block in zip(self.cond_expr,self.cond_blocks):
-            s += str(expr)
+        def blocklist_str( blocklist ):
+            # connect the (ConditionalBlock|LineBlock) together into an array
+            return "[" + \
+                       ",".join([str(b) for b in blocklist]) +\
+                   "]"
+
+        # array of tuples
+        #   tuple[0] is ConditionalExpression
+        #   tuple[1] is array of (LineBlock|ConditionalBlock)
+        s += "["
+        s += ",".join( [ "("+str(expr)+","+blocklist_str(blocklist)+")" for expr,blocklist in zip(self.cond_exprs,self.cond_blocks) ] )
+        s += "]"
+
+        # TODO add else case
+        if len(self.cond_blocks) > len(self.cond_exprs):
+            # have an else
+            s += "," + blocklist_str(self.cond_blocks[-1])
+
         s += ")"
         return s
 
 class ConditionalDirective(Directive):
     name = "(should not see this)"
     
-class old_ConditionalDirective(Directive):
-    name = "(should not see this)"
-
-    # A ConditionalDirective instance in the array represents a nested
-    # conditional. A LineBlock instance represents a blob of unparsed text
-    # (will be parsed if the condition evaluates True).
-    #
-    # if_blocks 
-    # elif_blocks 
-    # else_blocks 
-    #   are all arrays of {LineBlock|ConditionalDirective}*
-    #
-    # For if/elif, The conditional expression lives in [0]
-    # The blocks of "stuff" inside the condition live in [1:]
-    #
-    # The conditional expression will an Expression instance.
-    #   ifdef FOO --> Expression([Literal("FOO")])
-    #   ifeq FOO,BAR ->  TODO (not sure yet)
-    #
-    # if abc        
-    #   foo         <--- if_blocks[n]
-    # else if xyz   
-    #   bar         <--- elif_blocks[n]
-    # else
-    #   baz         <--- else_blocks[n]
-    # endif
-    #
-    # The "stuff" inside the condition is {LineBlock|ConditionalDirective}* 
-    # So is an array of unparsed text (LineBlock) intermixed with more nested
-    # conditionals (ConditionalDirective).
-
-    def __init__(self, expression, if_blocks=None, *args ) :
-        # require an expression
-        super().__init__(expression)
-
-        # hold the code blocks inside if/else/else/else/endif 
-        self.if_blocks = []
-        self.elif_blocks = [] 
-        self.else_blocks = []
-
-        # could have an empty else case. Need this so .makefile() will show the
-        # "else"
-        self.haz_else = False
-
-        # this is the stuff inside the if
-        # if 
-        #   stuff <----
-        # else ...
-        # ...
-        #
-
-        self.if_blocks = if_blocks or []
-        self._validate(self.if_blocks)
-
-        if len(args): 
-            print("args={0} else={1}".format(args,args[-1]))
-            # last of args must be the else_blocks[]
-            self._validate(args[-1])
-            self.else_blocks = args[-1]
-            if self.else_blocks:
-                self.haz_else = True
-
-            # TODO add elseif 
-
-    def _validate(self,a):
-        for b in a :
-            assert isinstance(b,(ConditionalDirective,LineBlock)),(type(b),)
-
-    def __str__(self):
-        s = "{0}(".format(self.__class__.__name__)
-
-        s += ",".join((
-            # top conditional expression
-            str(self.expression),
-
-            # blocks inside the if
-            "[" + "".join([ str(s) for s in self.if_blocks] ) + "]",
-
-            # else if blocks (if any)
-            "[" + "".join([ str(s) for s in self.elif_blocks] ) + "]",
-
-            # else blocks (if any)
-            "[" + "".join([ str(s) for s in self.else_blocks] ) + "]",
-        ))
-
-        s += ")"
-        return s
-
-    def makefile(self,depth=0):
-        print("makefile() depth={0}".format(depth))
-        prefix="."*depth
-        m = prefix
-        m += super().makefile()
-        m += "\n"
-
-        # Automatically indent the output to make visual inspection easier.
-        # Don't like the automatic indents? Comment this out. :-P
-        depth += 4
-
-        if self.if_blocks:
-            m += "".join([ s.makefile(depth) for s in self.if_blocks])
-
-        if self.elif_blocks:
-            m += "\n".join([ "else "+s.makefile(depth) for s in self.elif_blocks])
-
-        print("{0} m={1}".format(id(self),printable_string(m)))
-        if self.haz_else:
-            m += prefix + "else\n"
-        if self.else_blocks:
-            m += "\n".join([ s.makefile(depth) for s in self.else_blocks])
-            print("{0} m={1}".format(id(self),printable_string(m)))
-
-        if prefix: 
-            m += prefix + "endif\n"
-        else:
-            m += "qendif\n"
-        print("{0} m={1}".format(id(self),printable_string(m)))
-        return m
-
-    def add_if_block( self, code_block ) : 
-        # if abc
-        #   foo <--- this stuff
-        # else if xyz 
-        #   bar
-        # else
-        #   baz 
-        # endif
-        self._validate([code_block])
-        self.if_blocks.append(code_block)
-
-    def add_else_if_block(self,else_if_block):
-        # if abc
-        #   foo
-        # else if xyz <---- this and 
-        #   bar <--- this stuff
-        # else
-        #   baz 
-        # endif
-        self._validate([else_if_block])
-        self.elif_blocks.append( else_if_block )
-
-    def add_else_block(self,else_block):
-        # if abc
-        #   foo
-        # else if xyz   
-        #   bar
-        # else
-        #   baz <--- this stuff
-        # endif
-        self._validate([else_block])
-        self.else_blocks.append( else_block )
-
 class IfdefDirective(ConditionalDirective):
     name = "ifdef"
 
@@ -789,6 +731,23 @@ class IfeqDirective(ConditionalDirective):
 
 class IfneqDirective(ConditionalDirective):
     name = "ifneq"
+
+class DefineDirective(Directive):
+    name = "define"
+
+    def __init__(self,macro_name,line_block=None):
+        super().__init__()
+        self.string = macro_name
+        assert isinstance(macro_name,str),type(macro_name)
+
+        self.line_block = line_block if line_block else []
+        LineBlock.validate(self.line_block)
+
+    def __str__(self):
+        return Symbol.__str__(self)
+
+    def set_block(self,line_block):
+        self.line_block = line_block
 
 class Makefile(object) : 
     # A collection of statements, directives, rules.
@@ -803,9 +762,7 @@ class Makefile(object) :
 #        return "Makefile([{0}])".format(",\n".join( [ "{0}".format(block) for block in self.token_list ] ) )
 
     def makefile(self):
-        # each token.makefile() should have a trailing \n so whole string will
-        # be newline separated
-        s = "".join( [ "{0}".format(token.makefile()) for token in self.token_list ] )
+        s = "\n".join( [ "{0}".format(token.makefile()) for token in self.token_list ] )
         return s
 
     def __iter__(self):
@@ -1824,14 +1781,14 @@ def handle_conditional_directive(directive_inst,vline_iter,line_iter):
 
     # gather file lines; will be VirtualLine instances
     # Passed to LineBlock constructor.
-    line_block = []
+    line_list = []
 
     cond_block = ConditionalBlock()
     cond_block.add_conditional( directive_inst )
 
-    def save_block(line_block):
-        if len(line_block) :
-            cond_block.add_block( LineBlock(line_block) )
+    def save_block(line_list):
+        if len(line_list) :
+            cond_block.add_block( LineBlock(line_list) )
         return []
 
     # save where this directive block begins so we can report errors about big
@@ -1852,7 +1809,7 @@ def handle_conditional_directive(directive_inst,vline_iter,line_iter):
 
         if directive_str in conditional_directive : 
             # save the block of stuff we've read
-            line_block = save_block(line_block)
+            line_list = save_block(line_list)
 
             # recursive function is recursive
             sub_block = tokenize_directive(directive_str,virt_line,vline_iter,line_iter)
@@ -1865,7 +1822,7 @@ def handle_conditional_directive(directive_inst,vline_iter,line_iter):
                             description=errmsg)
 
             # save the block of stuff we've read
-            line_block = save_block(line_block)
+            line_list = save_block(line_list)
 
             print("phys_line={0}".format(printable_string(phys_line)))
 
@@ -1892,12 +1849,13 @@ def handle_conditional_directive(directive_inst,vline_iter,line_iter):
 
         elif directive_str=="endif":
             # save the block of stuff we've read
-            line_block = save_block(line_block)
+            line_list = save_block(line_list)
             state = state_endif
 
         else : 
             # save the line into the block
-            line_block.append(virt_line)
+            print("save \"{0}\"".format(printable_string(str(virt_line))))
+            line_list.append(virt_line)
 
         if state==state_endif : 
             # close the if/else/endif collection
@@ -1909,6 +1867,77 @@ def handle_conditional_directive(directive_inst,vline_iter,line_iter):
         raise ParseError(pos=starting_pos, description=errmsg)
     
     return cond_block
+
+def tokenize_define_directive(string):
+    # multi-line macro
+
+    state_start = 1
+    state_name = 2
+    state_seeking_eol = 3
+
+    state = state_start
+    macro_name = ""
+
+    # 3.81 treats the = as part of the name
+    # 3.82 and beyond introduced the "=" after the macro name
+    if not(Version.major==3 and Version.minor==81) : 
+        raise TODO()
+
+    # get the starting position of this string (for error reporting)
+    starting_pos = string.lookahead()["pos"]
+    print("starting_pos=",starting_pos)
+
+    for vchar in string : 
+        c = vchar["char"]
+        print("m c={0} state={1} idx={2} ".format( 
+                printable_char(c),state,string.idx))
+
+        if state==state_start:
+            # always eat whitespace while in the starting state
+            if c in whitespace : 
+                # eat whitespace
+                pass
+            else:
+                string.pushback()
+                state = state_name
+
+        elif state==state_name : 
+            # save the name until EOL (we'll strip off the trailing RHS
+            # whitespace later)
+            #
+            # TODO if Version > 3.81 then add support for "="
+            macro_name += c
+
+    return macro_name.rstrip()
+
+def handle_define_directive(define_inst,vline_iter,line_iter):
+
+    # array of VirtualLine
+    line_list = []
+
+    # save where this define block begins so we can report errors about 
+    # missing enddef 
+    starting_pos = define_inst.code.starting_pos()
+
+    for virt_line in vline_iter : 
+
+        # seach for enddef in physical line
+        phys_line = str(virt_line).lstrip()
+        if phys_line.startswith("endef"):
+            phys_line = phys_line[5:].lstrip()
+            if not phys_line or phys_line[0]=='#':
+                break
+            errmsg = "extraneous text after 'enddef' directive"
+            raise ParseError(vline=virt_line,pos=virt_line.starting_pos(),
+                        description=errmsg)
+
+        line_list.append(virt_line)
+    else :
+        errmsg = "missing enddef"
+        raise ParseError(pos=starting_pos, description=errmsg)
+
+    define_inst.set_block(LineBlock(line_list))
+    return define_inst
 
 #@depth_checker
 def tokenize_directive(directive_str,virt_line,vline_iter,line_iter):
@@ -1963,10 +1992,15 @@ def tokenize_directive(directive_str,virt_line,vline_iter,line_iter):
 
         "ifeq" : { "constructor" : IfeqDirective,
                     "tokenizer"   : tokenize_assign_RHS,
-                  },
+                 },
         "ifneq" : { "constructor" : IfneqDirective,
                      "tokenizer"   : tokenize_assign_RHS,
-                   },
+                  },
+
+        "define" : { "constructor" : DefineDirective,
+                     "tokenizer" : tokenize_define_directive,
+                   },  
+
         # TODO add rest of opening directives
     }
 
@@ -2009,6 +2043,9 @@ def tokenize_directive(directive_str,virt_line,vline_iter,line_iter):
     # and maybe nested conditions)
     if directive_str in conditional_directive :
         return handle_conditional_directive(directive_instance,vline_iter,line_iter)
+
+    if directive_str == "define": 
+        return handle_define_directive(directive_instance,vline_iter,line_iter)
 
     return directive_instance
 
@@ -2253,7 +2290,7 @@ if __name__=='__main__':
     print("makefile={0}".format(makefile))
 
     print("# start makefile")
-    print(makefile.makefile(),end="")
+    print(makefile.makefile())
     print("# end makefile")
 
     round_trip(makefile)
