@@ -4,8 +4,7 @@
 # davep 22-Nov-2024 
 
 import pymake
-from pymake import (Literal, Expression, ConditionalBlock,
-                    ConditionalDirective, IfdefDirective, LineBlock)
+from pymake import *
 from vline import VirtualLine
 import run_tests
 
