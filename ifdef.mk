@@ -156,3 +156,45 @@ def: ; @echo def
 
 xyz endif : ; @echo $@
 
+ifdef A
+    a=b
+    b=c
+    d=e
+else ifeq ($a,$b)
+    e=f
+    f=g
+    h=i
+    ifneq ($b,$c)
+        i=j
+        j=k
+        k=l
+    else
+        l=m
+        m=n
+        n=o
+        ifndef B
+            a=2
+            b=3
+            c=4
+        else
+            a=3
+            b=4
+            c=5
+        endif
+        o=p
+        p=q
+        q=r
+    endif
+    r=s
+    s=t
+    t=u
+else ifneq ($a,$b)
+    u=v
+    v=w
+    w=x
+else 
+    x=y
+    y=z
+    z=a
+endif
+
