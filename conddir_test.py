@@ -11,6 +11,14 @@ import run_tests
 
 run = run_tests.run_makefile_string
 
+def round_trip(cond_block,expected_makefile):
+    s = str(cond_block)
+    print("s=",s)
+    m2=eval(s).makefile()
+    print(m2)
+    assert m2==expected_makefile,m2
+    print(m2)
+
 def test1():
     # ifdef FOO 
     # endif
@@ -20,14 +28,15 @@ def test1():
     b.add_conditional(c)
     print(b)
     m = b.makefile()
-    print(m,end="")
-    assert m=='ifdef FOO\nendif\n'
+    print(m)
+    assert m=='ifdef FOO\nendif'
 
     s = str(b)
     print("s=",s)
     m2=eval(s).makefile()
-    assert m2=='ifdef FOO\nendif\n'
-    print(m2,end="")
+    print(m2)
+    assert m2=='ifdef FOO\nendif',m2
+    print(m2)
 
 def test2():
     # ifdef FOO
@@ -43,7 +52,14 @@ def test2():
     print(b)
     m = b.makefile()
     print(m)
-    assert m=='ifdef FOO\na=b\nendif\n',m
+    assert m=='ifdef FOO\na=b\nendif',m
+
+    s = str(b)
+    print("s=",s)
+    m2=eval(s).makefile()
+    print(m2)
+    assert m2=='ifdef FOO\na=b\nendif',m2
+    print(m2)
 
 def test3():
     # ifdef FOO
@@ -62,12 +78,12 @@ def test3():
     b.add_block(lb1)
     b.start_else()
     b.add_block(lb2)
-    print(b.cond_expr)
-    print(b.cond_blocks)
     print(b)
     m = b.makefile()
     print(m)
-    assert m=='ifdef FOO\na=b\nelse\na=d\nendif\n',m
+    expect = 'ifdef FOO\na=b\nelse\na=d\nendif'
+    assert m==expect,m
+    round_trip(b,expect)
 
 def test4():
     # ifdef FOO
@@ -85,7 +101,9 @@ def test4():
     print(b)
     m = b.makefile()
     print(m)
-    assert m=='ifdef FOO\na=b\nelse\nendif\n'
+    expect = 'ifdef FOO\na=b\nelse\nendif'
+    assert m==expect,m
+    round_trip(b,expect)
 
 def test5():
     # ifdef FOO
@@ -103,7 +121,9 @@ def test5():
     print(b)
     m = b.makefile()
     print(m)
-    assert m=='ifdef FOO\nelse\na=d\nendif\n'
+    expect='ifdef FOO\nelse\na=d\nendif'
+    assert m==expect,m
+    round_trip(b,expect)
 
 def test6():
     # ifdef FOO
@@ -122,14 +142,11 @@ def test6():
     b.add_conditional(c)
     b.add_block(lb)
     print(b)
-#    print(eval(s))
-#    s = eval(s)
-#    print(s)
-#    s = eval(str(s))
     m = b.makefile()
     print(m)
-
-    assert m=='ifdef FOO\na=b\nc=d\ne=f\nendif\n'
+    expect='ifdef FOO\na=b\nc=d\ne=f\nendif'
+    assert m==expect,m
+    round_trip(b,expect)
 
 def test7():
     s = """\
@@ -139,11 +156,118 @@ else#foobarbaz
 a=c
 endif
 """
-    run(s,"ifdef FOO\na=b\nelse\na=c\nendif\n")
+    run(s,"ifdef FOO\na=b\nelse\na=c\nendif")
+
+def test8():
+    s = """\
+ifdef FOO
+    ifdef BAR
+        ifdef BAZ
+        endif
+    endif
+endif
+"""
+    r = """\
+ifdef FOO
+ifdef BAR
+ifdef BAZ
+endif
+endif
+endif"""
+    run(s,r)
+
+def test9():
+    s = """\
+ifdef NOTDEF
+    this is a bunch of crap
+    that makefile will ignore
+    ifeq ($a,$b)
+        this should still be ignored
+    endif
+endif
+"""
+    r = """\
+ifdef NOTDEF
+    this is a bunch of crap
+    that makefile will ignore
+ifeq ($(a),$(b))
+        this should still be ignored
+endif
+endif"""
+    run(s,r)
+
+def test10():
+    s="""\
+ifdef FOO
+else
+    ifdef BAR
+    endif
+endif
+"""
+    r="""\
+ifdef FOO
+else
+ifdef BAR
+endif
+endif"""
+    run(s,r)
+
+def test11():
+    s="""\
+ifdef FOO
+    a=b foo
+    b=c foo
+    d=e foo
+else
+    ifdef XYZ
+
+    else ifdef BAR
+        e=f bar
+        f=g bar
+        g=h bar
+        ifdef BAZ
+            h=i baz
+            i=j baz
+            j=k baz
+        else
+        endif
+    else ifdef BAZ
+        ifndef QQQQ
+        else
+        endif
+    else
+    endif
+endif
+"""
+    r="""\
+ifdef FOO
+    a=b foo
+    b=c foo
+    d=e foo
+else
+ifdef XYZ
+else ifdef BAR
+        e=f bar
+        f=g bar
+        g=h bar
+ifdef BAZ
+            h=i baz
+            i=j baz
+            j=k baz
+else
+endif
+else ifdef BAZ
+ifndef QQQQ
+else
+endif
+else
+endif
+endif"""
+    run(s,r)
 
 if __name__=='__main__':
-#    from run_tests import runlocals
-#    runlocals(locals())
-    test1()
+    from run_tests import runlocals
+    runlocals(locals())
+#    test9()
 
 
