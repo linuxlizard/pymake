@@ -3,8 +3,11 @@
 
 bar=baz
 
+define foo = 
+endef # foo foo foo
+
 # The following are from the GNU Make manual
-define two-lines
+define two-lines 
 	@echo foo
 	@echo $(bar)
 endef
@@ -40,23 +43,47 @@ endef
 # valid
 #define: ; @echo $@
 
-# weird. $(info) won't display multi-line variables
-$(info $$two-lines=em$(two-lines)pty)
+# $(info) will display multi-line variables
+$(info two-lines=$(two-lines))
 #$(info $$frobnicate=em$(frobnicate)pty)
 
 #empty=
 a=$(if $(two-lines), $(info not empty), $(info empty))
 #$(info a=$a)
 
-#define crap = 
-#this is
-#a
-#load of crap
-#that won't pass
-#muster 
-#as a makefile
-#endef
-#
+define crap = 
+this is
+a
+load of crap
+that won't pass
+muster 
+as a makefile
+endef
+
+ifeq ("$(crap)","")
+$(info must be make 3.81)
+endif
+
+ifneq ("$(crap)","")
+$(info must be make > 3.81)
+endif
+
+ifneq ("$(crap =)","")
+$(info must be make 3.81)
+endif
+
+ifeq ("$(crap =)","")
+$(info must be make > 3.81)
+endif
+
+define no-equal-sign
+foo foo foo
+endef
+
+ifneq ("$(no-equal-sign)","foo foo foo")
+    $(error foo foo foo)
+endif
+
 #define nested = 
 #blah blah blah blah define blah =
 #define nested-inner = 
