@@ -740,14 +740,21 @@ class DefineDirective(Directive):
         self.string = macro_name
         assert isinstance(macro_name,str),type(macro_name)
 
-        self.line_block = line_block if line_block else []
-        LineBlock.validate(self.line_block)
+        self.line_block = line_block if line_block else LineBlock([])
 
     def __str__(self):
-        return Symbol.__str__(self)
+        return "{0}(\"{1}\",{2})".format(self.__class__.__name__,
+                        self.string,
+                        str(self.line_block))
 
     def set_block(self,line_block):
         self.line_block = line_block
+
+    def makefile(self):
+        return "define {0}\n{1}endef".format(
+                        self.string,
+                        self.line_block.makefile() )
+        
 
 class Makefile(object) : 
     # A collection of statements, directives, rules.
