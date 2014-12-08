@@ -438,12 +438,15 @@ class RuleExpression(Expression):
 
 class PrerequisiteList(Expression):
      # davep 03-Dec-2014 ; FIXME prereq list must be an array of expressions,
-     # not an expression itself or wind up with problems around $()a vs $() a
-     # (note the space)
-#    def __init__(self,token_list):
-#        raise TODO()
-#        # ???????? work
-#        self.token_list = [ Expression(t) for t in token_list ]
+     # not an expression itself or wind up with problems with spaces
+     #  $()a vs $() a
+     # (note the space before 'a')
+
+    def __init__(self,token_list):
+        for t in token_list :
+            assert isinstance(t,Expression),(type(t,))
+
+        self.token_list = token_list
         
     def makefile(self):
         # space separated
@@ -1196,8 +1199,24 @@ def tokenize_rule_RHS(string):
 
     state = state_start
     token = ""
+    prereq_list = []
     token_list = []
 
+    # davep 07-Dec-2014 ;  rule prerequisites are a whitespace separated
+    # collection of Expressions. 
+    # foo : a$(b)c  <--- one Expression, three terms
+    #   vs
+    # foo : a $(b) c    <--- three Expressions
+    #
+    # Collect the tokens (e.g., Literal, VarRef) into token_list[]
+    # On whitespace, create Expression(token_list), add to prereq_list
+    # At end of prereqs, create PrerequisiteList(prereq_list)
+
+    def save_prereq(token_list):
+        if token_list : 
+            prereq_list.append( Expression(token_list) )
+        return []
+    
     for vchar in string :
         c = vchar["char"]
         print("p c={0} state={1} idx={2}".format(printable_char(c),state,string.idx))
@@ -1207,10 +1226,9 @@ def tokenize_rule_RHS(string):
                 # End of prerequisites; start of recipe.  Note we don't
                 # preserve token because it will be empty at this point.
                 # bye!
-                # XXX pushback ';' ? I think I need to for the recipe
-                # tokenizer.
+                # pushback ';' because I need it for the recipe tokenizer.
                 string.pushback()
-                return PrerequisiteList(token_list)
+                return PrerequisiteList(prereq_list)
             elif c in whitespace :
                 # eat whitespace until we find something interesting
                 state = state_whitespace
@@ -1227,8 +1245,10 @@ def tokenize_rule_RHS(string):
 
         elif state==state_word:
             if c in whitespace :
-                # save token so far 
-                token_list.append(Literal(token))
+                # save what we've seen so far
+                if token : 
+                    token_list.append(Literal(token))
+                token_list = save_prereq(token_list)
                 # restart the current token
                 token = ""
                 # start eating whitespace
@@ -1266,8 +1286,10 @@ def tokenize_rule_RHS(string):
                 # save the token we've captured
                 if token :
                     token_list.append(Literal(token))
-                # start seeking next boundary
-                state = state_start
+                    token_list = save_prereq(token_list)
+
+                # line comment terminates the line (nothing after the comment)
+                return PrerequisiteList(prereq_list)
 
             elif c=='$':
                 state = state_dollar
@@ -1276,13 +1298,18 @@ def tokenize_rule_RHS(string):
                 # recipe tokenizer expects to start with a ';' or a <tab>
                 string.pushback()
                 # end of prerequisites; start of recipe
-                token_list.append(Literal(token))
-                return PrerequisiteList(token_list)
+                if token : 
+                    token_list.append(Literal(token))
+                    token_list = save_prereq(token_list)
+                # prereqs terminated
+                return PrerequisiteList(prereq_list)
             
             elif c in eol :
                 # end of prerequisites; start of recipe
-                token_list.append(Literal(token))
-                return PrerequisiteList(token_list)
+                if token : 
+                    token_list.append(Literal(token))
+                    token_list = save_prereq(token_list)
+                return PrerequisiteList(prereq_list)
 
             else:
                 token += c
@@ -1292,8 +1319,10 @@ def tokenize_rule_RHS(string):
                 # literal $
                 token += "$"
             else:
-                # save token so far 
-                token_list.append(Literal(token))
+                # save token(s) so far but do NOT push to prereq_list (only
+                # push to prereq_list on whitespace)
+                if token : 
+                    token_list.append(Literal(token))
                 # restart token
                 token = ""
 
@@ -1338,11 +1367,17 @@ def tokenize_rule_RHS(string):
             else:
                 # The prerequisites (or whatever) are continued on the next
                 # line. We treat the EOL as a boundary between symbols
+                # davep 07-Dec-2014 ; shouldn't see this anymore (VirtualLine
+                # hides the line continuations)
+                assert 0
                 state = state_start
                 
         else : 
             # wtf?
             assert 0, state
+
+    # davep 07-Dec-2014 ; do we ever get here? 
+    assert 0, state
 
     if state==state_word:
         # save the token we've seen so far
@@ -1353,7 +1388,7 @@ def tokenize_rule_RHS(string):
         # premature end of file?
         raise ParseError()
 
-    return PrerequisiteList(token_list)
+    return PrerequisiteList(prereq_list)
 
 #@depth_checker
 def tokenize_assign_RHS(string):
