@@ -8,6 +8,10 @@
 # davep 09-sep-2014
 
 import sys
+import logging
+
+logger = logging.getLogger("pymake")
+#logging.basicConfig(level=logging.DEBUG)
 
 # require Python 3.x for best Unicode handling
 if sys.version_info.major < 3:
@@ -76,44 +80,6 @@ directive = {
     "private", 
     "vpath",
 } | conditional_directive
-
-functions = {
-    "subst",
-    "patsubst",
-    "strip",
-    "findstring",
-    "filter",
-    "filter-out",
-    "sort",
-    "word",
-    "words",
-    "wordlist",
-    "firstword",
-    "lastword",
-    "dir",
-    "notdir",
-    "suffix",
-    "basename",
-    "addsuffix",
-    "addprefix",
-    "join",
-    "wildcard",
-    "realpath",
-    "absname",
-    "error",
-    "warning",
-    "shell",
-    "origin",
-    "flavor",
-    "foreach",
-    "if",
-    "or",
-    "and",
-    "call",
-    "eval",
-    "file",
-    "value",
-}
 
 automatic_variables = {
     "@",
@@ -1695,6 +1661,8 @@ def usage():
     print("usage: TODO")
 
 if __name__=='__main__':
+    logging.basicConfig(level=logging.DEBUG)
+
     if len(sys.argv) < 2 : 
         usage()
         sys.exit(1)
@@ -1715,3 +1683,5 @@ if __name__=='__main__':
 
     round_trip(makefile)
 
+#    from evaluate import evaluate
+#    evaluate(makefile)

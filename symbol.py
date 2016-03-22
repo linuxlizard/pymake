@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 
 import sys
+import logging
+
+logger = logging.getLogger("pymake.symbol")
 
 from printable import printable_char, printable_string
 from vline import VirtualLine
@@ -79,9 +82,15 @@ class Symbol(object):
         for t in token_list : 
             assert isinstance(t,Symbol), (type(t), t)
 
+    def eval(self, symbol_table):
+        # children should override
+        return None
+
 class Literal(Symbol):
     # A literal found in the token stream. Store as a string.
-    pass
+    
+    def eval(self, symbol_table):
+        return self.string
 
 class Operator(Symbol):
     pass
@@ -141,6 +150,9 @@ class Expression(Symbol):
     def __len__(self):
         return len(self.token_list)
 
+    def eval(self, symbol_table):
+        return "".join([e.eval(symbol_table) for e in self.token_list])
+
 class VarRef(Expression):
     # A variable reference found in the token stream. Save as a nested set of
     # tuples representing a tree. 
@@ -161,6 +173,21 @@ class VarRef(Expression):
         s += ")"
         return s
 
+    def eval(self, symbol_table):
+        # TODO functions (info, etc)
+        result = ""
+        for t in self.token_list:
+            s = t.eval(symbol_table)
+            if s in symbol_table:
+                s = symbol_table[s]
+            else:
+                logger.debug("symbol \"%s\" not in symbol_table", s)
+                s = ""
+
+            result += s
+
+        return result
+
 class AssignmentExpression(Expression):
     def __init__(self,token_list):
         # AssignmentExpression :=  Expression AssignOp Expression
@@ -170,6 +197,13 @@ class AssignmentExpression(Expression):
         assert isinstance(token_list[2],Expression),(type(token_list[2]),)
 
         Expression.__init__(self,token_list)
+
+    def eval(self, symbol_table):
+        lhs = self.token_list[0].eval(symbol_table)
+        rhs = self.token_list[2].eval(symbol_table)
+        # TODO handle different styles of assignment
+        symbol_table[lhs] = rhs
+        return None
 
 class RuleExpression(Expression):
     # Rules are tokenized in multiple steps. First the target + prerequisites
