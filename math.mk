@@ -65,6 +65,18 @@ $(info $x+$y=$(call add,$x,$y))
 num=$(call add,$x,$y)
 $(if $(filter-out 102,$(num)),$(error num $(num)!=102))
 
+x=100
+y=58
+$(info $x-$y=$(call sub,$x,$y))
+
+x=3
+y=5
+$(info $x-$y=$(call sub,$x,$y))
+
+x=333
+y=765
+$(info $x-$y=$(call sub,$x,$y))
+
 # kinda slow (duh)
 x=5000
 y=9000
