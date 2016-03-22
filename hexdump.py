@@ -2,6 +2,9 @@
 
 # http://aspn.activestate.com/ASPN/Cookbook/Python/Recipe/142812
 
+import logging
+logger = logging.getLogger("hexdump")
+
 FILTER=''.join([(len(repr(chr(x)))==3) and chr(x) or '.' for x in range(256)])
 
 def dump(src, length=8):
@@ -22,10 +25,6 @@ def dump(src, length=8):
 #       printable = s.translate(FILTER)
 #       result.append("%04X   %-*s   %s\n" % (i, length*3, hexa, printable))
 #    return ''.join(result)
-
-import logging
-logging.basicConfig()
-logger = logging.getLogger("hexdump")
 
 def parse_hexdump( lines_list ) :
 
@@ -58,6 +57,8 @@ def parse_hexdump( lines_list ) :
     return bytestr
 
 if __name__ == '__main__' :
+    logging.basicConfig()
+
     logger.setLevel( level=logging.DEBUG )
 
     s=("This 10 line function is just a sample of python power "
