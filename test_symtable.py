@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+# davep 20-Mar-2016 ; symbol table
+
 import sys
 import logging
 

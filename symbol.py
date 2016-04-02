@@ -159,7 +159,6 @@ class VarRef(Expression):
     # $a            ->  VarExp(a)
     # $(abc)        ->  VarExp(abc,)
     # $(abc$(def))  ->  VarExp(abc,VarExp(def),)
-    # $(abc$(def)$(ghi))  ->  VarExp(abc,VarExp(def),)
     # $(abc$(def)$(ghi))  ->  VarExp(abc,VarExp(def),VarExp(ghi),)
     # $(abc$(def)$(ghi$(jkl)))  ->  VarExp(abc,VarExp(def),VarExp(ghi,VarExp(jkl)),)
     # $(abc$(def)xyz)           ->  VarExp(abc,VarRef(def),Literal(xyz),)

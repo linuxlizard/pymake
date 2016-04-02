@@ -1,10 +1,19 @@
+
+# davep 20-Mar-2016 ; built-in functions
+
 import sys
+import logging
+
+logger = logging.getLogger("pymake.functions")
+
+from evaluate import evaluate
 
 __all__ = [ "Info", 
             "Warning",
             "Error",
           ]
 
+# built-in functions GNU Make 3.81(ish?)
 builtins = {
     "subst",
     "patsubst",
@@ -54,7 +63,8 @@ class Function:
 
 class PrintingFunction(Function):
     def eval(self, symbol_table):
-        print("TODO", file=self.fh)
+        s = evaluate(self.args, symbol_table)
+        print(s, file=self.fh)
         return ""
 
 class Info(PrintingFunction):

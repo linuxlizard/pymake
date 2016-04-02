@@ -1,4 +1,5 @@
-from pymake import functions
+# davep 20-Mar-2016 ; symbol table
+
 from functions import *
 
 class SymbolTable(object):
