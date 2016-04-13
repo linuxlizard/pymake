@@ -84,6 +84,7 @@ class Symbol(object):
 
     def eval(self, symbol_table):
         # children should override
+        assert 0
         return None
 
 class Literal(Symbol):
@@ -106,7 +107,7 @@ class RuleOp(Operator):
 class Expression(Symbol):
     # An expression is a list of symbols.
     def __init__(self, token_list ):
-        # expect a list/array/tuple (something with len())
+        # expect a list/array/tuple (test by calling len())
         assert len(token_list)>=0, (type(token_list),token_list)
 
         self.token_list = token_list
@@ -173,37 +174,41 @@ class VarRef(Expression):
         return s
 
     def eval(self, symbol_table):
-        # TODO functions (info, etc)
-        result = ""
-        for t in self.token_list:
-            s = t.eval(symbol_table)
-            if s in symbol_table:
-                s = symbol_table[s]
-            else:
-                logger.debug("symbol \"%s\" not in symbol_table", s)
-                s = ""
+        try:
+            # XXX is eval() here a bad, bad, bad idea? 
+            # symtable.fetch() will construct a Function instance if required
+            # so need to pass in the function args as well. If not a function, the 
+            fargs = self.token_list[1:]
+            sym = symbol_table.fetch(self.token_list[0].eval(symbol_table), fargs)
+        except KeyError:
+            return Literal("")
 
-            result += s
-
-        return result
+        try:
+            return sym.eval(symbol_table)
+        except AttributeError:
+            assert isinstance(sym,str)
+            return sym
 
 class AssignmentExpression(Expression):
     def __init__(self,token_list):
-        # AssignmentExpression :=  Expression AssignOp Expression
-        assert len(token_list)==3,len(token_list)
-        assert isinstance(token_list[0],Expression)
-        assert isinstance(token_list[1],AssignOp)
-        assert isinstance(token_list[2],Expression),(type(token_list[2]),)
-
         Expression.__init__(self,token_list)
+        self.sanity()
 
     def eval(self, symbol_table):
+        self.sanity()
         lhs = self.token_list[0].eval(symbol_table)
         rhs = self.token_list[2].eval(symbol_table)
         # TODO handle different styles of assignment
-        symbol_table[lhs] = rhs
+        symbol_table.add(lhs, rhs)
         return None
 
+    def sanity(self):
+        # AssignmentExpression :=  Expression AssignOp Expression
+        assert len(self.token_list)==3,len(self.token_list)
+        assert isinstance(self.token_list[0],Expression)
+        assert isinstance(self.token_list[1],AssignOp)
+        assert isinstance(self.token_list[2],Expression),(type(self.token_list[2]),)
+        
 class RuleExpression(Expression):
     # Rules are tokenized in multiple steps. First the target + prerequisites
     # are tokenized and put into an instance of this RuleExpression. Then the

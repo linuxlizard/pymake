@@ -11,10 +11,28 @@
 $(info hello, world) $(info hello, world)
 $(info hello, world)            $(info hello, world)
 
+# two lines (info adds carriage return between calls)
 $(info Hello, world)$(info Hello, World) 
 
-q$(info I am q)=42
+# resolves to q=42
+q$(info assigning to q)=42
 $(info q=$q)
+
+s=$(info hello, world)
+$(info info returns s="$s")
+
+a=
+$(info a="$(value a)")
+#a=
+$(if $a,$(error foo),$(info ok))
+#$(if "",$(error foo),$(info ok))
+$(if ,$(error foo),$(info ok))
+
+# should resolve to nothing (leading space is significant)
+a=$( info leading space)
+$(info a=>$a<)
+$(if $( info leading space),$(error foo),$(info ok))
+
 
 all:;@:
 

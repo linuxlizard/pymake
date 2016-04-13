@@ -1683,5 +1683,11 @@ if __name__=='__main__':
 
     round_trip(makefile)
 
-#    from evaluate import evaluate
-#    evaluate(makefile)
+    from evaluate import evaluate
+    from symtable import SymbolTable
+    symtable = SymbolTable()
+    for sym in makefile.token_list:
+        logger.debug("sym=%s", sym)
+        s = sym.eval(symtable)
+        logger.debug("s=%s", s)
+#    evaluate(makefile.token_list, symtable)
