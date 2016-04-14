@@ -6,12 +6,14 @@ import logging
 
 logger = logging.getLogger("pymake.functions")
 
-from symbol import Literal
+from symbol import VarRef, Literal
 from evaluate import evaluate
 
 __all__ = [ "Info", 
             "MWarning",
             "Error",
+
+            "make_function",
           ]
 
 # built-in functions GNU Make 3.81(ish?)
@@ -54,32 +56,32 @@ builtins = {
     "info",
 }
 
-class Function:
+class Function(VarRef):
     name = "(none)"
 
     def __init__(self, args):
-        self.args = args
+        self.token_list = args
 
     def eval(self, symbol_table):
         return ""
 
 class PrintingFunction(Function):
     def eval(self, symbol_table):
-        s = evaluate(self.args, symbol_table)
+        s = evaluate(self.token_list, symbol_table)
         print(s, file=self.fh)
         return ""
 
 class Info(PrintingFunction):
-    name = "info"
+    string = "info"
     fh = sys.stdout
 
 class MWarning(PrintingFunction):
     # name Warning is used by Python builtins so use MWarning instead
-    name = "warning"
+    string = "warning"
     fh = sys.stderr
 
 class Error(PrintingFunction):
-    name = "error"
+    string = "error"
     fh = sys.stderr
 
     def eval(self, symbol_table):
@@ -124,8 +126,26 @@ def split_function_call(s):
     # no whitespace anywhere
     return s, None
 
-def make_symbols(symtable):
-    symtable.add_function("info", Info)
-    symtable.add_function("warning", MWarning)
-    symtable.add_function("error", Error)
+_classes = {
+    "info" : Info,
+    "warning" : MWarning,
+    "error" : Error,
+}
+
+def make_function(arglist):
+    # do NOT .eval() here!!! will cause side effects. only want to look up the string
+    s = arglist[0].string
+    logger.debug("s=%s", s)
+    # do NOT modify arglist; is a ref into the AST
+
+    fname, rest = split_function_call(s)
+    assert rest != ""  # catch a weird corner condition error
+
+    # allow KeyError to propagate to indicate this is not a function
+    fcls = _classes[fname]
+
+    logger.debug("fname=%s rest=%s fcls=%s", fname, rest, fcls)
+    
+    if rest: return fcls([Literal(rest)] + arglist[1:])
+    return fcls(arglist)
 

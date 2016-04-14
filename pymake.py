@@ -25,6 +25,7 @@ from printable import printable_char, printable_string
 from symbol import *
 from error import *
 from version import Version
+import functions 
 
 #whitespace = set( ' \t\r\n' )
 whitespace = set(' \t')
@@ -855,7 +856,15 @@ def tokenize_variable_ref(string):
 
                 # save what we've read so far
                 token_list.append( Literal(token) )
-                return VarRef(token_list)
+
+                # do we have a function call?
+                try:
+                    fn = functions.make_function(token_list)
+                except KeyError:
+                    # nope, not a function call
+                    return VarRef(token_list)
+                else:
+                    return fn
                 # done tokenizing the var ref
 
             elif c=='$':
@@ -1656,12 +1665,24 @@ print("# end makefile")
 #        print("print(\"{0}\".format(makefile))",file=outfile)
         print(dumpmakefile,file=outfile)
         
+
+def execute(makefile):
+    # tinkering with how to evaluate
+    from evaluate import evaluate
+    from symtable import SymbolTable
+    symtable = SymbolTable()
+    for sym in makefile.token_list:
+        logger.debug("sym=%s", sym)
+        s = sym.eval(symtable)
+        logger.debug("s=%s", s)
+
 def usage():
     # TODO
     print("usage: TODO")
 
 if __name__=='__main__':
-    logging.basicConfig(level=logging.DEBUG)
+    logging.basicConfig(level=logging.INFO)
+#    logging.basicConfig(level=logging.DEBUG)
 
     if len(sys.argv) < 2 : 
         usage()
@@ -1677,17 +1698,8 @@ if __name__=='__main__':
 #    print("makefile=",",\\\n".join( [ "{0}".format(block) for block in makefile ] ) )
     print("makefile={0}".format(makefile))
 
-    print("# start makefile")
-    print(makefile.makefile())
-    print("# end makefile")
+#    print("# start makefile")
+#    print(makefile.makefile())
+#    print("# end makefile")
 
-    round_trip(makefile)
-
-    from evaluate import evaluate
-    from symtable import SymbolTable
-    symtable = SymbolTable()
-    for sym in makefile.token_list:
-        logger.debug("sym=%s", sym)
-        s = sym.eval(symtable)
-        logger.debug("s=%s", s)
-#    evaluate(makefile.token_list, symtable)
+    execute(makefile)

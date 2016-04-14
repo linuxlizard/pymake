@@ -9,6 +9,7 @@ from printable import printable_char, printable_string
 from vline import VirtualLine
 from version import Version
 from error import *
+from evaluate import evaluate
 
 __all__ = [ "Symbol",
             "Literal",
@@ -174,20 +175,10 @@ class VarRef(Expression):
         return s
 
     def eval(self, symbol_table):
-        try:
-            # XXX is eval() here a bad, bad, bad idea? 
-            # symtable.fetch() will construct a Function instance if required
-            # so need to pass in the function args as well. If not a function, the 
-            fargs = self.token_list[1:]
-            sym = symbol_table.fetch(self.token_list[0].eval(symbol_table), fargs)
-        except KeyError:
-            return Literal("")
-
-        try:
-            return sym.eval(symbol_table)
-        except AttributeError:
-            assert isinstance(sym,str)
-            return sym
+        s = ""
+        for sym in self.token_list:
+            s += symbol_table.fetch(sym.eval(symbol_table))
+        return s
 
 class AssignmentExpression(Expression):
     def __init__(self,token_list):
@@ -287,6 +278,10 @@ class RuleExpression(Expression):
 
         print("add_recipe_list()",self.makefile())
         print("add_recipe_list()",self.recipe_list.code)
+
+    def eval(self, symbol_table):
+        # TODO
+        logger.error("%s eval not implemented yet", self.string)
 
 class PrerequisiteList(Expression):
      # davep 03-Dec-2014 ; FIXME prereq list must be an array of expressions,
