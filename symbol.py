@@ -72,9 +72,9 @@ class Symbol(object):
         assert hasattr(vline,"phys_lines")
         assert hasattr(vline,"virt_lines")
 
-        print("set_code() start={0} end={1}".format(
+        logger.debug("set_code() start=%s end=%s",
                 vline.virt_lines[0][0]["pos"],
-                vline.virt_lines[-1][-1]["pos"]) )
+                vline.virt_lines[-1][-1]["pos"])
 
         self.code = vline
 
@@ -281,7 +281,7 @@ class RuleExpression(Expression):
 
     def eval(self, symbol_table):
         # TODO
-        logger.error("%s eval not implemented yet", self.string)
+        logger.error("%s eval not implemented yet", type(self))
 
 class PrerequisiteList(Expression):
      # davep 03-Dec-2014 ; FIXME prereq list must be an array of expressions,

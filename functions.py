@@ -57,10 +57,8 @@ builtins = {
 }
 
 class Function(VarRef):
-    name = "(none)"
-
     def __init__(self, args):
-        self.token_list = args
+        super().__init__(args)
 
     def eval(self, symbol_table):
         return ""
@@ -85,7 +83,16 @@ class Error(PrintingFunction):
     fh = sys.stderr
 
     def eval(self, symbol_table):
-        super().eval(symbol_table)
+        logger.debug("self=%s", self)
+        for t in self.token_list:
+            print(t)
+            print(t.code)
+        logger.debug("code=%s", self.code.get_code())
+        logger.debug("physcode=%s", self.code.phys_lines)
+        print(dir(self.code))
+
+        s = evaluate(self.token_list, symbol_table)
+        print("*** {}. Stop.".format(s), file=self.fh)
         sys.exit(1)
 
 def split_function_call(s):

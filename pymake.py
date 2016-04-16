@@ -26,6 +26,7 @@ from symbol import *
 from error import *
 from version import Version
 import functions 
+import source
 
 #whitespace = set( ' \t\r\n' )
 whitespace = set(' \t')
@@ -147,6 +148,7 @@ def comment(string):
             # otherwise char is eaten
 
         else:
+            # should not get here
             assert 0, state
 
 depth = 0
@@ -189,7 +191,7 @@ def tokenize_statement(string):
     # get the starting position of this string (for error reporting)
     starting_pos = string.lookahead()["pos"]
 
-    print("tokenize_statement() pos={0}".format(starting_pos))
+    logger.debug("tokenize_statement() pos=%s", starting_pos)
 
     # save current position in the token stream
     string.push_state()
@@ -204,7 +206,7 @@ def tokenize_statement(string):
     # tokenize_statement_LHS() stopped.
     last_symbol = lhs[-1]
 
-    print("lhs={0} len={1}".format(lhs[-1],len(lhs)))
+    logger.debug("lhs=%s len=%d", lhs[-1], len(lhs))
 
     if isinstance(last_symbol,RuleOp): 
         statement_type = "rule"
@@ -213,8 +215,7 @@ def tokenize_statement(string):
         # Python3 Unicode handling
 #        print( u"last_token={0} \u2234 statement is {1}".format(last_symbol,statement_type).encode("utf-8"))
 #        print( "last_token={0} ∴ statement is {1}".format(last_symbol,statement_type).encode("utf-8"))
-        print( "last_token={0} ∴ statement is {1}".format(last_symbol,statement_type))
-        print("re-run as rule")
+        logger.debug( "last_token=%s ∴ statement is %s so re-run as rule", last_symbol, statement_type)
 
         # jump back to starting position
         string.pop_state()
@@ -236,7 +237,7 @@ def tokenize_statement(string):
 
 #        print( u"last_token={0} \u2234 statement is {1}".format(last_symbol,statement_type).encode("utf-8"))
 #        print( "last_token={0} ∴ statement is {1}".format(last_symbol,statement_type).encode("utf-8"))
-        print( "last_token={0} ∴ statement is {1}".format(last_symbol,statement_type))
+        logger.debug( "last_token=%s ∴ statement is %s", last_symbol, statement_type)
 
         # The statement is an assignment. Tokenize rest of line as an assignment.
         statement = list(lhs)
@@ -246,7 +247,7 @@ def tokenize_statement(string):
     elif isinstance(last_symbol,Expression) :
         statement_type="expression"
 #        print( u"last_token={0} \u2234 statement is {1}".format(last_symbol,statement_type).encode("utf-8"))
-        print( "last_token={0} ∴ statement is {1}".format(last_symbol,statement_type))
+        logger.debug( "last_token=%s ∴ statement is %s", last_symbol, statement_type)
 
         # davep 17-Nov-2014 ; the following code makes no sense 
         # Wind up in this case when have a non-rule and non-assignment.
@@ -271,6 +272,7 @@ def tokenize_statement(string):
 #        print( "last_token={0} \u2234 statement is {1}".format(last_symbol,statement_type).encode("utf-8"))
         print( "last_token={0} ∴ statement is {1}".format(last_symbol,statement_type))
 
+        # should not get here
         assert 0,last_symbol
 
 #@depth_checker
@@ -279,7 +281,7 @@ def tokenize_statement_LHS(string,separators=""):
     # whitespace as a separator. An assignment statement preserves internal
     # whitespace but leading/trailing whitespace is stripped.
 
-    print("tokenize_statement_LHS()")
+    logger.debug("tokenize_statement_LHS()")
 
     state_start = 1
     state_in_word = 2
@@ -320,12 +322,11 @@ def tokenize_statement_LHS(string,separators=""):
 
     # get the starting position of this string (for error reporting)
     starting_pos = string.lookahead()["pos"]
-    print("starting_pos=",starting_pos)
+    logger.debug("starting_pos=%s",starting_pos)
 
     for vchar in string : 
         c = vchar["char"]
-        print("s c={0} state={1} idx={2} ".format(
-                printable_char(c),state,string.idx,token))
+#        print("s c={0} state={1} idx={2} ".format(printable_char(c),state,string.idx,token))
         if state==state_start:
             # always eat whitespace while in the starting state
             if c in whitespace : 
@@ -456,6 +457,7 @@ def tokenize_statement_LHS(string,separators=""):
             return Expression(token_list), RuleOp("::") 
 
         else:
+            # should not get here
             assert 0,state
 
     # hit end of string; what was our final state?
@@ -480,6 +482,7 @@ def tokenize_statement_LHS(string,separators=""):
         # downstream.
         return Expression(token_list), 
 
+    # should not get here
     assert 0, (state,starting_pos)
 
 #@depth_checker
@@ -492,7 +495,7 @@ def tokenize_rule_prereq_or_assign(string):
     # End of the rule's RHS is ';' or EOL.  The ';' may be followed by a
     # recipe.
 
-    print("tokenize_rule_prereq_or_assign()")
+    logger.debug("tokenize_rule_prereq_or_assign()")
 
     # save current position in the token stream
     string.push_state()
@@ -532,7 +535,7 @@ def tokenize_rule_RHS(string):
     #
     # RHS terminated by comment, EOL, ';'
 
-    print("tokenize_rule_RHS()")
+    logger.debug("tokenize_rule_RHS()")
 
     state_start = 1
     state_word = 2
@@ -718,7 +721,7 @@ def tokenize_rule_RHS(string):
                 state = state_start
                 
         else : 
-            # wtf?
+            # should not get here
             assert 0, state
 
     # davep 07-Dec-2014 ; do we ever get here? 
@@ -737,7 +740,7 @@ def tokenize_rule_RHS(string):
 
 #@depth_checker
 def tokenize_assign_RHS(string):
-    print("tokenize_assign_RHS()")
+    logger.debug("tokenize_assign_RHS()")
 
     state_start = 1
     state_dollar = 2
@@ -803,6 +806,7 @@ def tokenize_assign_RHS(string):
             state = state_literal
 
         else:
+            # should not get here
             assert 0, state
 
     # end of string
@@ -816,7 +820,7 @@ def tokenize_variable_ref(string):
     # Handles nested expressions e.g., $( $(foo) )
     # Returns a VarExp object.
 
-    print("tokenize_variable_ref()")
+    logger.debug("tokenize_variable_ref()")
 
     state_start = 1
     state_dollar = 2
@@ -828,7 +832,7 @@ def tokenize_variable_ref(string):
 
     for vchar in string : 
         c = vchar["char"]
-        print("v c={0} state={1} idx={2}".format(printable_char(c),state,string.idx))
+#        print("v c={0} state={1} idx={2}".format(printable_char(c),state,string.idx))
         if state==state_start:
             if c=='$':
                 state=state_dollar
@@ -889,6 +893,7 @@ def tokenize_variable_ref(string):
                 token += c
 
         else:
+                # should not get here
             assert 0, state
 
     raise ParseError(pos=vchar["pos"])
@@ -900,7 +905,7 @@ def tokenize_recipe(string):
     # A variable ref is a token boundary, and EOL is a token boundary.
     # At recipe boundary, create a Recipe from the token_list. 
 
-    print("tokenize_recipe()")
+    logger.debug("tokenize_recipe()")
 
     state_start = 1
     state_lhs_white = 2
@@ -986,6 +991,7 @@ def tokenize_recipe(string):
             state = state_recipe
 
         else:
+            # should not get here
             assert 0,state
 
     print("end of string state={0}".format(state))
@@ -995,6 +1001,7 @@ def tokenize_recipe(string):
     if state==state_recipe : 
         token_list.append( Literal(token) )
     else:
+        # should not get here
         assert 0,(state,string.starting_file_line)
 
     return Recipe( token_list )
@@ -1082,7 +1089,7 @@ def parse_recipes( line_iter, semicolon_vline=None ) :
                 state = state_start
 
         else : 
-            # wtf?
+            # should not get here
             assert 0,state
 
     print("bottom of parse_recipes()")
@@ -1266,6 +1273,8 @@ def handle_conditional_directive(directive_inst,vline_iter,line_iter):
 def tokenize_define_directive(string):
     # multi-line macro
 
+    logger.debug("tokenize_define_directive()")
+
     state_start = 1
     state_name = 2
     state_seeking_eol = 3
@@ -1336,8 +1345,8 @@ def handle_define_directive(define_inst,vline_iter,line_iter):
 
 #@depth_checker
 def tokenize_directive(directive_str,virt_line,vline_iter,line_iter):
-    print("tokenize_directive() \"{0}\" at line={1}".format(
-            directive_str,virt_line.starting_file_line))
+    logger.debug("tokenize_directive() \"%s\" at line=%d",
+            directive_str,virt_line.starting_file_line)
 
     # TODO probably need a lot of parse checking here eventually
     # (Most parse checking is in the Directive constructor)
@@ -1457,7 +1466,7 @@ def tokenize(virt_line,vline_iter,line_iter):
     #               different backslash usage in recipes.
     #
 
-    print("tokenize()")
+    logger.debug("tokenize()")
 
     # Is this a directive statement (e.g., ifdef ifeq define)?  Read the full
     # concatenated line from virtual line looking for first whitespace
@@ -1529,7 +1538,7 @@ def tokenize(virt_line,vline_iter,line_iter):
 
     return token
 
-def get_vline(line_iter): 
+def xxx_get_vline(line_iter): 
     # GENERATOR
     #
     # line_iter is an iterator that supports pushback
@@ -1583,7 +1592,7 @@ def get_vline(line_iter):
                 state = state_tokenize
 
         else:
-            # wtf?
+            # should not get here
             assert 0, state
 
         if state==state_tokenize: 
@@ -1595,7 +1604,7 @@ def get_vline(line_iter):
 
             # make a virtual line (joins together backslashed lines into one
             # line visible through an iterator)
-            virt_line = VirtualLine(line_list,starting_line_number)
+            virt_line = VirtualLine(line_list, starting_line_number)
             del line_list # detach the ref (VirtualLine keeps the array)
 
             # caller can also use line_iter
@@ -1606,44 +1615,50 @@ def get_vline(line_iter):
 
     return None
 
-def parse_makefile_from_strlist(file_lines):
+def parse_makefile_from_src(src):
     # file_lines is an array of Python strings.
     # The newlines must be preserved.
 
+    logger.debug("parse from src=%s", src.name)
+
+    # trigger getting an array of python strings from the source
+    src.load()
+
     # ScannerIterator across the file_lines array (to support pushback of an
     # entire line). 
-    line_iter = ScannerIterator(file_lines)
+    line_iter = ScannerIterator(src.file_lines)
 
     # get_vline() returns a Python <generator> that walks across makefile
     # lines, joining backslashed lines into VirtualLine instances.
-    vline_iter = get_vline(line_iter)
+    vline_iter = vline.get_vline(line_iter)
 
     # The vline_iter will read from line_iter. But line_iter should be at the
     # proper place at all times. In other words, there are two readers from
     # line_iter: this function and tokenize_vline()
     # Recipes need to read from line_iter (different backslash rules).
     # Rest of tokenizer reads from vline_iter.
-    token_list = [ tokenize(vline,vline_iter,line_iter) for vline in vline_iter ] 
+    token_list = [tokenize(vline, vline_iter, line_iter) for vline in vline_iter] 
 
     return Makefile(token_list)
 
-def parse_makefile_string(s):
-    import io
-    with io.StringIO(s) as infile:
-        file_lines = infile.readlines()
-    try : 
-        return parse_makefile_from_strlist(file_lines)
-    except ParseError as err:
-        err.filename = "<string id={0}>".format(id(s)) 
-        print(err,file=sys.stderr)
-        raise
+#def parse_makefile_string(s):
+#    import io
+#    with io.StringIO(s) as infile:
+#        file_lines = infile.readlines()
+#    try : 
+#        return parse_makefile_from_strlist(file_lines)
+#    except ParseError as err:
+#        err.filename = "<string id={0}>".format(id(s)) 
+#        print(err,file=sys.stderr)
+#        raise
 
 def parse_makefile(infilename) : 
-    with open(infilename,'r') as infile :
-        file_lines = infile.readlines()
+
+    src = source.SourceFile(infilename)
 
     try : 
-        return parse_makefile_from_strlist(file_lines)
+        return parse_makefile_from_src(src)
+#        return parse_makefile_from_strlist(file_lines)
     except ParseError as err:
         err.filename = infilename
         print(err,file=sys.stderr)
@@ -1668,11 +1683,10 @@ print("# end makefile")
 
 def execute(makefile):
     # tinkering with how to evaluate
-    from evaluate import evaluate
+    logger.info("Starting execute of %s", id(makefile))
     from symtable import SymbolTable
     symtable = SymbolTable()
     for sym in makefile.token_list:
-        logger.debug("sym=%s", sym)
         s = sym.eval(symtable)
         logger.debug("s=%s", s)
 
@@ -1681,8 +1695,8 @@ def usage():
     print("usage: TODO")
 
 if __name__=='__main__':
-    logging.basicConfig(level=logging.INFO)
-#    logging.basicConfig(level=logging.DEBUG)
+#    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=logging.DEBUG)
 
     if len(sys.argv) < 2 : 
         usage()

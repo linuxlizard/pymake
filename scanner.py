@@ -6,6 +6,9 @@
 
 import sys
 import string
+import logging
+
+logger = logging.getLogger("pymake.scanner")
 
 # require Python 3.x because reasons
 if sys.version_info.major < 3:

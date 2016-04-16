@@ -24,15 +24,14 @@ $(info info returns s="$s")
 a=
 $(info a="$(value a)")
 #a=
-$(if $a,$(error foo),$(info ok))
+#$(if $a,$(error foo),$(info ok))
 #$(if "",$(error foo),$(info ok))
-$(if ,$(error foo),$(info ok))
+#$(if ,$(error foo),$(info ok))
 
 # should resolve to nothing (leading space is significant)
 a=$( info leading space)
 $(info a=>$a<)
-$(if $( info leading space),$(error foo),$(info ok))
+#$(if $( info leading space),$(error foo),$(info ok))
 
-
-all:;@:
+@:;@:
 

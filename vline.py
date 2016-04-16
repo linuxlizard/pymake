@@ -10,10 +10,9 @@
 
 import sys
 import itertools
+import logging
 
-# require Python 3.x because reasons
-if sys.version_info.major < 3:
-    raise Exception("Requires Python 3.x")
+logger = logging.getLogger("pymake.vline")
 
 import hexdump
 from scanner import ScannerIterator
@@ -251,8 +250,8 @@ class VirtualLine(object):
         self.virt_lines = above
 
         above,below = split_2d_array(self.phys_lines, row_to_split, truncate_pos[VCHAR_COL] )
-        print("above=",above)
-        print("below=",below)
+#        print("above=",above)
+#        print("below=",below)
 
         # recipe lines are what we found after the rule was parsed
         recipe_lines = below
@@ -302,8 +301,90 @@ class VirtualLine(object):
         s += "],{0})".format(self.starting_file_line)
         return s
 
+    def get_code(self):
+        return { "filename": "TODO",
+                 "src" : self.phys_lines,
+                 "line": self.starting_file_line}
+
 class RecipeVirtualLine(VirtualLine):
     # This is a block containing recipe(s). Don't collapse around backslashes.
     def _collapse_virtual_line(self):
         pass
+
+def get_vline(line_iter): 
+    # GENERATOR
+    #
+    # line_iter is an iterator that supports pushback
+    # that iterates across an array of strings
+    #
+    # The line_iter can also be passed around to other tokenizers (e.g., the
+    # recipe tokenizer). So this function cannot assume it's the only line_iter
+    # user.
+    #
+    # Each string should be terminated by an EOL.  Handle cases where line is
+    # continued after the EOL by a \+EOL (backslash).
+
+    state_start = 1
+    state_backslash = 2
+    state_tokenize = 3
+    
+    state = state_start 
+
+    # can't use enumerate() because the line_iter will also be used inside
+    # parse_recipes(). 
+    for line in line_iter :
+        # line_iter.idx is the *next* line number counting from zero 
+        line_number = line_iter.idx-1
+#        print("line_num={0} state={1}".format(line_number,state))
+#        print("{0}".format(hexdump.dump(line),end=""))
+
+        if state==state_start : 
+            start_line_stripped = line.strip()
+
+            # ignore blank lines
+            if len(start_line_stripped)==0:
+                continue
+
+            line_list = [ line ] 
+
+            starting_line_number = line_number
+            if is_line_continuation(line):
+                # We found a line with trailing \+eol
+                # We will start collecting the next lines until we see a line
+                # that doesn't end with \+eol
+                state = state_backslash
+            else :
+                # We found a single line of makefile. Tokenize!
+                state = state_tokenize
+
+        elif state==state_backslash : 
+            line_list.append( line )
+            if not is_line_continuation(line):
+                # This is the last line of our continuation block. Create a
+                # virtual block for this array of lines.
+                state = state_tokenize
+
+        else:
+            # wtf?
+            assert 0, state
+
+        if state==state_tokenize: 
+            # is this a line comment?
+            if start_line_stripped.startswith("#") :
+                # ignore
+                state = state_start
+                continue
+
+            # make a virtual line (joins together backslashed lines into one
+            # line visible through an iterator)
+            virt_line = VirtualLine(line_list, starting_line_number)
+            del line_list # detach the ref (VirtualLine keeps the array)
+
+            # caller can also use line_iter
+            yield virt_line
+
+            # back around the horn
+            state = state_start
+
+    return None
 
