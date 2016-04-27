@@ -17,7 +17,7 @@ if sys.version_info.major < 3:
 class ScannerIterator(object):
     # string iterator that allows look ahead and push back
     # can also push/pop state (for deep lookaheads)
-    def __init__(self,data):
+    def __init__(self, data):
         self.data = data
         self.idx = 0
         self.max_idx = len(self.data)
@@ -77,7 +77,7 @@ class ScannerIterator(object):
         # allow chaining
         return self
 
-    def eat(self,s):
+    def eat(self, s):
         # consume a string from the leading part of the data
         # for example:  eat("hello") from "hello, world" will result in 
         # ", world"
@@ -85,7 +85,7 @@ class ScannerIterator(object):
         # Requires the string be found in the data, like string's index method.
         # Requires the string start exactly at the current position.
 
-        errmsg = "\"{0}\" not found in {1}".format(s,self)
+        errmsg = "\"{0}\" not found in {1}".format(s, self)
         for c in s :
             if self.idx >= self.max_idx:
                 # full substring not found so error!

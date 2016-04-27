@@ -8,6 +8,7 @@ logger = logging.getLogger("pymake.functions")
 
 from symbol import VarRef, Literal
 from evaluate import evaluate
+from vline import VCharString
 
 __all__ = [ "Info", 
             "MWarning",
@@ -84,15 +85,16 @@ class Error(PrintingFunction):
 
     def eval(self, symbol_table):
         logger.debug("self=%s", self)
-        for t in self.token_list:
-            print(t)
-            print(t.code)
-        logger.debug("code=%s", self.code.get_code())
-        logger.debug("physcode=%s", self.code.phys_lines)
-        print(dir(self.code))
+
+        t = self.token_list[0]
+        print(type(t), t)
+        print(type(t.string[0]), t.string[0])
+        print(t.string[0].filename)
+        print(t.string[0].pos)
+        print(t.string[0].linenumber)
 
         s = evaluate(self.token_list, symbol_table)
-        print("*** {}. Stop.".format(s), file=self.fh)
+        print("{}:{}: *** {}. Stop.".format(t.string[0].filename, t.string[0].linenumber, s), file=self.fh)
         sys.exit(1)
 
 def split_function_call(s):
@@ -114,7 +116,9 @@ def split_function_call(s):
 
     # Find first whitespace, split the string into string before and after
     # whitespace, throwing away the whitespace itself.
-    for idx, c in enumerate(s):
+    for idx, vchar in enumerate(s):
+        c = vchar.char
+        logger.debug("c=%s state=%d idx=%d", c, state, idx)
         # most common state first
         if state==state_searching:
             # we have seen at least one non-white so now seeking a next
@@ -122,7 +126,7 @@ def split_function_call(s):
             if iswhite(c):
                 # don't return empty string, return None if there is nothing
                 logger.debug("s=%s idx=%d", s, idx)
-                return s[:idx], s[idx+1:] if idx+1<len(s) else None
+                return VCharString(s[:idx]), VCharString(s[idx+1:]) if idx+1<len(s) else None
         elif state==state_init:
             if iswhite(c):
                 # no functions start with whitespace
@@ -141,12 +145,17 @@ _classes = {
 
 def make_function(arglist):
     # do NOT .eval() here!!! will cause side effects. only want to look up the string
-    s = arglist[0].string
-    logger.debug("s=%s", s)
+    vcstr = arglist[0].string
+    # .string will be a VCharString
+    logger.debug("vcstr=%s", vcstr)
     # do NOT modify arglist; is a ref into the AST
 
-    fname, rest = split_function_call(s)
-    assert rest != ""  # catch a weird corner condition error
+    fname, rest = split_function_call(vcstr)
+
+    logger.debug("fname=\"%s\" rest=\"%s\"", fname, rest)
+
+    # convert from array to python string for lookup
+    fname = str(fname)
 
     # allow KeyError to propagate to indicate this is not a function
     fcls = _classes[fname]

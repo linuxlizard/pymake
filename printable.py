@@ -23,5 +23,5 @@ def printable_string(s):
     #
     # Want to be able to round trip the output of the Symbol hierarchy back
     # into valid Python code.
-    return "".join( [ printable_char(c) for c in s ] )
+    return "".join([printable_char(vc.char) for vc in s if not vc.hide])
 

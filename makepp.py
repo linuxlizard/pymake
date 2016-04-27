@@ -2,6 +2,8 @@
 
 # Make Pre Processor!
 #
+# Test code.
+#
 # Run an entire Makefile through the vline pre-processor.
 # Joins backslashed lines into one logical line (whilc preserving physical
 # lines). Removes lines that are only comments (inline comments are preserved).

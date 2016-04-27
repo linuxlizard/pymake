@@ -46,20 +46,24 @@ __all__ = [ "Symbol",
 #
 class Symbol(object):
     # base class of everything we find in the makefile
-    def __init__(self,string=None):
-        # by default, save the token's string 
+    def __init__(self, string=None):
+        # davep 24-Apr-2016 ; using array of vchar for the symbol now 
+        if string:
+            # do you quack like a VCharString?
+            assert string[0].filename, type(string)
+            assert string[0].pos, type(string)
+            assert string[0].char, type(string)
+
+        # by default, save the token's VChars
         # (descendent classes could store something different)
         self.string = string
-
-        # a VirtualLine that holds the code that is compiled to this symbol
-        self.code = None
 
     def __str__(self):
         # create a string such as Literal("all")
         # handle embedded " and ' (with backslashes I guess?)
-        return "{0}(\"{1}\")".format(self.__class__.__name__,printable_string(self.string))
+        return "{0}(\"{1}\")".format(self.__class__.__name__, printable_string(self.string))
 
-    def __eq__(self,rhs):
+    def __eq__(self, rhs):
         # lhs is self
         return self.string==rhs.string
 
@@ -67,21 +71,10 @@ class Symbol(object):
         # create a Makefile from this object
         return self.string
 
-    def set_code(self,vline):
-        # the VirtualLine instance holding the block of text for this symbol
-        assert hasattr(vline,"phys_lines")
-        assert hasattr(vline,"virt_lines")
-
-        logger.debug("set_code() start=%s end=%s",
-                vline.virt_lines[0][0]["pos"],
-                vline.virt_lines[-1][-1]["pos"])
-
-        self.code = vline
-
     @staticmethod
     def validate(token_list):
         for t in token_list : 
-            assert isinstance(t,Symbol), (type(t), t)
+            assert isinstance(t, Symbol), (type(t), t)
 
     def eval(self, symbol_table):
         # children should override
@@ -92,7 +85,7 @@ class Literal(Symbol):
     # A literal found in the token stream. Store as a string.
     
     def eval(self, symbol_table):
-        return self.string
+        return printable_string(self.string)
 
 class Operator(Symbol):
     pass
@@ -109,7 +102,7 @@ class Expression(Symbol):
     # An expression is a list of symbols.
     def __init__(self, token_list ):
         # expect a list/array/tuple (test by calling len())
-        assert len(token_list)>=0, (type(token_list),token_list)
+        assert len(token_list)>=0, (type(token_list), token_list)
 
         self.token_list = token_list
 
@@ -120,22 +113,22 @@ class Expression(Symbol):
     def __str__(self):
         # return a ()'d list of our tokens
         s = "{0}([".format(self.__class__.__name__)
-        s += ",".join( [ str(t) for t in self.token_list ] )
+        s += ", ".join([str(t) for t in self.token_list])
         s += "])"
         return s
 
-    def __getitem__(self,idx):
+    def __getitem__(self, idx):
         return self.token_list[idx]
 
-    def __eq__(self,rhs):
+    def __eq__(self, rhs):
         # lhs is self
         # rhs better be another expression
-        assert isinstance(rhs,Expression),(type(rhs),rhs)
+        assert isinstance(rhs, Expression), (type(rhs), rhs)
 
         if len(self.token_list) != len(rhs.token_list):
             return False
 
-        for tokens in zip(self.token_list,rhs.token_list) :
+        for tokens in zip(self.token_list, rhs.token_list) :
             if tokens[0].__class__ != tokens[1].__class__ : 
                 return False
 
@@ -147,7 +140,7 @@ class Expression(Symbol):
 
     def makefile(self):
         # Build a Makefile string from this rule expression.
-        return "".join( [ t.makefile() for t in self.token_list ] )
+        return "".join([t.makefile() for t in self.token_list])
             
     def __len__(self):
         return len(self.token_list)
@@ -181,24 +174,26 @@ class VarRef(Expression):
         return s
 
 class AssignmentExpression(Expression):
-    def __init__(self,token_list):
-        Expression.__init__(self,token_list)
+    def __init__(self, token_list):
+        Expression.__init__(self, token_list)
         self.sanity()
 
     def eval(self, symbol_table):
         self.sanity()
         lhs = self.token_list[0].eval(symbol_table)
+        logger.debug("assignment lhs=%s", lhs)
         rhs = self.token_list[2].eval(symbol_table)
+        logger.debug("assignment rhs=%s", rhs)
         # TODO handle different styles of assignment
         symbol_table.add(lhs, rhs)
         return None
 
     def sanity(self):
         # AssignmentExpression :=  Expression AssignOp Expression
-        assert len(self.token_list)==3,len(self.token_list)
-        assert isinstance(self.token_list[0],Expression)
-        assert isinstance(self.token_list[1],AssignOp)
-        assert isinstance(self.token_list[2],Expression),(type(self.token_list[2]),)
+        assert len(self.token_list)==3, len(self.token_list)
+        assert isinstance(self.token_list[0], Expression)
+        assert isinstance(self.token_list[1], AssignOp)
+        assert isinstance(self.token_list[2], Expression), (type(self.token_list[2]),)
         
 class RuleExpression(Expression):
     # Rules are tokenized in multiple steps. First the target + prerequisites
@@ -221,15 +216,15 @@ class RuleExpression(Expression):
 
         assert len(token_list)==3 or len(token_list)==4, len(token_list)
 
-        assert isinstance(token_list[0],Expression),(type(token_list[0]),)
-        assert isinstance(token_list[1],RuleOp),(type(token_list[1]),)
+        assert isinstance(token_list[0], Expression), (type(token_list[0]),)
+        assert isinstance(token_list[1], RuleOp), (type(token_list[1]),)
 
-        if isinstance(token_list[2],PrerequisiteList) : 
+        if isinstance(token_list[2], PrerequisiteList) : 
             pass
-        elif isinstance(token_list[2],AssignmentExpression) :
+        elif isinstance(token_list[2], AssignmentExpression) :
             pass 
         else:
-            assert 0,(type(token_list[2]),)
+            assert 0, (type(token_list[2]),)
 
         # If one not provied, start with a default empty recipe list
         # (so this object will always have a RecipeList instance)
@@ -237,14 +232,14 @@ class RuleExpression(Expression):
             self.recipe_list = RecipeList([]) 
             token_list.append( self.recipe_list )
         elif len(token_list)==4 : 
-            assert isinstance(token_list[3],RecipeList),(type(token_list[3]),)
+            assert isinstance(token_list[3], RecipeList), (type(token_list[3]),)
 
-        Expression.__init__(self,token_list)
+        Expression.__init__(self, token_list)
 
     def makefile(self):
         # rule-targets rule-op prereq-list <CR>
         #     recipes
-        assert len(self.token_list)==4,len(self.token_list)
+        assert len(self.token_list)==4, len(self.token_list)
 
         # davep 03-Dec-2014 ; need spaces between targets, no spaces between
         # prerequisites
@@ -267,17 +262,16 @@ class RuleExpression(Expression):
         return s
 
     def add_recipe_list( self, recipe_list ) : 
-        assert isinstance(recipe_list,RecipeList)
+        assert isinstance(recipe_list, RecipeList)
 
-        print("add_recipe_list() rule={0}".format(self.makefile()))
-        print("add_recipe_list() recipe_list={0}".format(str(recipe_list)))
+        logger.debug("add_recipe_list() rule=%s", self.makefile())
+        logger.debug("add_recipe_list() recipe_list=%s", str(recipe_list))
 
         # replace my recipe list with this recipe list
         self.token_list[3] = recipe_list
         self.recipe_list = recipe_list
 
-        print("add_recipe_list()",self.makefile())
-        print("add_recipe_list()",self.recipe_list.code)
+#        logger.debug("add_recipe_list() %s", self.makefile())
 
     def eval(self, symbol_table):
         # TODO
@@ -289,9 +283,9 @@ class PrerequisiteList(Expression):
      #  $()a vs $() a
      # (note the space before 'a')
 
-    def __init__(self,token_list):
+    def __init__(self, token_list):
         for t in token_list :
-            assert isinstance(t,Expression),(type(t,))
+            assert isinstance(t, Expression), (type(t,))
 
         self.token_list = token_list
         
@@ -307,11 +301,11 @@ class Recipe(Expression):
 
 class RecipeList( Expression ) : 
     # A collection of Recipe objects
-    def __init__(self,recipe_list):
+    def __init__(self, recipe_list):
         for r in recipe_list :
-            assert isinstance(r,Recipe),(r,)
+            assert isinstance(r, Recipe), (r,)
         
-        Expression.__init__(self,recipe_list)
+        Expression.__init__(self, recipe_list)
 
     def makefile(self):
         # newline separated, tab prefixed
@@ -327,16 +321,16 @@ class Directive(Symbol):
     # A Directive instance contains an Expression instance ("has a").
     # A Directive instance is _not_ an Expression instance ("not is-a").
 
-    def __init__(self,expression=None):
+    def __init__(self, expression=None):
         if expression : 
-            assert isinstance(expression,Expression) 
+            assert isinstance(expression, Expression) 
 
         super().__init__()
         self.expression = expression
 
     def __str__(self):
         if self.expression : 
-            return "{0}({1})".format(self.__class__.__name__,str(self.expression))
+            return "{0}({1})".format(self.__class__.__name__, str(self.expression))
         else:
             return "{0}()".format(self.__class__.__name__)
 
@@ -349,7 +343,7 @@ class Directive(Symbol):
 class ExportDirective(Directive):
     name = "export"
 
-    def __init__(self,expression=None):
+    def __init__(self, expression=None):
         # TODO 
         # make 3.81 "export define" not allowed ("missing separator")
         # make 3.82 works
@@ -384,7 +378,7 @@ class OverrideDirective(Directive):
         if expression is None :
             # must have an expression (bare override not allowed)
             raise ParseError(description=description)
-        if not isinstance(expression,AssignmentExpression):
+        if not isinstance(expression, AssignmentExpression):
             # must have an assignment expression            
             raise ParseError(description=description)
 
@@ -408,7 +402,7 @@ class LineBlock(Symbol):
     #   LineBlock
     # endef
 
-    def __init__(self,vline_list):
+    def __init__(self, vline_list):
         VirtualLine.validate(vline_list)
         self.vline_list = vline_list
         super().__init__()
@@ -422,7 +416,7 @@ class LineBlock(Symbol):
     def __str__(self):
         # This class contains an array of VirtualLine instances. Need to
         # recreate the appropriate Python code.
-        s = ",".join( [v.python() for v in self.vline_list] )
+        s = ", ".join( [v.python() for v in self.vline_list] )
         return "LineBlock([{0}])".format(s)
 
 class ConditionalBlock(Directive):
@@ -474,7 +468,7 @@ class ConditionalBlock(Directive):
         # now process args
         # Args will be an array of tuples.
         # Each tuple will be:
-        #   (ConditionalExpression,[LineBlock|ConditionalBlock]*)
+        #   (ConditionalExpression, [LineBlock|ConditionalBlock]*)
         # tuple[0] is the ConditionalExpression
         # tuple[1] is an array of zero or more LineBlock/ConditionalBlocks that
         #          represent the contents of the conditional case.
@@ -483,7 +477,7 @@ class ConditionalBlock(Directive):
         
         if conditional_blocks : 
             for block_tuple in conditional_blocks : 
-                cond_expr,cond_block_list = block_tuple
+                cond_expr, cond_block_list = block_tuple
                 self.add_conditional( cond_expr )
                 for b in cond_block_list : 
                     self.add_block( b )
@@ -501,12 +495,12 @@ class ConditionalBlock(Directive):
         
     def add_conditional( self, cond_expr ) :
         assert len(self.cond_exprs) == len(self.cond_blocks)
-        assert isinstance(cond_expr, ConditionalDirective), (type(cond_expr),)
+        assert isinstance(cond_expr, ConditionalDirective), (type(cond_expr), )
         self.cond_exprs.append(cond_expr)
         self.cond_blocks.append( [] )
 
     def add_block( self, block ):
-        assert isinstance(block,(ConditionalBlock,LineBlock)),(type(block),)
+        assert isinstance(block, (ConditionalBlock, LineBlock)), (type(block), )
         self.cond_blocks[-1].append(block)
 
     def start_else( self ) : 
@@ -524,13 +518,13 @@ class ConditionalBlock(Directive):
         # jump through weird hoop to add tailing \n on ConditionalBlock sub-blocks
         # (my rule is the final \n is caller's responsibility)
         def prn(b):
-            if isinstance(b,ConditionalBlock) :
+            if isinstance(b, ConditionalBlock) :
                 return b.makefile()+"\n"
             else:
                 return b.makefile()
 
         # if/elseif blocks
-        for expr,block in zip(self.cond_exprs,self.cond_blocks):
+        for expr, block in zip(self.cond_exprs, self.cond_blocks):
             s += e + expr.makefile()+"\n"
             s += "".join([prn(b) for b in block])
             e = "else "
@@ -549,20 +543,20 @@ class ConditionalBlock(Directive):
         def blocklist_str( blocklist ):
             # connect the (ConditionalBlock|LineBlock) together into an array
             return "[" + \
-                       ",".join([str(b) for b in blocklist]) +\
+                       ", ".join([str(b) for b in blocklist]) +\
                    "]"
 
         # array of tuples
         #   tuple[0] is ConditionalExpression
         #   tuple[1] is array of (LineBlock|ConditionalBlock)
         s += "["
-        s += ",".join( [ "("+str(expr)+","+blocklist_str(blocklist)+")" for expr,blocklist in zip(self.cond_exprs,self.cond_blocks) ] )
+        s += ", ".join( [ "("+str(expr)+", "+blocklist_str(blocklist)+")" for expr, blocklist in zip(self.cond_exprs, self.cond_blocks) ] )
         s += "]"
 
         # TODO add else case
         if len(self.cond_blocks) > len(self.cond_exprs):
             # have an else
-            s += "," + blocklist_str(self.cond_blocks[-1])
+            s += ", " + blocklist_str(self.cond_blocks[-1])
 
         s += ")"
         return s
@@ -585,19 +579,19 @@ class IfneqDirective(ConditionalDirective):
 class DefineDirective(Directive):
     name = "define"
 
-    def __init__(self,macro_name,line_block=None):
+    def __init__(self, macro_name, line_block=None):
         super().__init__()
         self.string = macro_name
-        assert isinstance(macro_name,str),type(macro_name)
+        assert isinstance(macro_name, str), type(macro_name)
 
         self.line_block = line_block if line_block else LineBlock([])
 
     def __str__(self):
-        return "{0}(\"{1}\",{2})".format(self.__class__.__name__,
+        return "{0}(\"{1}\", {2})".format(self.__class__.__name__,
                         self.string,
                         str(self.line_block))
 
-    def set_block(self,line_block):
+    def set_block(self, line_block):
         self.line_block = line_block
 
     def makefile(self):
@@ -610,13 +604,13 @@ class Makefile(object) :
     # A collection of statements, directives, rules.
     # Note this class is separate from the Symbol hierarchy.
 
-    def __init__(self,token_list):
+    def __init__(self, token_list):
         Symbol.validate(token_list)
         self.token_list = token_list
 
     def __str__(self):
-        return "Makefile([{0}])".format(",\n".join( [ str(block) for block in self.token_list ] ) )
-#        return "Makefile([{0}])".format(",\n".join( [ "{0}".format(block) for block in self.token_list ] ) )
+        return "Makefile([{0}])".format(", \n".join( [ str(block) for block in self.token_list ] ) )
+#        return "Makefile([{0}])".format(", \n".join( [ "{0}".format(block) for block in self.token_list ] ) )
 
     def makefile(self):
         s = "\n".join( [ "{0}".format(token.makefile()) for token in self.token_list ] )

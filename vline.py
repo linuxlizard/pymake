@@ -45,51 +45,61 @@ def is_line_continuation(line):
 # using a class for the virtual char so can interchange string with VirtualLine
 # in ScannerIterator
 class VChar(object):
-    def __init__(self, char, pos):
+    def __init__(self, char, pos, filename):
         self.char = char
+        # VCHAR_ROW, VCHAR_COL index into pos
         self.pos = pos
+
+        # show/hide this char (e.g., hide if in a comment or backslash with
+        # weird whitespace)
         self.hide = False
 
-    def __getitem__(self, key):
-        if key == "char":
-            return self.char
-        if key == "pos":
-            return self.pos
-        if key == "hide":
-            return self.hide
-        raise KeyError(key)
+        self.filename = filename
 
-    def __setitem__(self, key, value):
-        if key == "char":
-            assert isinstance(value, str), value
-            self.char = value
-        elif key == "pos":
-            assert isinstance(value, int), value
-            self.pos = value
-        elif key == "hide":
-            assert isinstance(value, bool), value
-            self.hide = value
-        else:
-            raise KeyError(key)
+    @property
+    def linenumber(self):
+        return self.pos[VCHAR_ROW]+1
 
     def __str__(self):
-        # created this class pretty much just for this method, e.g.,
-        #   while str(self.data[self.idx]) in string.whitespace :
         return self.char
 
-    @staticmethod
-    def string_from_vchars(vchar_list):
-        # convert array of vchar into a Python string
-        return "".join([v.char for v in vchar_list])
 
+class VCharString(object):
+    # # davep 24-Apr-2016 ;  
+    # container of vchars; quack like a Python string
+    def __init__(self, arg=None):
+        self.chars = list(arg) if arg else []
 
+    def __str__(self):
+        return "".join([str(c) for c in self.chars if not c.hide])
+
+    def __add__(self, vchar):
+        assert vchar.pos
+        assert vchar.filename
+        self.chars.append(vchar)
+        return self
+
+    def __len__(self):
+        return len(self.chars)
+
+    def __getitem__(self, idx):
+        return self.chars[idx]
+
+    def rstrip(self):
+        while self.chars[-1].char in whitespace:
+            self.chars.pop()
+        return self
+    
+        
 class VirtualLine(object):
-
-    def __init__(self, phys_lines_list, starts_at_file_line):
+    def __init__(self, phys_lines_list, filename, starts_at_file_line):
         # need an array of strings (2-D array of characters)
         assert isinstance(phys_lines_list, list)
         for p in phys_lines_list:
             assert isinstance(p, str), type(p)
+
+        # where do I come from?
+        self.filename = filename
 
         # save a pristine copy of the original list
         self.phys_lines = phys_lines_list
@@ -99,6 +109,7 @@ class VirtualLine(object):
 
         # create a single array of all the characters with their position in
         # the 2-d array
+        self.virt_lines = []
         self._make_virtual_line()
 
         # Based on the \ line continuation rules, collapse 2-D array into a new
@@ -109,18 +120,16 @@ class VirtualLine(object):
         # Create a 2-D array of vchar (hash) from our 2-D array (array of
         # strings).
         #
-        # The new 2-D array will be the characters with their row,col in the
+        # The new 2-D array will be the characters with their row, col in the
         # 2-D array.
-
-        self.virt_lines = []
         for row_idx, line in enumerate(self.phys_lines):
             vline = []
             for col_idx, char in enumerate(line):
                 # char is the original character
-                # pos is the (row,col) of the char in the file
+                # pos is the (row, col) of the char in the file
                 # hide indicates a hidden character (don't feed to the
                 # tokenizer, don't highlight in View)
-                vchar = VChar(char,(row_idx+self.starting_file_line,col_idx))
+                vchar = VChar(char, (row_idx+self.starting_file_line, col_idx), self.filename)
                 vline.append(vchar)
             self.virt_lines.append(vline)
 
@@ -151,57 +160,57 @@ class VirtualLine(object):
         # becomes "this is a test"
         #
         while row < len(self.virt_lines)-1 :
-#            print("row={0} {1}".format(row, hexdump.dump(self.phys_lines[row],16)),end="")
+#            print("row={0} {1}".format(row, hexdump.dump(self.phys_lines[row], 16)), end="")
 
             # start at eol
             col = len(self.virt_lines[row])-1
 
             # kill EOL
-            assert self.virt_lines[row][col]["char"] in eol, (row,col,self.virt_lines[row][col]["char"])
-            self.virt_lines[row][col]["hide"] = True
+            assert self.virt_lines[row][col].char in eol, (row, col, self.virt_lines[row][col].char)
+            self.virt_lines[row][col].hide = True
             col -= 1
 
             # replace \ with <space>
-            assert self.virt_lines[row][col]["char"]=='\\', (row,col,self.virt_lines[row][col]["char"])
-            self.virt_lines[row][col]["char"] = ' '
+            assert self.virt_lines[row][col].char=='\\', (row, col, self.virt_lines[row][col].char)
+            self.virt_lines[row][col].char = ' '
 
             # are we now a blank line?
-            if self.virt_lines[row][col-1]["hide"] :
-                self.virt_lines[row][col]["hide"] = True
+            if self.virt_lines[row][col-1].hide :
+                self.virt_lines[row][col].hide = True
 
             col -= 1
 
             # eat whitespace backwards
-            while col >= 0 and self.virt_lines[row][col]["char"] in whitespace :
-                self.virt_lines[row][col]["hide"] = True
+            while col >= 0 and self.virt_lines[row][col].char in whitespace :
+                self.virt_lines[row][col].hide = True
                 col -= 1
 
             # eat whitespace forward on next line
             row += 1
             col = 0
-            while col < len(self.virt_lines[row]) and self.virt_lines[row][col]["char"] in whitespace :
-                self.virt_lines[row][col]["hide"] = True
+            while col < len(self.virt_lines[row]) and self.virt_lines[row][col].char in whitespace :
+                self.virt_lines[row][col].hide = True
                 col += 1
 
         # Last char of the last line should be an EOL. There should be no
         # backslash on this last line.
         col = len(self.virt_lines[row])-1
-        assert self.virt_lines[row][col]["char"] in eol, (row,col,self.virt_lines[row][col]["char"])
+        assert self.virt_lines[row][col].char in eol, (row, col, self.virt_lines[row][col].char)
         col -= 1
-        assert self.virt_lines[row][col]["char"] != '\\', (row,col,self.virt_lines[row][col]["char"])
+        assert self.virt_lines[row][col].char != '\\', (row, col, self.virt_lines[row][col].char)
 
     def __str__(self):
         # build string from the visible characters
         i = itertools.chain(*self.virt_lines)
-        return "".join( [ c["char"] for c in i if not c["hide"] ] )
+        return "".join( [ c.char for c in i if not c.hide ] )
 
 #    def __iter__(self):
 #        # This iterator we will feed the characters that are still visible to
 #        # the tokenizer. Using ScannerIterator so we have pushback. The
 #        # itertools.chain() joins all the virt_lines together into one
 #        # contiguous array
-#        self.virt_iterator = ScannerIterator( [ c for c in itertools.chain(*self.virt_lines) if not c["hide"] ] )
-#        setattr(self.virt_iterator,"starting_file_line",self.starting_file_line)
+#        self.virt_iterator = ScannerIterator( [ c for c in itertools.chain(*self.virt_lines) if not c.hide ] )
+#        setattr(self.virt_iterator, "starting_file_line", self.starting_file_line)
 #        print("VirtualLine.__iter__ self.virt_iterator={0}".format(self.virt_iterator))
 #        return self.virt_iterator
 
@@ -210,11 +219,12 @@ class VirtualLine(object):
         # the tokenizer. Using ScannerIterator so we have pushback. The
         # itertools.chain() joins all the virt_lines together into one
         # contiguous array
-        virt_iterator = ScannerIterator( [ c for c in itertools.chain(*self.virt_lines) if not c["hide"] ] )
-        setattr(virt_iterator,"starting_file_line",self.starting_file_line)
+        virt_iterator = ScannerIterator( [ c for c in itertools.chain(*self.virt_lines) if not c.hide ] )
+        # davep 22-Apr-2016 ; monkey patching smells funny 
+#        setattr(virt_iterator, "starting_file_line", self.starting_file_line)
         return virt_iterator
 
-    def truncate(self,truncate_pos):
+    def truncate(self, truncate_pos):
         # Created to allow the parser to cut off a block at a token boundary.
         # Need to parse something like:
         # foo : bar ; baz
@@ -237,21 +247,21 @@ class VirtualLine(object):
                 above.extend([left])
             below = [right] + below
 
-            return (above,below)
+            return (above, below)
 
         # split the recipe from the rule
-        first_line_pos = self.virt_lines[0][0]["pos"]
+        first_line_pos = self.virt_lines[0][0].pos
         row_to_split = truncate_pos[VCHAR_ROW] - first_line_pos[VCHAR_ROW]
 
-        above,below = split_2d_array(self.virt_lines, row_to_split, truncate_pos[VCHAR_COL] )
-#        print("above=","".join([c["char"] for c in itertools.chain(*above) if not c["hide"]]))
-#        print("below=","".join([c["char"] for c in itertools.chain(*below) if not c["hide"]]))
+        above, below = split_2d_array(self.virt_lines, row_to_split, truncate_pos[VCHAR_COL] )
+#        print("above=", "".join([c.char for c in itertools.chain(*above) if not c.hide]))
+#        print("below=", "".join([c.char for c in itertools.chain(*below) if not c.hide]))
 
         self.virt_lines = above
 
-        above,below = split_2d_array(self.phys_lines, row_to_split, truncate_pos[VCHAR_COL] )
-#        print("above=",above)
-#        print("below=",below)
+        above, below = split_2d_array(self.phys_lines, row_to_split, truncate_pos[VCHAR_COL] )
+#        print("above=", above)
+#        print("below=", below)
 
         # recipe lines are what we found after the rule was parsed
         recipe_lines = below
@@ -271,22 +281,22 @@ class VirtualLine(object):
         return self.virt_lines[0][0].pos
 
 #    @classmethod
-#    def from_vchar_list(cls,vchar_list,starting_file_line):
+#    def from_vchar_list(cls, vchar_list, starting_file_line):
 #        # create a VirtualLine instance from an array of VChar instances
-#        vline = cls([],starts_at_file_line)
+#        vline = cls([], starts_at_file_line)
 #        TODO  -- not sure I need this and it looks like it'll be very hard so
 #        leave it out for now
 
     @classmethod
-    def from_string(cls,python_string):
+    def from_string(cls, python_string):
         # create a VirtualLine instance from a single string (convenience
         # method for test/debug code)
-        return cls([python_string],0)
+        return cls([python_string], 0)
 
     @staticmethod
     def validate(vline_list):
         for v in vline_list : 
-            assert isinstance(v,VirtualLine), (type(v), v)
+            assert isinstance(v, VirtualLine), (type(v), v)
 
     def get_phys_line(self):
         # rebuild a single physical line (needed when tokenizing recipes)
@@ -297,12 +307,12 @@ class VirtualLine(object):
         # Used in str() methods from Symbol class hierarchy to round trip the
         # code.
         s = "VirtualLine(["
-        s += ",".join( ["\"{0}\"".format(printable_string(p)) for p in self.phys_lines] )
-        s += "],{0})".format(self.starting_file_line)
+        s += ", ".join( ["\"{0}\"".format(printable_string(p)) for p in self.phys_lines] )
+        s += "], {}, {})".format(self.filename, self.starting_file_line)
         return s
 
     def get_code(self):
-        return { "filename": "TODO",
+        return { "filename": self.filename,
                  "src" : self.phys_lines,
                  "line": self.starting_file_line}
 
@@ -311,7 +321,7 @@ class RecipeVirtualLine(VirtualLine):
     def _collapse_virtual_line(self):
         pass
 
-def get_vline(line_iter): 
+def get_vline(filename, line_iter): 
     # GENERATOR
     #
     # line_iter is an iterator that supports pushback
@@ -331,12 +341,12 @@ def get_vline(line_iter):
     state = state_start 
 
     # can't use enumerate() because the line_iter will also be used inside
-    # parse_recipes(). 
+    # parse_recipes() and the idx can change with push_back
     for line in line_iter :
         # line_iter.idx is the *next* line number counting from zero 
-        line_number = line_iter.idx-1
-#        print("line_num={0} state={1}".format(line_number,state))
-#        print("{0}".format(hexdump.dump(line),end=""))
+        starting_line_number = line_iter.idx-1
+#        print("line_num={0} state={1}".format(line_number, state))
+#        print("{0}".format(hexdump.dump(line), end=""))
 
         if state==state_start : 
             start_line_stripped = line.strip()
@@ -347,7 +357,6 @@ def get_vline(line_iter):
 
             line_list = [ line ] 
 
-            starting_line_number = line_number
             if is_line_continuation(line):
                 # We found a line with trailing \+eol
                 # We will start collecting the next lines until we see a line
@@ -376,8 +385,8 @@ def get_vline(line_iter):
                 continue
 
             # make a virtual line (joins together backslashed lines into one
-            # line visible through an iterator)
-            virt_line = VirtualLine(line_list, starting_line_number)
+            # line visible through a character by character iterator)
+            virt_line = VirtualLine(line_list, filename, starting_line_number)
             del line_list # detach the ref (VirtualLine keeps the array)
 
             # caller can also use line_iter

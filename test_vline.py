@@ -24,13 +24,13 @@ def test1(infilename):
     src = SourceFile(infilename)
     src.load()
     scanner = ScannerIterator(src.file_lines)
-    vline_iter = get_vline(scanner)
+    vline_iter = get_vline(infilename, scanner)
 
     for vline in vline_iter:
         logger.info("@@%d >>%s<<", vline.starting_file_line, vline)
 
 def main():
-    for f in sys.argv[1:]
+    for f in sys.argv[1:]:
         test1(f)
 
 if __name__=='__main__':

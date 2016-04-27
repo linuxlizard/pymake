@@ -13,7 +13,7 @@ class SourceFile(Source):
         super().__init__(filename)
 
     def load(self):
-        with open(self.name,'r') as infile :
+        with open(self.name, 'r') as infile :
             self.file_lines = infile.readlines()
 
 # TODO read from io.StringIO ?
