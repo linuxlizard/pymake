@@ -11,248 +11,248 @@ import run_tests
 run = run_tests.run_makefile_string
 
 def round_trip(cond_block,expected_makefile):
-    s = str(cond_block)
-    print("s=",s)
-    m2=eval(s).makefile()
-    print(m2)
-    assert m2==expected_makefile,m2
-    print(m2)
+	s = str(cond_block)
+	print("s=",s)
+	m2=eval(s).makefile()
+	print(m2)
+	assert m2==expected_makefile,m2
+	print(m2)
 
 def test1():
-    # ifdef FOO 
-    # endif
-    e = Expression([Literal("FOO")])
-    b = ConditionalBlock()
-    c = IfdefDirective(e)
-    b.add_conditional(c)
-    print(b)
-    m = b.makefile()
-    print(m)
-    assert m=='ifdef FOO\nendif'
+	# ifdef FOO 
+	# endif
+	e = Expression([Literal("FOO")])
+	b = ConditionalBlock()
+	c = IfdefDirective(e)
+	b.add_conditional(c)
+	print(b)
+	m = b.makefile()
+	print(m)
+	assert m=='ifdef FOO\nendif'
 
-    s = str(b)
-    print("s=",s)
-    m2=eval(s).makefile()
-    print(m2)
-    assert m2=='ifdef FOO\nendif',m2
-    print(m2)
+	s = str(b)
+	print("s=",s)
+	m2=eval(s).makefile()
+	print(m2)
+	assert m2=='ifdef FOO\nendif',m2
+	print(m2)
 
 def test2():
-    # ifdef FOO
-    # a=b
-    # endif
-    e = Expression([Literal("FOO")])
-    v = VirtualLine.from_string("a=b\n")
-    lb = LineBlock([v])
-    c = IfdefDirective(e)
-    b = ConditionalBlock()
-    b.add_conditional(c)
-    b.add_block(lb)
-    print(b)
-    m = b.makefile()
-    print(m)
-    assert m=='ifdef FOO\na=b\nendif',m
+	# ifdef FOO
+	# a=b
+	# endif
+	e = Expression([Literal("FOO")])
+	v = VirtualLine.from_string("a=b\n")
+	lb = LineBlock([v])
+	c = IfdefDirective(e)
+	b = ConditionalBlock()
+	b.add_conditional(c)
+	b.add_block(lb)
+	print(b)
+	m = b.makefile()
+	print(m)
+	assert m=='ifdef FOO\na=b\nendif',m
 
-    s = str(b)
-    print("s=",s)
-    m2=eval(s).makefile()
-    print(m2)
-    assert m2=='ifdef FOO\na=b\nendif',m2
-    print(m2)
+	s = str(b)
+	print("s=",s)
+	m2=eval(s).makefile()
+	print(m2)
+	assert m2=='ifdef FOO\na=b\nendif',m2
+	print(m2)
 
 def test3():
-    # ifdef FOO
-    # a=b
-    # else
-    # a=d
-    # endif
-    e = Expression([Literal("FOO")])
-    c = IfdefDirective(e)
-    v1 = VirtualLine.from_string("a=b\n")
-    v2 = VirtualLine.from_string("a=d\n")
-    lb1 = LineBlock([v1])
-    lb2 = LineBlock([v2])
-    b = ConditionalBlock()
-    b.add_conditional(c)
-    b.add_block(lb1)
-    b.start_else()
-    b.add_block(lb2)
-    print(b)
-    m = b.makefile()
-    print(m)
-    expect = 'ifdef FOO\na=b\nelse\na=d\nendif'
-    assert m==expect,m
-    round_trip(b,expect)
+	# ifdef FOO
+	# a=b
+	# else
+	# a=d
+	# endif
+	e = Expression([Literal("FOO")])
+	c = IfdefDirective(e)
+	v1 = VirtualLine.from_string("a=b\n")
+	v2 = VirtualLine.from_string("a=d\n")
+	lb1 = LineBlock([v1])
+	lb2 = LineBlock([v2])
+	b = ConditionalBlock()
+	b.add_conditional(c)
+	b.add_block(lb1)
+	b.start_else()
+	b.add_block(lb2)
+	print(b)
+	m = b.makefile()
+	print(m)
+	expect = 'ifdef FOO\na=b\nelse\na=d\nendif'
+	assert m==expect,m
+	round_trip(b,expect)
 
 def test4():
-    # ifdef FOO
-    # a=b
-    # else
-    # endif
-    e = Expression([Literal("FOO")])
-    v1 = VirtualLine.from_string("a=b\n")
-    lb1 = LineBlock([v1])
-    c = IfdefDirective(e)
-    b = ConditionalBlock()
-    b.add_conditional(c)
-    b.add_block(lb1)
-    b.start_else()
-    print(b)
-    m = b.makefile()
-    print(m)
-    expect = 'ifdef FOO\na=b\nelse\nendif'
-    assert m==expect,m
-    round_trip(b,expect)
+	# ifdef FOO
+	# a=b
+	# else
+	# endif
+	e = Expression([Literal("FOO")])
+	v1 = VirtualLine.from_string("a=b\n")
+	lb1 = LineBlock([v1])
+	c = IfdefDirective(e)
+	b = ConditionalBlock()
+	b.add_conditional(c)
+	b.add_block(lb1)
+	b.start_else()
+	print(b)
+	m = b.makefile()
+	print(m)
+	expect = 'ifdef FOO\na=b\nelse\nendif'
+	assert m==expect,m
+	round_trip(b,expect)
 
 def test5():
-    # ifdef FOO
-    # else
-    # a=d
-    # endif
-    e = Expression([Literal("FOO")])
-    v2 = VirtualLine.from_string("a=d\n")
-    lb1 = LineBlock([v2])
-    c = IfdefDirective(e)
-    b = ConditionalBlock()
-    b.add_conditional(c)
-    b.start_else()
-    b.add_block(lb1)
-    print(b)
-    m = b.makefile()
-    print(m)
-    expect='ifdef FOO\nelse\na=d\nendif'
-    assert m==expect,m
-    round_trip(b,expect)
+	# ifdef FOO
+	# else
+	# a=d
+	# endif
+	e = Expression([Literal("FOO")])
+	v2 = VirtualLine.from_string("a=d\n")
+	lb1 = LineBlock([v2])
+	c = IfdefDirective(e)
+	b = ConditionalBlock()
+	b.add_conditional(c)
+	b.start_else()
+	b.add_block(lb1)
+	print(b)
+	m = b.makefile()
+	print(m)
+	expect='ifdef FOO\nelse\na=d\nendif'
+	assert m==expect,m
+	round_trip(b,expect)
 
 def test6():
-    # ifdef FOO
-    # a=b
-    # c=d
-    # e=f
-    # endif
-    e = Expression([Literal("FOO")])
-    v = [ VirtualLine.from_string("a=b\n"),
-          VirtualLine.from_string("c=d\n"),
-          VirtualLine.from_string("e=f\n") 
-        ]
-    lb = LineBlock(v)
-    c = IfdefDirective(e)
-    b = ConditionalBlock()
-    b.add_conditional(c)
-    b.add_block(lb)
-    print(b)
-    m = b.makefile()
-    print(m)
-    expect='ifdef FOO\na=b\nc=d\ne=f\nendif'
-    assert m==expect,m
-    round_trip(b,expect)
+	# ifdef FOO
+	# a=b
+	# c=d
+	# e=f
+	# endif
+	e = Expression([Literal("FOO")])
+	v = [ VirtualLine.from_string("a=b\n"),
+		  VirtualLine.from_string("c=d\n"),
+		  VirtualLine.from_string("e=f\n") 
+		]
+	lb = LineBlock(v)
+	c = IfdefDirective(e)
+	b = ConditionalBlock()
+	b.add_conditional(c)
+	b.add_block(lb)
+	print(b)
+	m = b.makefile()
+	print(m)
+	expect='ifdef FOO\na=b\nc=d\ne=f\nendif'
+	assert m==expect,m
+	round_trip(b,expect)
 
 def test7():
-    s = """\
+	s = """\
 ifdef FOO
 a=b
 else#foobarbaz
 a=c
 endif
 """
-    run(s,"ifdef FOO\na=b\nelse\na=c\nendif")
+	run(s,"ifdef FOO\na=b\nelse\na=c\nendif")
 
 def test8():
-    s = """\
+	s = """\
 ifdef FOO
-    ifdef BAR
-        ifdef BAZ
-        endif
-    endif
+	ifdef BAR
+		ifdef BAZ
+		endif
+	endif
 endif
 """
-    r = """\
+	r = """\
 ifdef FOO
 ifdef BAR
 ifdef BAZ
 endif
 endif
 endif"""
-    run(s,r)
+	run(s,r)
 
 def test9():
-    s = """\
+	s = """\
 ifdef NOTDEF
-    this is a bunch of crap
-    that makefile will ignore
-    ifeq ($a,$b)
-        this should still be ignored
-    endif
+	this is a bunch of crap
+	that makefile will ignore
+	ifeq ($a,$b)
+		this should still be ignored
+	endif
 endif
 """
-    r = """\
+	r = """\
 ifdef NOTDEF
-    this is a bunch of crap
-    that makefile will ignore
+	this is a bunch of crap
+	that makefile will ignore
 ifeq ($(a),$(b))
-        this should still be ignored
+		this should still be ignored
 endif
 endif"""
-    run(s,r)
+	run(s,r)
 
 def test10():
-    s="""\
+	s="""\
 ifdef FOO
 else
-    ifdef BAR
-    endif
+	ifdef BAR
+	endif
 endif
 """
-    r="""\
+	r="""\
 ifdef FOO
 else
 ifdef BAR
 endif
 endif"""
-    run(s,r)
+	run(s,r)
 
 def test11():
-    s="""\
+	s="""\
 ifdef FOO
-    a=b foo
-    b=c foo
-    d=e foo
+	a=b foo
+	b=c foo
+	d=e foo
 else
-    ifdef XYZ
+	ifdef XYZ
 
-    else ifdef BAR
-        e=f bar
-        f=g bar
-        g=h bar
-        ifdef BAZ
-            h=i baz
-            i=j baz
-            j=k baz
-        else
-        endif
-    else ifdef BAZ
-        ifndef QQQQ
-        else
-        endif
-    else
-    endif
+	else ifdef BAR
+		e=f bar
+		f=g bar
+		g=h bar
+		ifdef BAZ
+			h=i baz
+			i=j baz
+			j=k baz
+		else
+		endif
+	else ifdef BAZ
+		ifndef QQQQ
+		else
+		endif
+	else
+	endif
 endif
 """
-    r="""\
+	r="""\
 ifdef FOO
-    a=b foo
-    b=c foo
-    d=e foo
+	a=b foo
+	b=c foo
+	d=e foo
 else
 ifdef XYZ
 else ifdef BAR
-        e=f bar
-        f=g bar
-        g=h bar
+		e=f bar
+		f=g bar
+		g=h bar
 ifdef BAZ
-            h=i baz
-            i=j baz
-            j=k baz
+			h=i baz
+			i=j baz
+			j=k baz
 else
 endif
 else ifdef BAZ
@@ -262,11 +262,11 @@ endif
 else
 endif
 endif"""
-    run(s,r)
+	run(s,r)
 
 if __name__=='__main__':
-    from run_tests import runlocals
-    runlocals(locals())
-#    test9()
+	from run_tests import runlocals
+	runlocals(locals())
+#	test9()
 
 

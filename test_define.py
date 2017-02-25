@@ -7,14 +7,14 @@ import run_tests
 run = run_tests.run_makefile_string
 
 def test1():
-    s = """\
+	s = """\
 define foo
-    foo foo foo
+	foo foo foo
 endef
 """
-    run(s,s.strip())
+	run(s,s.strip())
 
 if __name__=='__main__':
-    from run_tests import runlocals
-    runlocals(locals())
+	from run_tests import runlocals
+	runlocals(locals())
 

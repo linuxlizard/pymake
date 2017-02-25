@@ -2,8 +2,9 @@
 #
 # davep 07-Oct-2014 ;
 
-#$(info hello, world)
+$(info hello, world)
 
+# legal (see "missing separator" notes below)
 $(if "$(FOO)",$(BAR),$(BAZ))
 
 $(info hello, world)
@@ -12,21 +13,27 @@ $(info $(.FEATURES))
 
 $(warning warning warning danger danger!)
 
-#$(sort foo bar lose)
+foo=$(sort foo bar lose)
 
 #$(foreach prog
 
-#$(subst from,to,text)
+feet=$(subst ee,EE,feet in the street)
 
+# NOT LEGAL -- "*** missing separator.  Stop."
+# Seems to require a LHS. 
+#$(sort foo bar lose)
 #$(or a,b,c)
 #$(and a,b,c)
+# Many more; need to have tests for all of them.
 
-#$(dir ./tests)
+a=$(or a,b,c)
+b=$(and a,b,c)
 
-#$(shell ls)
+c=$(dir ./tests)
 
-#$(join a b,.c .o)
+d=$(shell ls)
+
+e=$(join a b,.c .o)
 
 # need to have one target to prevent make from complaining
-all:;@:
-
+@:;@:
