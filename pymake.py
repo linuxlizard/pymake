@@ -383,9 +383,10 @@ def tokenize_statement_LHS(vchar_scanner, separators=""):
 				# maybe assignment ?= += !=
 				# cheat and peekahead
 				if vchar_scanner.lookahead().char == '=':
-					vchar_scanner.next()
+					eq = vchar_scanner.next()
+					assign = AssignOp(vline.VCharString([vchar, eq]))
 					token_list.append(Literal(token.rstrip()))
-					return Expression(token_list),AssignOp(c+'=')
+					return Expression(token_list), assign
 				else:
 					token += vchar
 
@@ -874,12 +875,10 @@ def tokenize_variable_ref(vchar_scanner):
 
 				# do we have a function call?
 				try:
-					fn = functions.make_function(token_list)
+					return functions.make_function(token_list)
 				except KeyError:
 					# nope, not a function call
 					return VarRef(token_list)
-				else:
-					return fn
 				# done tokenizing the var ref
 
 			elif c=='$':
@@ -907,7 +906,7 @@ def tokenize_variable_ref(vchar_scanner):
 				# should not get here
 			assert 0, state
 
-	raise ParseError(pos=vchar.pos)
+	raise ParseError(pos=vchar.pos, description="VarRef not closed")
 
 #@depth_checker
 def tokenize_recipe(vchar_scanner):
@@ -1617,14 +1616,48 @@ print("# end makefile")
 		print(dumpmakefile, file=outfile)
 		
 
+def find_pos(tok):
+	# recursively descend into a token tree to find a token with a non-null vcharstring
+	# which will show the starting filename/position of the token
+	logger.debug("find_pos tok=%s", tok)
+
+	# If the tok has a token_list, it's an Expression
+	# otherwise, is a Symbol.
+	#
+	# Expressions contain list of Symbols (although an Expression is also
+	# itself a Symbol). Expression does not have a string (VCharString)
+	# associated with it but contains the Symbols that do.
+	try:
+		for t in tok.token_list:
+			find_pos(t)
+	except AttributeError:
+		# we found a Symbol
+		for c in tok.string:
+			logger.debug("%s %s %s", c, c.pos, c.filename)
+
 def execute(makefile):
 	# tinkering with how to evaluate
 	logger.info("Starting execute of %s", id(makefile))
 	from symtable import SymbolTable
 	symtable = SymbolTable()
-	for sym in makefile.token_list:
-		s = sym.eval(symtable)
-		logger.debug("s=%s", s)
+	for tok in makefile.token_list:
+		try:
+			s = tok.eval(symtable)
+			logger.debug("execute result s=\"%s\"", s)
+		except MakeError:
+			# let ParseError propagate
+			raise
+		except:
+			# My code crashed. For shame!
+			logger.error("eval exception during token makefile=%s", tok.makefile())
+			logger.error("eval exception during token string=%s", tok.string)
+			logger.error("eval exception during token token_list=%s", tok.token_list)
+			for t in tok.token_list:
+				logger.error("token=%s string=%s", t, t.string)
+			find_pos(tok)
+			logger.exception("INTERNAL ERROR")
+#			logger.error("eval failed tok file=%s pos=%s", tok.
+			raise
 
 def usage():
 	# TODO
@@ -1642,14 +1675,15 @@ if __name__=='__main__':
 	try : 
 		makefile = parse_makefile(infilename)
 	except ParseError:
+		# TODO dump lots of lovely useful information about the failure.
 		sys.exit(1)
 
 	# the following is just test code to printf the results. 
-#	print("makefile=", ",\\\n".join( [ "{0}".format(block) for block in makefile ] ) )
-	print("makefile={0}".format(makefile))
+#	print("makefile={0}".format(makefile))
 
-	print("# start makefile")
-	print(makefile.makefile())
-	print("# end makefile")
+	# regenerate the makefile
+#	print("# start makefile")
+#	print(makefile.makefile())
+#	print("# end makefile")
 
 	execute(makefile)

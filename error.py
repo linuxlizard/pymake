@@ -1,15 +1,21 @@
 #!/usr/bin/env python3
 
-__all__ = [ "ParseError",
+__all__ = [ "MakeError",
+			"ParseError",
 			"NestedTooDeep",
-			"TODO",
+			"Unimplemented",
+			"VersionError",
 		  ]
 
 # test/debug flags
 # assert() in ParseError() constructor TODO make this a command line arg
-assert_on_parse_error = False  
+assert_on_parse_error = False
 
-class ParseError(Exception):
+class MakeError(Exception):
+	# base class of all pymake exceptions
+	pass
+
+class ParseError(MakeError):
 	filename = None   # filename containing the error
 	pos = (-1,-1)  # row/col of positin, zero based
 	code = None	  # code line that caused the error (a VirtualLine)
@@ -31,10 +37,13 @@ class ParseError(Exception):
 		return "parse error: filename=\"{0}\" pos={1} src=\"{2}\": {3}".format(
 				self.filename,self.pos,str(self.vline).strip(),self.description)
 
-class NestedTooDeep(Exception):
+class NestedTooDeep(MakeError):
 	pass
 
-class TODO(Exception):
+class Unimplemented(MakeError):
+	"""Feature not yet implemented"""
 	pass
 
-
+class VersionError(MakeError):
+	"""Feature not in this version"""
+	pass

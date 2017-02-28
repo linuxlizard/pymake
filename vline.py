@@ -96,13 +96,13 @@ class VCharString(object):
 		while len(self.chars) and self.chars[-1].char in whitespace:
 			self.chars.pop()
 		return self
-	
+
 	@classmethod
 	def from_string(cls, python_string):
 		# make a VCharString from a regular python string (mostly used with
 		# testing) the positions and filename will be nonsense)
 		return cls([VChar(c, (0,0), "/dev/null") for c in python_string])
-		
+
 class VirtualLine(object):
 	def __init__(self, phys_lines_list, starts_at_file_line=-1, filename="/dev/null"):
 		logger.debug("VirtualLine line_num=%d filename=%s", starts_at_file_line, filename)

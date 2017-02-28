@@ -12,6 +12,6 @@ def evaluate(symbol_list, symbol_table):
 	for sym in symbol_list:
 		logger.debug("sym=%s", sym)
 		s += sym.eval(symbol_table)
-		logger.debug("s=%s", s)
+		logger.debug("eval result s=\"%s\"", s)
 		logger.debug("symbol_table=%s", symbol_table)
 	return s

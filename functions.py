@@ -10,10 +10,13 @@ logger.setLevel(level=logging.DEBUG)
 from symbol import VarRef, Literal
 from evaluate import evaluate
 from vline import VCharString
+from error import *
+import shell
 
 __all__ = [ "Info", 
 			"MWarning",
 			"Error",
+			"Shell", 
 
 			"make_function",
 		  ]
@@ -61,7 +64,6 @@ builtins = {
 class Function(VarRef):
 	def __init__(self, args):
 		logger.debug("function=%s args=%s", self.name, args)
-		assert 0
 		super().__init__(args)
 
 	def makefile(self):
@@ -77,6 +79,7 @@ class Function(VarRef):
 class PrintingFunction(Function):
 	def eval(self, symbol_table):
 		s = evaluate(self.token_list, symbol_table)
+		logger.debug("%s \"%s\"", self.name, s)
 		print(s, file=self.fh)
 		return ""
 
@@ -113,7 +116,41 @@ class Subst(Function):
 	name = "subst"
 	
 	def eval(self, symbol_table):
-		assert 0, self.args
+		# needs 3 args
+		logger.debug("%s len=%d tokens=%s", self.name, len(self.token_list), self.token_list)
+		for t in self.token_list:
+			print(t)
+			if t.string:
+				s = t.string
+				for c in s:
+					print("type={} pos={} filename={}".format(type(c), c.pos, c.filename))
+
+		raise Unimplemented
+
+		s = "".join([t.eval(symbol_table) for t in self.token_list])
+		logger.debug("%s s=\"%s\"", self.name, s)
+		# make skips whitpace between subst and first art
+		s = s.lstrip()
+		logger.debug("%s s=\"%s\"", self.name, s)
+		c1 = s.index(',')
+		from_ = s[:c1]
+		s = s[c1+1:]
+		c2 = s.index(',')
+		to = s[:c2]
+		text = s[c2+1:]
+
+		logger.debug("%s from=\"%s\" to=\"%s\" text=\"%s\"", self.name, from_, to, text)
+		s = text.replace(from_, to)
+		logger.debug("%s \"%s\"", self.name, s)
+		return s
+
+class Shell(Function):
+	name = "shell"
+
+	def eval(self, symbol_table):
+		s = "".join([t.eval(symbol_table) for t in self.token_list])
+		logger.debug("%s s=\"%s\"", self.name, s)
+		return shell.execute(s)
 
 def split_function_call(s):
 	# break something like "info hello world" that needs a secondary parse
@@ -143,7 +180,7 @@ def split_function_call(s):
 			# whitespace
 			if iswhite(c):
 				# don't return empty string, return None if there is nothing
-				logger.debug("s=%s idx=%d", s, idx)
+				logger.debug("s=\"%s\" idx=%d", s, idx)
 				return VCharString(s[:idx]), VCharString(s[idx+1:]) if idx+1<len(s) else None
 		elif state==state_init:
 			if iswhite(c):
@@ -160,18 +197,23 @@ _classes = {
 	"warning" : MWarning,
 	"error" : Error,
 	"subst" : Subst,
+	"shell" : Shell,
 }
 
 def make_function(arglist):
+	logger.debug("make_function arglist=%s", arglist)
+
+	for a  in arglist:
+		print(a)
+
 	# do NOT .eval() here!!! will cause side effects. only want to look up the string
 	vcstr = arglist[0].string
 	# .string will be a VCharString
-	logger.debug("vcstr=%s", vcstr)
 	# do NOT modify arglist; is a ref into the AST
 
 	fname, rest = split_function_call(vcstr)
 
-	logger.debug("fname=\"%s\" rest=\"%s\"", fname, rest)
+	logger.debug("make_function fname=\"%s\" rest=\"%s\"", fname, rest)
 
 	# convert from array to python string for lookup
 	fname = str(fname)
@@ -179,7 +221,7 @@ def make_function(arglist):
 	# allow KeyError to propagate to indicate this is not a function
 	fcls = _classes[fname]
 
-	logger.debug("fname=%s rest=%s fcls=%s", fname, rest, fcls)
-	
+	logger.debug("make_function fname=\"%s\" rest=\"%s\" fcls=%s", fname, rest, fcls)
+
 	if rest: return fcls([Literal(rest)] + arglist[1:])
-	return fcls(arglist)
+	return fcls(arglist[1:])

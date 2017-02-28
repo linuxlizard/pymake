@@ -1,8 +1,16 @@
-# Tinker with GNU Make $(shell ) function
+# Tinker with GNU Make $(shell) function
 # davep 19-Sep-2014
 
-date != date
-$(info date=$(date))
+now != date
+$(info now=$(now))
+#$(info date=$(date))
+
+file=hello.c
+include= $(shell cat $(file) | grep include)
+$(info includes=$(include))
+
+file=mulmer.c
+$(info includes=$(include))
 
 date = $(shell date)
 $(info date=$(date))
@@ -18,6 +26,9 @@ $(info foo=$(foo))
 
 foo = $(shell abcdefghijklmnopqrstuvwxyz)
 $(info foo=$(foo))
+
+file=$(shell cat shell.mk)
+$(info $(file))
 
 @:;@:
 

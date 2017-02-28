@@ -10,6 +10,7 @@ from vline import VirtualLine, VCharString
 from version import Version
 from error import *
 from evaluate import evaluate
+import shell
 
 __all__ = [ "Symbol",
 			"Literal",
@@ -41,6 +42,7 @@ __all__ = [ "Symbol",
 			"DefineDirective",
 			"Makefile",
 ]
+
 #
 #  Class Hierarchy for Tokens
 #
@@ -49,12 +51,13 @@ class Symbol(object):
 	def __init__(self, string=None):
 		# davep 24-Apr-2016 ; using array of vchar for the symbol now 
 		if string:
-			# do you quack like a VCharString?
+			# do you quack like a VCharString? everything must be VChar so know filename/pos
+			logger.debug("new Symbol string=\"%s\"", string)
 			try:
-				assert string[0].filename, type(string)
+				string[0].pos, string[0].filename
 			except AttributeError:
-				# make an anonymouse VCharString
-				string = VCharString.from_string(string)
+				logger.error(type(string))
+				raise
 
 		# by default, save the token's VChars
 		# (descendent classes could store something different)
@@ -67,7 +70,13 @@ class Symbol(object):
 
 	def __eq__(self, rhs):
 		# lhs is self
-		return self.string==rhs.string
+		# compare to rhs
+		try:
+			return self.string == rhs.string
+		except AttributeError:
+			# rhs can also be python string instead of VCharString
+			# e.g., ":=" "::=" 
+			return str(self.string) == rhs
 
 	def makefile(self):
 		# create a Makefile from this object
@@ -77,6 +86,14 @@ class Symbol(object):
 	def validate(token_list):
 		for t in token_list : 
 			assert isinstance(t, Symbol), (type(t), t)
+#			print(type(t))
+#			print(dir(t))
+			if t.string:
+#				print(t.string)
+#				print(type(t.string))
+#				print(t)
+				for c in t.string:
+					logger.debug("%s %s %s", c, c.pos, c.filename)
 
 	def eval(self, symbol_table):
 		# children should override
@@ -99,18 +116,19 @@ class AssignOp(Operator):
 class RuleOp(Operator):
 	# A rule sumbol, one of { : , :: }
 	pass
-	
+
+
 class Expression(Symbol):
-	# An expression is a list of symbols.
+	# An Expression is a list of Symbols. An Expression self.string is None
+	# A Symbol will not have a token_list.
+	# A Symbol's self.string is the VCharString containing VChar knowing the
+	#	filename/pos of everything in the Makefile
 	def __init__(self, token_list ):
 		# expect a list/array/tuple (test by calling len())
 		assert len(token_list)>=0, (type(token_list), token_list)
-
 		self.token_list = token_list
-
 		Symbol.validate(token_list)
-
-		Symbol.__init__(self)
+		super().__init__()
 
 	def __str__(self):
 		# return a ()'d list of our tokens
@@ -123,7 +141,7 @@ class Expression(Symbol):
 		return self.token_list[idx]
 
 	def __eq__(self, rhs):
-		# Used in test code.		 
+		# Used in test code.
 		#
 		# lhs is self
 		# rhs better be another expression
@@ -161,38 +179,69 @@ class Expression(Symbol):
 class VarRef(Expression):
 	# A variable reference found in the token stream. Save as a nested set of
 	# tuples representing a tree. 
-	# $a			->  VarExp(a)
-	# $(abc)		->  VarExp(abc,)
-	# $(abc$(def))  ->  VarExp(abc,VarExp(def),)
-	# $(abc$(def)$(ghi))  ->  VarExp(abc,VarExp(def),VarExp(ghi),)
-	# $(abc$(def)$(ghi$(jkl)))  ->  VarExp(abc,VarExp(def),VarExp(ghi,VarExp(jkl)),)
-	# $(abc$(def)xyz)		   ->  VarExp(abc,VarRef(def),Literal(xyz),)
-	# $(info this is a varref)  ->  VarExp(info this is a varref)
+	# $a			->  VarRef(a)
+	# $(abc)		->  VarRef(abc,)
+	# $(abc$(def))  ->  VarRef(abc,VarRef(def),)
+	# $(abc$(def)$(ghi))  ->  VarRef(abc,VarRef(def),VarRef(ghi),)
+	# $(abc$(def)$(ghi$(jkl)))  ->  VarRef(abc,VarRef(def),VarRef(ghi,VarRef(jkl)),)
+	# $(abc$(def)xyz)		   ->  VarRef(abc,VarRef(def),Literal(xyz),)
+	# $(info this is a varref)  ->  VarRef(info this is a varref)
 
 	def makefile(self):
 		return "$(" + "".join([t.makefile() for t in self.token_list]) + ")"
 
 	def eval(self, symbol_table):
-		return "".join([symbol_table.fetch(sym.eval(symbol_table)) for sym in self.token_list])
-
 		s = ""
 		for sym in self.token_list:
-			s += symbol_table.fetch(sym.eval(symbol_table))
+#			print(type(sym), sym)
+			value = sym.eval(symbol_table)
+#			print(type(value), value)
+			ref = symbol_table.fetch(value)
+#			print(type(ref), ref)
+			if isinstance(ref,Expression):
+				# execute the expression
+				ref_value = ref.eval(symbol_table)
+#				print(type(ref_value), ref_value)
+				s += ref_value
+			else:
+				s += ref
 		return s
+#		return "".join([symbol_table.fetch(sym.eval(symbol_table)) for sym in self.token_list])
 
 class AssignmentExpression(Expression):
 	def __init__(self, token_list):
-		Expression.__init__(self, token_list)
+		super().__init__(token_list)
 		self.sanity()
 
 	def eval(self, symbol_table):
 		self.sanity()
 		lhs = self.token_list[0].eval(symbol_table)
-		logger.debug("assignment lhs=%s", lhs)
-		rhs = self.token_list[2].eval(symbol_table)
+		op = self.token_list[1]
+		logger.debug("assignment lhs=%s op=%s", lhs, op)
+
+		# handle different styles of assignment
+		if op == ":=" or op == "::=":
+			# simply expanded
+			rhs = self.token_list[2].eval(symbol_table)
+		elif op == "=":
+			# recursively expanded
+			# store the expression in the symbol table without evaluating
+			rhs = self.token_list[2]
+		elif op == "!=":
+			# != seems to be a > 3.81 feature so add a version check here
+			if Version.major < 4:
+				raise VersionError("!= not in this version of make")
+
+			# execute RHS as shell
+			s = self.token_list[2].eval(symbol_table)
+			rhs = shell.execute(s)
+		else:
+			# TODO
+			raise Unimplemented("op=%s"%op)
+
 		logger.debug("assignment rhs=%s", rhs)
-		# TODO handle different styles of assignment
 		symbol_table.add(lhs, rhs)
+
 		return None
 
 	def sanity(self):
@@ -201,7 +250,7 @@ class AssignmentExpression(Expression):
 		assert isinstance(self.token_list[0], Expression)
 		assert isinstance(self.token_list[1], AssignOp)
 		assert isinstance(self.token_list[2], Expression), (type(self.token_list[2]),)
-		
+
 class RuleExpression(Expression):
 	# Rules are tokenized in multiple steps. First the target + prerequisites
 	# are tokenized and put into an instance of this RuleExpression. Then the
@@ -241,7 +290,7 @@ class RuleExpression(Expression):
 		elif len(token_list)==4 : 
 			assert isinstance(token_list[3], RecipeList), (type(token_list[3]),)
 
-		Expression.__init__(self, token_list)
+		super().__init__(token_list)
 
 	def makefile(self):
 		# rule-targets rule-op prereq-list <CR>
@@ -293,14 +342,11 @@ class PrerequisiteList(Expression):
 	def __init__(self, token_list):
 		for t in token_list :
 			assert isinstance(t, Expression), (type(t,))
+		super().__init__(token_list)
 
-		self.token_list = token_list
-		
 	def makefile(self):
 		# space separated
-		s = " ".join( [ t.makefile() for t in self.token_list ] )
-
-		return s
+		return " ".join( [ t.makefile() for t in self.token_list ] )
 
 class Recipe(Expression):
 	# A single line of a recipe
@@ -396,7 +442,7 @@ class OverrideDirective(Directive):
 			raise ParseError(description=description)
 
 		super().__init__(expression)
-		
+
 class LineBlock(Symbol):
 	# Pile of unparsed code inside a conditional directive or a define
 	# multi-line macro. The text is unexamined until the condition is evaluated

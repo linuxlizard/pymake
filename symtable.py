@@ -5,8 +5,6 @@ import logging
 
 logger = logging.getLogger("pymake.symtable")
 
-from symbol import Literal
-
 class DuplicateFunction(Exception):
 	pass
 
@@ -23,8 +21,9 @@ class SymbolTable(object):
 		self.symbols[name] = value
 
 	def fetch(self, s):
-		# now try a var lookup (allow keyerror to propagate)
-		logger.debug("fetch sym=%s", s)
+		# now try a var lookup 
+		# Will always return an empty string on any sort of failure. 
+		logger.debug("fetch sym=\"%s\"", s)
 		if not len(s):
 			return ""
 		try:
