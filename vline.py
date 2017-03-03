@@ -244,7 +244,7 @@ class VirtualLine(object):
 		# (Only need this rarely)
 
 		def split_2d_array( splitme, row_to_split, col_to_split ):
-			# splite a 2-D array (array of strings to be exact) into two
+			# split a 2-D array (array of strings to be exact) into two
 			# arrays. The character at the split point belows to 'below'.
 			above = splitme[:row_to_split]
 			below = splitme[row_to_split+1:]

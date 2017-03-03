@@ -54,7 +54,7 @@ class Symbol(object):
 			# do you quack like a VCharString? everything must be VChar so know filename/pos
 			logger.debug("new Symbol string=\"%s\"", string)
 			try:
-				string[0].pos, string[0].filename
+				string.chars, string[0].pos, string[0].filename
 			except AttributeError:
 				logger.error(type(string))
 				raise

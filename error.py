@@ -5,6 +5,7 @@ __all__ = [ "MakeError",
 			"NestedTooDeep",
 			"Unimplemented",
 			"VersionError",
+			"EvalError",
 		  ]
 
 # test/debug flags
@@ -13,20 +14,12 @@ assert_on_parse_error = False
 
 class MakeError(Exception):
 	# base class of all pymake exceptions
-	pass
-
-class ParseError(MakeError):
 	filename = None   # filename containing the error
-	pos = (-1,-1)  # row/col of positin, zero based
-	code = None	  # code line that caused the error (a VirtualLine)
+	pos = (-1, -1)  # row/col of positin, zero based
+	code = None  # code line that caused the error (a VirtualLine)
 	description = "(No description!)" # useful description of the error
 
 	def __init__(self,*args,**kwargs):
-		if assert_on_parse_error : 
-			# handy for stopping immediately to diagnose a parse error
-			# (especially when the parse error is unexpected or wrong)
-			assert 0
-
 		super().__init__(*args)
 		self.vline = kwargs.get("vline",None)
 		self.pos = kwargs.get("pos",None)
@@ -34,8 +27,17 @@ class ParseError(MakeError):
 		self.description = kwargs.get("description",None)
 
 	def __str__(self):
-		return "parse error: filename=\"{0}\" pos={1} src=\"{2}\": {3}".format(
+		return "*** filename=\"{0}\" pos={1} src=\"{2}\": {3}".format(
 				self.filename,self.pos,str(self.vline).strip(),self.description)
+
+class ParseError(MakeError):
+	def __init__(self, *args, **kwargs):
+		super().__init__(*args, **kwargs)
+
+		if assert_on_parse_error : 
+			# handy for stopping immediately to diagnose a parse error
+			# (especially when the parse error is unexpected or wrong)
+			assert 0
 
 class NestedTooDeep(MakeError):
 	pass
@@ -46,4 +48,8 @@ class Unimplemented(MakeError):
 
 class VersionError(MakeError):
 	"""Feature not in this version"""
+	pass
+
+class EvalError(MakeError):
+	"""execution error e.g., bad function call"""
 	pass

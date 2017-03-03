@@ -78,6 +78,7 @@ y=765
 $(info $x-$y=$(call sub,$x,$y))
 
 # kinda slow (duh)
+$(info slow calculation...)
 x=5000
 y=9000
 $(info $x+$y=$(call add,$x,$y))
