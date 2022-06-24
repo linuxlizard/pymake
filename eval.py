@@ -4,8 +4,6 @@ import sys
 import itertools
 import pprint
 
-class TODO(Exception):
-	pass
 
 def stringify(arg):
 	if isinstance(arg,list):
@@ -150,7 +148,7 @@ class Ref(object):
 		assert len(value)
 		print(value[0])
 		if value is None : 
-			raise TODO()
+			raise NotImplementedError()
 			return Value()
 
 		print("Ref={0}.execute() value={1}".format(repr(self),repr(value)))
@@ -164,11 +162,11 @@ class Ref(object):
 			return [ Value(v) for v in value ]
 
 		assert 0
-		raise TODO()
+		raise NotImplementedError()
 		return Value(value)
 
 	def __str__(self):
-		raise TODO()
+		raise NotImplementedError()
 
 class Expr(object):
 	def __init__(self,*args):
@@ -191,7 +189,7 @@ class Expr(object):
 		return values
 
 	def __str__(self):
-		raise TODO()
+		raise NotImplementedError()
 
 class Assign(object):
 	def __init__(self,dst,*srcargs):
@@ -231,7 +229,7 @@ class Assign(object):
 		symtable.set(dstname,srcvalue)
 
 	def __str__(self):
-		raise TODO()
+		raise NotImplementedError()
 
 def main() : 
 #	a = Atom("a")

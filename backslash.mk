@@ -100,7 +100,7 @@ space after this backslash!\
 
 
 # this works \ in RHS of assignment is ok
-I am an assignment statement = \
+I_am_an_assignment_statement_=_\
 that equals \ a bunch of stuff \ with \
 backslashes \ that should not be \ confused with \
 continuation \ of the \ line
@@ -110,8 +110,10 @@ assignment :
 
 # this works. \ in LHS of assignment is ok
 # fails in 3.82 and 4.0
-I am a \
-split assignment = legal in 3.81 
+ifeq ($(MAKE_VERSION),3.81)
+I_am_a_\
+split_assignment = legal in 3.81 
+endif
 
 split-assignment : 
 	@echo $(I am a split assignment)
