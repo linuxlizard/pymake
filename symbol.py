@@ -56,12 +56,12 @@ class Symbol(object):
         # davep 24-Apr-2016 ; using array of vchar for the symbol now 
         if vstring:
             # do you quack like a VCharString? everything must be VChar so know filename/pos
-            logger.debug("new Symbol string=\"%s\"", vstring)
             try:
                 vstring.chars, vstring[0].pos, vstring[0].filename
             except AttributeError:
                 logger.error(type(vstring))
                 raise
+            logger.debug("new Symbol vstring=\"%s\"", printable_string(vstring))
             vstring.validate()
 
         # by default, save the token's VChars
@@ -406,6 +406,9 @@ class Directive(Symbol):
         else : 
             return "{0}".format(self.name)
 
+    def save(self, code):
+        self.code = code
+
 class ExportDirective(Directive):
     name = "export"
 
@@ -472,11 +475,16 @@ class LineBlock(Symbol):
         if _debug:
             [vline.validate() for vline in vline_list]
 
+        # ha-ha typechecking
+        if len(vline_list):
+            vline_list[0].filename
+
         self.vline_list = vline_list
         super().__init__()
 
     def makefile(self):
-        VirtualLine.validate(self.vline_list)
+        if _debug:
+            [vline.validate() for vline in self.vline_list]
         
         s = "".join( [ str(v) for v in self.vline_list ] )
         return s
@@ -632,6 +640,9 @@ class ConditionalBlock(Directive):
 class ConditionalDirective(Directive):
     name = "(should not see this)"
     
+    def save(self, code):
+        self.code = code
+
 class IfdefDirective(ConditionalDirective):
     name = "ifdef"
 

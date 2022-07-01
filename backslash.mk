@@ -22,7 +22,7 @@ all : test-backslash-semicolon test-backslash-recipes lots-of-fore-whitespace\
     backslash-eol backslash-o-rama backslash-space-eol assignment split-assignment \
     split-prereqs-with-backslashes this-is-a-rule-with-backslashes \
     backslash-in-comment rule-not-highlighted-by-vim \qqq \n \
- ; @echo $@ $^
+foo foo foo foo  ; @echo $@ $^
 
 
 # silent output without launching a shell

@@ -43,6 +43,10 @@ def is_line_continuation(line):
         pos -= 1
     return pos >= 0 and line[pos] == '\\'
 
+def vchars_debug_string(vchar_list):
+    """Utility function to debug dump an array of vchars"""
+    return " ".join([str((vc.char,str(vc.pos))) for vc in vchar_list])
+
 def validate_vchars(vchar_list):
     if not _debug:
         return            
@@ -54,7 +58,7 @@ def validate_vchars(vchar_list):
     infilename = None
     lines_list = []
     for vchar in vchar_list:
-        logger.debug("validating %s @ %d,%d %s", vchar.printable(), vchar.row, vchar.col, vchar.filename)
+        logger.debug("validating \"%s\" @ %d,%d %s", vchar.printable(), vchar.row, vchar.col, vchar.filename)
 
         if infilename is None:
             infilename = vchar.filename
@@ -69,8 +73,15 @@ def validate_vchars(vchar_list):
             infile = open(infilename,'r')
             lines_list = infile.readlines()
 
-        file_char = lines_list[vchar.row][vchar.col]
+        try:
+            file_char = lines_list[vchar.row][vchar.col]
+        except IndexError:
+            # this is bad, very bad
+            breakpoint()
+            raise
+
         if not file_char == vchar.char:
+            # this is bad, very bad
             breakpoint()
         assert file_char == vchar.char, (file_char,vchar.char)
 
@@ -82,6 +93,11 @@ def validate_vchars(vchar_list):
 # in ScannerIterator
 class VChar(object):
     def __init__(self, char, pos, filename):
+        # ha ha python type checking
+        assert len(char)==1, len(char)
+        assert isinstance((pos), type(())), type(pos)
+        assert len(pos) == 2, pos
+
         self._char = char
         # VCHAR_ROW, VCHAR_COL index into pos
         self._pos = pos
@@ -165,19 +181,22 @@ class VCharString(object):
 
 
 class VirtualLine(object):
-    def __init__(self, phys_lines_list, starts_at_file_line=-1, filename="/dev/null"):
-        logger.debug("VirtualLine line_num=%d filename=%s", starts_at_file_line, filename)
+    def __init__(self, phys_lines_list, starting_pos, filename):
+        logger.debug("VirtualLine pos=%r filename=%s", starting_pos, filename)
         logger.debug("lines=%s", phys_lines_list)
+
         # need an array of strings (2-D array of characters)
         assert isinstance(phys_lines_list, list)
         for p in phys_lines_list:
             assert isinstance(p, str), type(p)
 
+        assert isinstance(starting_pos, type(())), type(starting_pos)
+
         # catch problem code
         assert len(filename), (type(filename), filename)
 
         # check for integer
-        assert starts_at_file_line+1 >= 0, starts_at_file_line
+#        assert starts_at_file_line+1 >= 0, starts_at_file_line
 
         # where do I come from?
         self.filename = filename
@@ -186,10 +205,10 @@ class VirtualLine(object):
         self.phys_lines = phys_lines_list
 
         # this is where this line blob started in the original source file
-        self.starting_file_line = starts_at_file_line
+        self.starting_pos = starting_pos
 
         # create a 2-d array of all the characters with their position in
-        # the 
+        # the file
         self.virt_chars = []
         self._make_virtual_line()
 
@@ -202,6 +221,8 @@ class VirtualLine(object):
         #
         # The new 2-D array will be the characters with their row, col in the
         # 2-D array.
+        starting_row = self.starting_pos[VCHAR_ROW]
+        starting_col = self.starting_pos[VCHAR_COL]
         for row_idx, line in enumerate(self.phys_lines):
             vchar_list = []
             for col_idx, char in enumerate(line):
@@ -209,8 +230,12 @@ class VirtualLine(object):
                 # pos is the (row, col) of the char in the file
                 # hide indicates a hidden character (don't feed to the
                 # tokenizer, don't highlight in View)
-                vchar = VChar(char, (row_idx+self.starting_file_line, col_idx), self.filename)
+                pos = (row_idx+starting_row, 
+                       col_idx+starting_col)
+                vchar = VChar(char, pos, self.filename)
                 vchar_list.append(vchar)
+            # reset the column back to zero since we're on a new line
+            starting_col = 0
             self.virt_chars.append(vchar_list)
 
     def _collapse_virtual_line(self):
@@ -343,7 +368,7 @@ class VirtualLine(object):
     def starting_pos(self):
         # position of this line (in a file) is the position of the first char
         # of the first line
-        return self.virt_lines[0][0].pos
+        return self.virt_chars[0][0].pos
 
     @classmethod
     def from_string(cls, python_string):
@@ -449,7 +474,7 @@ def get_vline(filename, line_iter):
 
             # make a virtual line (joins together backslashed lines into one
             # line visible through a character by character iterator)
-            virt_line = VirtualLine(line_list, starting_line_number, filename)
+            virt_line = VirtualLine(line_list, (starting_line_number,0), filename)
             del line_list # detach the ref (VirtualLine keeps the array)
 
             # caller can also use line_iter

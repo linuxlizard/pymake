@@ -14,7 +14,7 @@ else#comment
 endif
 
 ifdef FOO
-this is junk
+this is junk (should fail to parse)
 this else is ignored because of this backslash\
 else
 else
@@ -127,8 +127,11 @@ else
 endif
 
 # whitespace required? yes. This is an error.
+$(info foo=$(foo))
 ifeq ($(foo),1)
+$(info foo is 1)
 else ifeq ($(foo),2)
+$(info foo is 2)
 endif
 
 # ifeq hiding in trailing backslash \
@@ -140,7 +143,7 @@ all:;@:
 
 # this is valid (the : adjacent to the "ifdef")
 ifdef: abc
-	@echo $@
+	@echo weird $@ rule!
 
   
     include: abc ; @echo $@

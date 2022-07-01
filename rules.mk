@@ -42,10 +42,10 @@ $$$$ : ; @echo $@
 # so \\ -> \ (literal backslash)
 # shell wins up treating as empty echo?
 # make -f rules.mk -n '\' --> echo \ 
-\\ : ; @echo $@
+\\ : ; @echo I am backslash $@
 
 # make -f rules.mk ! --> !
-! : ; @echo $@
+! : ; @echo I am bang $@
 
 # prerequisite with embedded spaces
 # make -f rules.mk "I have spaces" -> I have spaces
@@ -79,6 +79,7 @@ I\ have\ embedded%percents : ; @echo $@
 
 # make -f rules.mk @ --> :
 @:;@:
+	exit 1
 
 # TODO I have no idea WTF this is
 .:;@.

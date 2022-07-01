@@ -584,7 +584,7 @@ def tokenize_rule_RHS(vchar_scanner):
     
     for vchar in vchar_scanner :
         c = vchar.char
-        print("p state={1} c={0} idx={2}".format(printable_char(c), state, vchar_scanner.idx))
+        print("p state={1} c={0} pos={2}".format(printable_char(c), state, vchar.pos))
 
         if state==state_start :
             if c==';':
@@ -933,12 +933,13 @@ def tokenize_recipe(vchar_scanner):
     state = state_start
     token = vline.VCharString()
     token_list = []
+    vchar_stack = []
 
     sanity_count = 0
 
     for vchar in vchar_scanner :
         c = vchar.char
-        print("r c={} state={} idx={} token=\"{}\" pos={}".format(printable_char(c), state, vchar_scanner.idx, token, vchar.pos))
+        print("r c={} state={} idx={} token=\"{}\" pos={}".format(printable_char(c), state, vchar_scanner.idx, printable_string(token), vchar.pos))
 
         sanity_count += 1
 #        assert sanity_count < 50
@@ -973,6 +974,7 @@ def tokenize_recipe(vchar_scanner):
             elif c=='$':
                 state = state_dollar
             elif c=='\\':
+                vchar_stack.append(vchar)
                 state = state_backslash
             else:
                 token += vchar 
@@ -1001,9 +1003,7 @@ def tokenize_recipe(vchar_scanner):
 
         elif state==state_backslash : 
             # literal \ followed by some char
-            breakpoint()
-            assert 0
-            token += '\\' # FIXME need a vchar here
+            token += vchar_stack.pop()
             token += vchar
             state = state_recipe
 
@@ -1024,9 +1024,7 @@ def tokenize_recipe(vchar_scanner):
     return Recipe( token_list )
 
 def parse_recipes(line_scanner, semicolon_vline=None): 
-
     logger.debug("parse_recipes()")
-#    print( file_lines.remain() )
 
     state_start = 1
     state_comment_backslash = 2
@@ -1049,18 +1047,27 @@ def parse_recipes(line_scanner, semicolon_vline=None):
     # we're working with the raw strings (not VirtualLine) here so need to
     # carefully handle backslashes ourselves
 
+    # start iterating over the array of strings in the line_scanner
+  
+    # sometimes need to maintain a previous position across states
+    starting_row = []
+
     for line in line_scanner : 
         print( "r state={0}".format(state))
+
+        # file line of 'line'
+        row = line_scanner.idx - 1
 
         if state==state_start : 
             if line.startswith(recipe_prefix):
                 # TODO handle DOS line ending
                 if line.endswith('\\\n'):
+                    starting_row.append(row)
                     lines_list = [ line ] 
                     state = state_recipe_backslash
                 else :
                     # single line
-                    recipe_vline = vline.RecipeVirtualLine([line], line_scanner.idx)
+                    recipe_vline = vline.RecipeVirtualLine([line], (row,0), line_scanner.filename)
                     recipe = tokenize_recipe(iter(recipe_vline))
                     logger.debug("recipe=%s", recipe.makefile())
                     recipe.save(recipe_vline)
@@ -1096,9 +1103,9 @@ def parse_recipes(line_scanner, semicolon_vline=None):
             if not line.endswith('\\\n'):
                 # now have an array of lines that need to be one line for the
                 # recipes tokenizer
-                recipe_vline = vline.RecipeVirtualLine(lines_list, line_scanner.idx)
+                recipe_vline = vline.RecipeVirtualLine(lines_list, (starting_row.pop(),0), line_scanner.filename)
                 recipe = tokenize_recipe(iter(recipe_vline))
-                recipe.set_code(recipe_vline)
+                recipe.save(recipe_vline)
                 recipe_list.append(recipe)
 
                 # go back and look for more
@@ -1141,7 +1148,7 @@ def seek_elseif(virt_line):
     # else ifeq ($a,$b) -> ifeq ($a,$b)
     # The returning value will be passed to the tokenizer recursively.
 
-    VirtualLine.validate([virt_line])
+    VirtualLine.validate(virt_line)
 
     # "When in doubt, use brute force."
     phys_line = str(virt_line)
@@ -1155,6 +1162,7 @@ def seek_elseif(virt_line):
     d = seek_directive(phys_line)
     if d in conditional_directive :
         print("found elseif condition=\"{0}\"".format(d))
+        breakpoint()
         return d,VirtualLine.from_string(phys_line)
 
     # found junk after else
@@ -1212,7 +1220,7 @@ def handle_conditional_directive(directive_inst, vline_iter, line_scanner):
 
     # save where this directive block begins so we can report errors about big
     # if/else/endif problems (such as missing endif)
-    starting_pos = directive_inst.code.starting_pos()
+    starting_pos = directive_inst.code.starting_pos
 
     for virt_line in vline_iter : 
         print("c state={0}".format(state))
@@ -1273,7 +1281,7 @@ def handle_conditional_directive(directive_inst, vline_iter, line_scanner):
 
         else : 
             # save the line into the block
-            print("save \"{0}\"".format(printable_string(str(virt_line))))
+            print("save \"{0}\"".format(printable_string(virt_line)))
             line_list.append(virt_line)
 
         if state==state_endif : 
@@ -1362,8 +1370,8 @@ def handle_define_directive(define_inst, vline_iter, vchar_scanner):
 
 #@depth_checker
 def tokenize_directive(directive_str, virt_line, vline_iter, line_scanner):
-    logger.debug("tokenize_directive() \"%s\" at line=%d",
-            directive_str, virt_line.starting_file_line)
+    logger.debug("tokenize_directive() \"%s\" at pos=%r",
+            directive_str, virt_line.starting_pos)
 
     # TODO probably need a lot of parse checking here eventually
     # (Most parse checking is in the Directive constructor)
@@ -1390,7 +1398,7 @@ def tokenize_directive(directive_str, virt_line, vline_iter, line_scanner):
         "include" : { "constructor" : IncludeDirective,
                        "tokenizer"   : tokenize_assign_RHS,
                      },
-        "-include" : { "constructor" : SIncludeDirective,
+        "-include" : { "constructor" : MinusIncludeDirective,
                        "tokenizer"   : tokenize_assign_RHS,
                      },
         "sinclude" : { "constructor" : SIncludeDirective,
@@ -1459,7 +1467,7 @@ def tokenize_directive(directive_str, virt_line, vline_iter, line_scanner):
         err.pos = virt_line.starting_pos()
         raise err
 
-    directive_instance.set_code(virt_line)
+    directive_instance.save(virt_line)
 
     # gather the contents of the conditional block (raw lines
     # and maybe nested conditions)
@@ -1531,14 +1539,17 @@ def tokenize(virt_line, vline_iter, line_scanner):
             # truncate at position of first char of whatever is
             # leftover from the rule
             truncate_pos = remaining_vchars[0].pos
+#            print("remaining=%s" % remaining_vchars)
+#            print("first remaining=%s pos=%r" % (remaining_vchars[0].char,remaining_vchars[0].pos))
+#            print("truncate_pos=%r" % (truncate_pos,))
 
             recipe_str_list = virt_line.truncate(truncate_pos)
 
             # make a new virtual line from the semicolon trailing
             # recipe (using a virtual line because backslashes)
-            dangling_recipe_vline = vline.RecipeVirtualLine(recipe_str_list, truncate_pos[vline.VCHAR_ROW], remaining_vchars[0].filename)
+            dangling_recipe_vline = vline.RecipeVirtualLine(recipe_str_list, truncate_pos, remaining_vchars[0].filename)
 #            print("dangling={0}".format(dangling_recipe_vline))
-#            print("dangling={0}".format(dangling_recipe_vline.virt_lines))
+#            print("dangling={0}".format(dangling_recipe_vline.virt_chars))
 #            print("dangling={0}".format(dangling_recipe_vline.phys_lines))
 
             recipe_list = parse_recipes(line_scanner, dangling_recipe_vline)
@@ -1565,7 +1576,7 @@ def parse_makefile_from_src(src):
 
     # ScannerIterator across the file_lines array (to support pushback of an
     # entire line). 
-    line_scanner = ScannerIterator(src.file_lines)
+    line_scanner = ScannerIterator(src.file_lines, src.name)
 
     # get_vline() returns a Python <generator> that walks across makefile
     # lines, joining backslashed lines into VirtualLine instances.
@@ -1684,7 +1695,7 @@ if __name__=='__main__':
 
 
     # print the S Expression
-    print("makefile={0}".format(makefile))
+#    print("makefile={0}".format(makefile))
 
     # regenerate the makefile
 #    print("# start makefile")
