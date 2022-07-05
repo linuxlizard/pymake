@@ -44,6 +44,7 @@ __all__ = [ "Symbol",
             "IfeqDirective",
             "IfneqDirective",
             "DefineDirective",
+            "UnDefineDirective",
             "Makefile",
 ]
 
@@ -678,6 +679,9 @@ class DefineDirective(Directive):
                         self.string,
                         self.line_block.makefile() )
         
+
+class UnDefineDirective(Directive):
+    name = "undefine"
 
 class Makefile(object) : 
     # A collection of statements, directives, rules.

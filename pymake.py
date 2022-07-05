@@ -1305,11 +1305,11 @@ def tokenize_define_directive(vchar_scanner):
     state_seeking_eol = 3
 
     state = state_start
-    macro_name = ""
+    macro_name = vline.VCharString()
 
     # 3.81 treats the = as part of the name
     # 3.82 and beyond introduced the "=" after the macro name
-    if not(Version.major==3 and Version.minor==81) : 
+    if Version.major<=3 and Version.minor<=81: 
         raise NotImplementedError()
 
     # get the starting position of this scanner (for error reporting)
@@ -1318,8 +1318,8 @@ def tokenize_define_directive(vchar_scanner):
 
     for vchar in vchar_scanner : 
         c = vchar.char
-        print("m c={0} state={1} idx={2} ".format( 
-                printable_char(c), state, vchar_scanner.idx))
+        print("m c={0} state={1} pos={2} ".format( 
+                printable_char(c), state, vchar.pos))
 
         if state==state_start:
             # always eat whitespace while in the starting state
@@ -1335,9 +1335,12 @@ def tokenize_define_directive(vchar_scanner):
             # whitespace later)
             #
             # TODO if Version > 3.81 then add support for "="
-            macro_name += c
+            macro_name += vchar
 
     return macro_name.rstrip()
+
+def tokenize_undefine_directive(vchar_scanner):
+    raise NotImplementedError("undefine")
 
 def handle_define_directive(define_inst, vline_iter, vchar_scanner):
 
@@ -1430,7 +1433,10 @@ def tokenize_directive(directive_str, virt_line, vline_iter, line_scanner):
         "define" : { "constructor" : DefineDirective,
                      "tokenizer" : tokenize_define_directive,
                    },  
-
+        
+        "undefine" : { "constructor" : UnDefineDirective,
+                     "tokenizer" : tokenize_undefine_directive,
+                   },  
         # TODO add rest of opening directives
     }
 
@@ -1457,7 +1463,7 @@ def tokenize_directive(directive_str, virt_line, vline_iter, line_scanner):
         # now feed to the chosen tokenizer
         expression = d["tokenizer"](viter)
 
-    print("{0} expression={1}".format(directive_str, expression))
+    print("{0} expression=\"{1}\"".format(directive_str, printable_string(expression)))
 
     # construct a Directive instance
     try : 
