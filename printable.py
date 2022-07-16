@@ -29,5 +29,6 @@ def printable_vcharstring(vcs):
 def printable_string(s): 
     if type(s)==type(""):
         return "".join([printable_char(c) for c in s])
-    return printable_vcharstring(s)
+    # hopefully this is a VirtualLine
+    return s.printable_str()
 

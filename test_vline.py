@@ -19,6 +19,7 @@ from vline import get_vline
 from source import SourceFile
 import hexdump
 from vline import is_line_continuation, VirtualLine
+from printable import printable_string
 
 # turn on the big global debug flags
 import vline
@@ -155,7 +156,7 @@ def file_test(infilename):
     vline_iter = get_vline(infilename, scanner)
 
     for vline in vline_iter:
-        logger.info("@@%d >>%s<<", vline.starting_file_line, vline)
+        logger.info("@@%r >>%s<<", vline.starting_pos, vline.printable_str())
         vline.validate()
 
 def run_tests() : 

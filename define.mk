@@ -8,8 +8,8 @@ endef # foo foo foo
 
 # The following are from the GNU Make manual
 define two-lines 
-	@echo foo
-	@echo $(bar)
+	@echo two-lines foo
+	@echo two-lines $(bar)
 endef
 
 define run-yacc 
@@ -17,16 +17,16 @@ yacc $(firstword $^)
 mv y.tab.c $@
 endef
 
-#define frobnicate =
-#@echo "frobnicating target $@"
-#frob-step-1 $< -o $@-step-1
-#frob-step-2 $@-step-1 -o $@
-#endef
+define frobnicate =
+@echo "frobnicating target $@"
+frob-step-1 $< -o $@-step-1
+frob-step-2 $@-step-1 -o $@
+endef
 
-#override define two-lines =
-#foo
-#$(bar)
-#endef
+override define two-lines =
+@echo foo
+@echo bar=$(bar)
+endef
 # end of GNU Make copy/paste
 
 # well this makes things more difficult
@@ -125,11 +125,13 @@ a=$(foreach pyname,$(shell ls *.mk),\
               $(patsubst %.mk,%.py,$(1)),\
               $(shell touch tests/$(pyname))\
    )
-$(info a=$a)
+#$(info a=$a)
 
-#$(info $(shell ls *.mk))
+$(info makefiles=$(shell ls *.mk))
 a=$(call mk2py,$(shell ls *.mk))
 #$(info $a)
+
+bar=qux
 
 .PHONY: all
 all : 

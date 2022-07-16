@@ -1302,7 +1302,7 @@ def tokenize_define_directive(vchar_scanner):
 
     state_start = 1
     state_name = 2
-    state_seeking_eol = 3
+    state_eol = 3
 
     state = state_start
     macro_name = vline.VCharString()
@@ -1335,9 +1335,16 @@ def tokenize_define_directive(vchar_scanner):
             # whitespace later)
             #
             # TODO if Version > 3.81 then add support for "="
-            macro_name += vchar
+            if c in whitespace or c == '=':
+                state = state_eol
+                break
+            else:
+                macro_name += vchar
 
-    return macro_name.rstrip()
+        else:
+            assert 0, state
+
+    return macro_name
 
 def tokenize_undefine_directive(vchar_scanner):
     raise NotImplementedError("undefine")
@@ -1349,8 +1356,9 @@ def handle_define_directive(define_inst, vline_iter, vchar_scanner):
 
     # save where this define block begins so we can report errors about 
     # missing enddef 
-    starting_pos = define_inst.code.starting_pos()
+    starting_pos = define_inst.code.starting_pos
 
+    breakpoint()
     for virt_line in vline_iter : 
 
         # seach for enddef in physical line

@@ -58,7 +58,7 @@ def validate_vchars(vchar_list):
     infilename = None
     lines_list = []
     for vchar in vchar_list:
-        logger.debug("validating \"%s\" @ %d,%d %s", vchar.printable(), vchar.row, vchar.col, vchar.filename)
+        logger.debug("validating \"%s\" @ %d,%d %s %r", vchar.printable(), vchar.row, vchar.col, vchar.filename, vchar.hide)
 
         if infilename is None:
             infilename = vchar.filename
@@ -162,13 +162,14 @@ class VCharString(object):
     def __getitem__(self, idx):
         return self.chars[idx]
 
-    def rstrip(self):
-        # 
-        # !! WARNING !! Modifies the "string" in-place! Regular strings return a copy.
-        # 
-        while len(self.chars) and self.chars[-1].char in whitespace:
-            self.chars.pop()
-        return self
+    # I don't know what I was thinking creating this method
+#    def rstrip(self):
+#        # 
+#        # !! WARNING !! Modifies the "string" in-place! Regular strings return a copy.
+#        # 
+#        while len(self.chars) and self.chars[-1].char in whitespace:
+#            self.chars.pop()
+#        return self
 
     @classmethod
     def from_string(cls, python_string):
@@ -253,7 +254,6 @@ class VirtualLine(object):
         # for each line in our virtual lines
         # kill the eol and whitepace on both sides of \
         # kill empty lines
-        # replace \ with <space>
         #
         # For example:
         # """this \
@@ -275,7 +275,7 @@ class VirtualLine(object):
             self.virt_chars[row][col].hide = True
             col -= 1
 
-            # replace \ with <space>
+            # hide the line continuation "\"
             assert self.virt_chars[row][col].char=='\\', (row, col, self.virt_chars[row][col].char)
             self.virt_chars[row][col].hide = True
 
@@ -308,6 +308,16 @@ class VirtualLine(object):
         # build string from the visible characters
         vchar_iter = itertools.chain(*self.virt_chars)
         return "".join([vchar.char for vchar in vchar_iter if not vchar.hide])
+
+    def printable_str(self):
+        # build string from the visible characters
+        s = ""
+        for row in self.virt_chars:
+            s += "".join([printable_char(vchar.char) for vchar in row if not vchar.hide]) 
+            s += " "
+        return s
+#        vchar_iter = itertools.chain(*self.virt_chars)
+#        return "".join([printable_char(vchar.char) for vchar in vchar_iter if not vchar.hide])
 
     def __iter__(self):
         # This iterator we will feed the characters that are still visible to
@@ -425,7 +435,8 @@ def get_vline(filename, line_iter):
     starting_line_number = -1
     state = state_start 
 
-    # can't use enumerate() because the line_iter will also be used inside
+    # note! line_iter is shared with the caller.
+    # Also can't use enumerate() because the line_iter will also be used inside
     # parse_recipes() and the idx can change with push_back
     for line in line_iter :
 #        # line_iter.idx is the *next* line number counting from zero 
@@ -477,7 +488,6 @@ def get_vline(filename, line_iter):
             virt_line = VirtualLine(line_list, (starting_line_number,0), filename)
             del line_list # detach the ref (VirtualLine keeps the array)
 
-            # caller can also use line_iter
             yield virt_line
 
             # back around the horn

@@ -10,8 +10,9 @@ else
 endif
 
 # directives can be in RHS of rule
-all : define endef undefine ifdef ifndef else endif include -include \
-	sinclude override export unexport private vpath
+
+all : DEFINE ENDEF UNDEFINE IFDEF IFNDEF ELSE ENDIF INCLUDE  \
+	SINCLUDE OVERRIDE EXPORT UNEXPORT PRIVATE VPATH
 	@echo rule $@
 
 # some directives cannot in in LHS of rule
@@ -25,11 +26,11 @@ undefine : ; @echo rule $@
 #ifndef : ; @echo ifndef $@
 #else : ; @echo else $@
 #endif : ; @echo endif $@
-#include : ; @echo include $@
-#-include : ; @echo -- -include $@
-#sinclude : ; @echo sinclude $@
-#override : ; @echo override $@
-#export : ; @echo export=$@
+include : ; @echo include $@
+-include : ; @echo -- -include $@
+sinclude : ; @echo sinclude $@
+override : ; @echo override $@
+export : ; @echo export=$@
 unexport : ; @echo rule $@
 private : ; @echo rule $@
 vpath : ; @echo rule $@
@@ -37,15 +38,15 @@ vpath : ; @echo rule $@
 
 # some directives can be used as names
 private=42
-$(info = 42=$(private))
+$(info private 42=$(private))
 export=43
-$(info = 43=$(export))
+$(info export 43=$(export))
 include=44
-$(info = 44=$(include))
+$(info include 44=$(include))
 endef=45
-$(info = 45=$(endef))
+$(info endef 45=$(endef))
 undefine=46
-$(info = 46=$(undefine))
+$(info undefine 46=$(undefine))
 
 vpath=47
 

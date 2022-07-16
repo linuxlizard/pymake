@@ -662,13 +662,13 @@ class DefineDirective(Directive):
     def __init__(self, macro_name, line_block=None):
         super().__init__()
         self.string = macro_name
-        assert isinstance(macro_name, str), type(macro_name)
+#        assert isinstance(macro_name, str), type(macro_name)
 
         self.line_block = line_block if line_block else LineBlock([])
 
     def __str__(self):
         return "{0}(\"{1}\", {2})".format(self.__class__.__name__,
-                        self.string,
+                        str(self.string),
                         str(self.line_block))
 
     def set_block(self, line_block):
@@ -676,7 +676,7 @@ class DefineDirective(Directive):
 
     def makefile(self):
         return "define {0}\n{1}endef".format(
-                        self.string,
+                        str(self.string),
                         self.line_block.makefile() )
         
 
