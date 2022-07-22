@@ -1335,7 +1335,7 @@ def tokenize_define_directive(vchar_scanner):
             # whitespace later)
             #
             # TODO if Version > 3.81 then add support for "="
-            if c in whitespace or c == '=':
+            if c in whitespace or c in eol or c == '=':
                 state = state_eol
                 break
             else:
@@ -1475,6 +1475,7 @@ def tokenize_directive(directive_str, virt_line, vline_iter, line_scanner):
 
     # construct a Directive instance
     try : 
+        breakpoint()
         directive_instance = d["constructor"](expression)
     except ParseError as err:
         err.vline = virt_line
@@ -1712,8 +1713,8 @@ if __name__=='__main__':
 #    print("makefile={0}".format(makefile))
 
     # regenerate the makefile
-#    print("# start makefile")
+    print("# start makefile")
     print(makefile.makefile())
-#    print("# end makefile")
+    print("# end makefile")
 
 #    execute(makefile)

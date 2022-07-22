@@ -162,14 +162,13 @@ class VCharString(object):
     def __getitem__(self, idx):
         return self.chars[idx]
 
-    # I don't know what I was thinking creating this method
-#    def rstrip(self):
-#        # 
-#        # !! WARNING !! Modifies the "string" in-place! Regular strings return a copy.
-#        # 
-#        while len(self.chars) and self.chars[-1].char in whitespace:
-#            self.chars.pop()
-#        return self
+    def rstrip(self):
+        # 
+        # !! WARNING !! Modifies the "string" in-place! Regular strings return a copy.
+        # 
+        while len(self.chars) and self.chars[-1].char in whitespace:
+            self.chars.pop()
+        return self
 
     @classmethod
     def from_string(cls, python_string):
@@ -180,6 +179,11 @@ class VCharString(object):
     def validate(self):
         validate_vchars(self.chars)
 
+    def printable_str(self):
+        # build string from the visible characters.
+        # see also printable_str() in VirtualLine
+        s = "".join([printable_char(vchar.char) for vchar in self.chars if not vchar.hide]) 
+        return s
 
 class VirtualLine(object):
     def __init__(self, phys_lines_list, starting_pos, filename):
@@ -324,7 +328,7 @@ class VirtualLine(object):
         # the tokenizer. Using ScannerIterator so we have pushback. The
         # itertools.chain() joins all the virt_lines together into one
         # contiguous array
-        virt_iterator = ScannerIterator([vchar for vchar in itertools.chain(*self.virt_chars) if not vchar.hide])
+        virt_iterator = ScannerIterator([vchar for vchar in itertools.chain(*self.virt_chars) if not vchar.hide], self.filename)
         return virt_iterator
 
     def truncate(self, truncate_pos):

@@ -17,7 +17,7 @@ if sys.version_info.major < 3:
 class ScannerIterator(object):
     # string iterator that allows look ahead and push back
     # can also push/pop state (for deep lookaheads)
-    def __init__(self, data, name=None):
+    def __init__(self, data, name):
         logger.debug("ScannerIterator datalen=%d", len(data))
         self.data = data
         self.filename = name

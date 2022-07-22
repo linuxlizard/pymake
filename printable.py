@@ -27,8 +27,10 @@ def printable_vcharstring(vcs):
     return "".join([printable_char(vc.char) for vc in vcs if not vc.hide])
 
 def printable_string(s): 
-    if type(s)==type(""):
+    try:
+        # hopefully this is a VirtualLine
+        return s.printable_str()
+    except AttributeError:
+        # plain string ?
         return "".join([printable_char(c) for c in s])
-    # hopefully this is a VirtualLine
-    return s.printable_str()
 
