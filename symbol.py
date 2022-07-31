@@ -54,7 +54,7 @@ __all__ = [ "Symbol",
 class Symbol(object):
     # base class of everything we find in the makefile
     def __init__(self, vstring=None):
-        # davep 24-Apr-2016 ; using array of vchar for the symbol now 
+        # using array of vchar for the symbol now 
         if vstring:
             # do you quack like a VCharString? everything must be VChar so know filename/pos
             try:
@@ -62,7 +62,7 @@ class Symbol(object):
             except AttributeError:
                 logger.error(type(vstring))
                 raise
-            logger.debug("new Symbol vstring=\"%s\"", printable_string(vstring))
+            logger.debug("new Symbol vstring=\"%s\"", printable_string(str(vstring)))
             vstring.validate()
 
         # by default, save the token's VChars
@@ -72,7 +72,7 @@ class Symbol(object):
     def __str__(self):
         # create a string such as Literal("all")
         # handle embedded " and ' (with backslashes I guess?)
-        return "{0}(\"{1}\")".format(self.__class__.__name__, printable_string(self.string))
+        return "{0}(\"{1}\")".format(self.__class__.__name__, printable_string(str(self.string)))
 
     def __eq__(self, rhs):
         # lhs is self
@@ -105,25 +105,26 @@ class Symbol(object):
 
 class Literal(Symbol):
     # A literal found in the token stream. Store as a string.
+
+    def __init__(self, vstring):
+        # catch bugs where I create empty Literals
+        assert len(vstring)
+
+        super().__init__(vstring)
     
     def eval(self, symbol_table):
         return printable_string(self.string)
 
 class Operator(Symbol):
-    def makefile(self):
-        raise NotImplementedError(self.__class__.__name__)
+    pass
 
 class AssignOp(Operator):
     # An assignment symbol, one of { "=" | ":=" | "?=" | "+=" | "!=" | "::=" }
-
-    def makefile(self):
-        return str(self.string)
+    pass
     
 class RuleOp(Operator):
-    # A rule sumbol, one of { ":" | "::" }
-
-    def makefile(self):
-        return str(self.string)
+    # A rule symbol, one of { ":" | "::" }
+    pass
 
 class Expression(Symbol):
     # An Expression is a list of Symbols. An Expression self.string is None
@@ -264,7 +265,7 @@ class RuleExpression(Expression):
     # (optional) recipe list is tokenized, added to an instance of RecipeList,
     # which is passed to the RuleExpression.
     #
-    # The two separate steps are necessary because the Makefile's lines  needs
+    # The two separate steps are necessary because the Makefile's lines need
     # to be separated differently for rules vs recipes (backslashes and
     # comments are handled differently).
     # 
@@ -304,11 +305,22 @@ class RuleExpression(Expression):
         #     recipes
         assert len(self.token_list)==4, len(self.token_list)
 
+        s = ""
+
+        # Embed the filename+pos of the rule in the output makefile.
+        # RuleExpression contains a token_list.
+        # That token_list also contains tokens. Peek at the first char of the
+        # first token within.
+        if _debug:
+            breakpoint()
+            tok = self.token_list[0].token_list[0]
+            s += "# %s %s\n" % (tok.string[0].filename, tok.string[0].pos)
+
         # davep 03-Dec-2014 ; need spaces between targets, no spaces between
         # prerequisites
         # 
         # first the targets
-        s = " ".join( [ t.makefile() for t in self.token_list[0].token_list ] )
+        s += " ".join( [ t.makefile() for t in self.token_list[0].token_list ] )
 
         # operator
         s += self.token_list[1].makefile()
@@ -327,7 +339,7 @@ class RuleExpression(Expression):
     def add_recipe_list( self, recipe_list ) : 
         assert isinstance(recipe_list, RecipeList)
 
-        logger.debug("add_recipe_list() rule=%s", self.makefile())
+        logger.debug("add_recipe_list() rule=%s", str(self))
         logger.debug("add_recipe_list() recipe_list=%s", str(recipe_list))
 
         # replace my recipe list with this recipe list
@@ -675,7 +687,8 @@ class DefineDirective(Directive):
         self.line_block = line_block
 
     def makefile(self):
-        return "define {0}\n{1}endef".format(
+        s = str(self.line_block)
+        return "define {0}=\n{1}endef".format(
                         str(self.string),
                         self.line_block.makefile() )
         

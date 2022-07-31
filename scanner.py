@@ -102,3 +102,12 @@ class ScannerIterator(object):
         # allow chaining
         return self
 
+    def peek_back(self):
+        # return one char previous (created to handle \ (backslashed)
+        # characters) (does not modify our state)
+        # The -2 is because: idx-1 is the current character, idx-1-1 is the
+        # previous character (idx is always the *next* char to be returned by
+        # this iterator)
+        if self.idx-2 < 0:
+            raise IndexError
+        return self.data[self.idx-2]

@@ -25,6 +25,12 @@ from printable import printable_string
 import vline
 vline._debug = True
 
+class DebugVirtualLine(VirtualLine):
+    # wrapper around VirtualLine which allows us to feed in strings that don't
+    # strictly come from files
+    def __init__(self, phys_lines_list):
+        super().__init__(phys_lines_list, (0,0), "/dev/null")
+
 def test_line_cont():
     test_list = ( 
         ( "this is a test\n",   False ),
@@ -48,6 +54,11 @@ def test_line_cont():
 
 def test_vline():
     test_list = ( 
+    # backslash then blank line then end-of-string
+    ( r"""space=\
+bar
+""", "space=\n" ),
+
     # single line
     ( "foo : bar ; baz\n", "foo : bar ; baz\n"),
     ( "backslash=\ \n", "backslash=\ \n"),
@@ -55,7 +66,7 @@ def test_vline():
     # backslash then blank line then end-of-string
     ( r"""space=\
 
-""", "space= \n" ),
+""", "space=\n" ),
 
     # backslash joining rule + recipe
     ( r"""foo\
@@ -118,9 +129,7 @@ baz
 
     for test in test_list : 
         # string, validation
-        s,v = test
-#        print(s,end="")
-#        print("s={0}".format(hexdump.dump(s,16)),end="")
+        test_src,valid_str = test
 
         # VirtualLine needs an array of lines from a file.  The EOLs must be
         # preserved. But I want a nice easy way to make test strings (one
@@ -130,21 +139,19 @@ baz
         # (rather than trying to create an array of strings by hand).
         # Split the test string by \n into an array. Then restore \n on each line.
         # The [:-1] skips the empty string after the final \n
-        file_lines = s.split("\n")[:-1]
+        # Example:
+        # "This\nis\na\ntest\n" becomes [ "this\n", "is\n", "a\n", test\n"]
+        file_lines = test_src.split("\n")[:-1]
         lines = [ line+"\n" for line in file_lines ]
         
-#        print( "split={0}".format(s.split("\n")))
-#        print( "lines={0} len={1}".format(lines,len(lines)),end="")
+        vline = DebugVirtualLine( lines )
 
-        vline = VirtualLine( lines, 0 )
-        for line in vline.virt_lines : 
-            print(line)
-        print(vline)
-
-        s = str(vline)
-        print("s={0}".format(hexdump.dump(s,16)))
-        print("v={0}".format(hexdump.dump(v,16)))
-        assert s==v
+        test_result = str(vline)
+        print("test_result={0}".format(hexdump.dump(test_result,16)),end="")
+        print("  valid_str={0}".format(hexdump.dump(valid_str,16)),end="")
+        if test_result != valid_str:
+            breakpoint()
+        assert test_result==valid_str
 
 
 def file_test(infilename):
@@ -152,12 +159,17 @@ def file_test(infilename):
     # continuations
     src = SourceFile(infilename)
     src.load()
-    scanner = ScannerIterator(src.file_lines)
+    scanner = ScannerIterator(src.file_lines, infilename)
     vline_iter = get_vline(infilename, scanner)
 
     for vline in vline_iter:
-        logger.info("@@%r >>%s<<", vline.starting_pos, vline.printable_str())
+        logger.info("@@%r >>%s<<", vline.starting_pos, printable_string(str(vline)))
         vline.validate()
+
+    scanner = ScannerIterator(src.file_lines, infilename)
+    vline_iter = get_vline(infilename, scanner)
+    for v in vline_iter:
+        print(str(v), end="")
 
 def run_tests() : 
     test_line_cont()
@@ -166,11 +178,12 @@ def run_tests() :
 
 def main():
 
-    # run internal tests
-#    run_tests()
-
     for f in sys.argv[1:]:
         file_test(f)
+
+    if len(sys.argv) == 1:
+        # run internal tests
+        run_tests()
 
 if __name__=='__main__':
     logging.basicConfig(level=logging.DEBUG)

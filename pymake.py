@@ -9,6 +9,7 @@
 
 import sys
 import logging
+import argparse
 
 logger = logging.getLogger("pymake")
 #logging.basicConfig(level=logging.DEBUG)
@@ -354,7 +355,8 @@ def tokenize_statement_LHS(vchar_scanner, separators=""):
             # whitespace in LHS of rule is ignored
             elif c in separators :
                 # end of word
-                token_list.append(Literal(token))
+                if len(token):
+                    token_list.append(Literal(token))
 
                 # start new token
                 token = vline.VCharString()
@@ -376,7 +378,9 @@ def tokenize_statement_LHS(vchar_scanner, separators=""):
             elif c==':':
                 # end of LHS (don't know if rule or assignment yet)
                 # strip trailing whitespace
-                token_list.append( Literal(token.rstrip()) )
+                token_cleaned = token.rstrip()
+                if len(token_cleaned):
+                    token_list.append( Literal(token_cleaned) )
                 # start new token
                 token = vline.VCharString()
                 token += vchar
@@ -416,8 +420,9 @@ def tokenize_statement_LHS(vchar_scanner, separators=""):
                 # literal $
                 token += vchar 
             else:
-                # save token so far; note no rstrip()!
-                token_list.append(Literal(token))
+                # save token so far (if any); note no rstrip()!
+                if len(token):
+                    token_list.append(Literal(token))
                 # start new token
                 token = vline.VCharString()
 
@@ -728,7 +733,8 @@ def tokenize_rule_RHS(vchar_scanner):
 
         elif state==state_backslash : 
             if not c in eol : 
-                # literal backslash
+                # literal backslash + some char
+                token += vchar_scanner.peek_back() # capture the literal backslash
                 token += vchar
                 state = state_word
             else:
@@ -939,7 +945,8 @@ def tokenize_recipe(vchar_scanner):
 
     for vchar in vchar_scanner :
         c = vchar.char
-        print("r c={} state={} idx={} token=\"{}\" pos={}".format(printable_char(c), state, vchar_scanner.idx, printable_string(token), vchar.pos))
+        print("r c={} state={} idx={} token=\"{}\" pos={}".format(
+            printable_char(c), state, vchar_scanner.idx, printable_string(str(token)), vchar.pos))
 
         sanity_count += 1
 #        assert sanity_count < 50
@@ -968,7 +975,8 @@ def tokenize_recipe(vchar_scanner):
         elif state==state_recipe :
             if c in eol : 
                 # save what we've seen so far
-                token_list.append(Literal(token))
+                if len(token):
+                    token_list.append(Literal(token))
                 # bye!
                 return Recipe(token_list) 
             elif c=='$':
@@ -1162,7 +1170,6 @@ def seek_elseif(virt_line):
     d = seek_directive(phys_line)
     if d in conditional_directive :
         print("found elseif condition=\"{0}\"".format(d))
-        breakpoint()
         return d,VirtualLine.from_string(phys_line)
 
     # found junk after else
@@ -1281,7 +1288,7 @@ def handle_conditional_directive(directive_inst, vline_iter, line_scanner):
 
         else : 
             # save the line into the block
-            print("save \"{0}\"".format(printable_string(virt_line)))
+            print("save \"{0}\"".format(printable_string(str(virt_line))))
             line_list.append(virt_line)
 
         if state==state_endif : 
@@ -1358,7 +1365,6 @@ def handle_define_directive(define_inst, vline_iter, vchar_scanner):
     # missing enddef 
     starting_pos = define_inst.code.starting_pos
 
-    breakpoint()
     for virt_line in vline_iter : 
 
         # seach for enddef in physical line
@@ -1471,11 +1477,10 @@ def tokenize_directive(directive_str, virt_line, vline_iter, line_scanner):
         # now feed to the chosen tokenizer
         expression = d["tokenizer"](viter)
 
-    print("{0} expression=\"{1}\"".format(directive_str, printable_string(expression)))
+    print("{0} expression=\"{1}\"".format(directive_str, printable_string(str(expression))))
 
     # construct a Directive instance
     try : 
-        breakpoint()
         directive_instance = d["constructor"](expression)
     except ParseError as err:
         err.vline = virt_line
@@ -1520,65 +1525,70 @@ def tokenize(virt_line, vline_iter, line_scanner):
 
     # tokenize character by character across a VirtualLine
     vchar_scanner = iter(virt_line)
-    token = tokenize_statement(vchar_scanner)
+    statement = tokenize_statement(vchar_scanner)
 
     # If we found a rule, we need to change how we're handling the
     # lines. (Recipes have different whitespace and backslash rules.)
-    if isinstance(token,RuleExpression) : 
-        # rule line can contain a recipe following a ; 
-        # for example:
-        # foo : bar ; @echo baz
-        #
-        # The rule parser should stop at the semicolon. Will leave the
-        # semicolon as the first char of iterator
-        # 
-        logger.debug("rule=%s", str(token))
+    if not isinstance(statement,RuleExpression) : 
+        logger.debug("statement=%s", str(statement))
+        return statement
 
-        # truncate the virtual line that precedes the recipe (cut off
-        # at a ";" that might be lurking)
-        #
-        # foo : bar ; @echo baz
-        #          ^--- truncate here
-        #
-        # I have to parse the full like as a rule to know where the
-        # rule ends and the recipe(s) begin. The backslash makes me
-        # crazy.
-        #
-        # foo : bar ; @echo baz\
-        # I am more recipe hur hur hur
-        #
-        # The recipe is "@echo baz\\\nI am more recipe hur hur hur\n"
-        # and that's what needs to exec'd.
-        remaining_vchars = vchar_scanner.remain()
-        if len(remaining_vchars) > 0:
-            # truncate at position of first char of whatever is
-            # leftover from the rule
-            truncate_pos = remaining_vchars[0].pos
+    # At this point we have a Rule.
+    # rule line can contain a recipe following a ; 
+    # for example:
+    # foo : bar ; @echo baz
+    #
+    # The rule parser should stop at the semicolon. Will leave the
+    # semicolon as the first char of iterator
+    # 
+#    logger.debug("rule=%s", str(token))
+
+    # truncate the virtual line that precedes the recipe (cut off
+    # at a ";" that might be lurking)
+    #
+    # foo : bar ; @echo baz
+    #          ^--- truncate here
+    #
+    # I have to parse the full like as a rule to know where the
+    # rule ends and the recipe(s) begin. The backslash makes me
+    # crazy.
+    #
+    # foo : bar ; @echo baz\
+    # I am more recipe hur hur hur
+    #
+    # The recipe is "@echo baz\\\nI am more recipe hur hur hur\n"
+    # and that's what needs to exec'd.
+    remaining_vchars = vchar_scanner.remain()
+    if len(remaining_vchars) > 0:
+        # truncate at position of first char of whatever is
+        # leftover from the rule
+        truncate_pos = remaining_vchars[0].pos
 #            print("remaining=%s" % remaining_vchars)
 #            print("first remaining=%s pos=%r" % (remaining_vchars[0].char,remaining_vchars[0].pos))
 #            print("truncate_pos=%r" % (truncate_pos,))
 
-            recipe_str_list = virt_line.truncate(truncate_pos)
+        recipe_str_list = virt_line.truncate(truncate_pos)
 
-            # make a new virtual line from the semicolon trailing
-            # recipe (using a virtual line because backslashes)
-            dangling_recipe_vline = vline.RecipeVirtualLine(recipe_str_list, truncate_pos, remaining_vchars[0].filename)
+        # make a new virtual line from the semicolon trailing
+        # recipe (using a virtual line because backslashes)
+        dangling_recipe_vline = vline.RecipeVirtualLine(recipe_str_list, truncate_pos, remaining_vchars[0].filename)
 #            print("dangling={0}".format(dangling_recipe_vline))
 #            print("dangling={0}".format(dangling_recipe_vline.virt_chars))
 #            print("dangling={0}".format(dangling_recipe_vline.phys_lines))
 
-            recipe_list = parse_recipes(line_scanner, dangling_recipe_vline)
-        else :
-            recipe_list = parse_recipes(line_scanner)
+        recipe_list = parse_recipes(line_scanner, dangling_recipe_vline)
+    else :
+        recipe_list = parse_recipes(line_scanner)
 
-        assert isinstance(recipe_list,RecipeList)
+    assert isinstance(recipe_list,RecipeList)
 
-        logger.debug("recipe_list=%s", str(recipe_list))
+    logger.debug("recipe_list=%s", str(recipe_list))
 
-        # attach the recipe(s) to the rule
-        token.add_recipe_list(recipe_list)
+    # attach the recipe(s) to the rule
+    statement.add_recipe_list(recipe_list)
 
-    return token
+    logger.debug("statement=%s", str(statement))
+    return statement
 
 def parse_makefile_from_src(src):
     # file_lines is an array of Python strings.
@@ -1693,7 +1703,21 @@ def usage():
     # TODO
     print("usage: TODO")
 
+def parse_args():
+    parser = argparse.ArgumentParser(description="Makefile Debugger")
+    parser.add_argument('-o', '--output', help="write regenerated makefile to file") 
+    parser.add_argument('filename', help='read as a makefile')
+
+    args = parser.parse_args()
+
+    # TODO additional checks
+
+    return args
+
 if __name__=='__main__':
+    args = parse_args()
+    print(args)
+
 #    logging.basicConfig(level=logging.INFO)
     logging.basicConfig(level=logging.DEBUG)
 
@@ -1713,8 +1737,10 @@ if __name__=='__main__':
 #    print("makefile={0}".format(makefile))
 
     # regenerate the makefile
-    print("# start makefile")
-    print(makefile.makefile())
-    print("# end makefile")
+    if args.output:
+        print("# start makefile")
+        with open(args.output,"w") as outfile:
+            print(makefile.makefile(), file=outfile)
+        print("# end makefile")
 
 #    execute(makefile)

@@ -13,7 +13,7 @@ def printable_char(c):
         return '\\"'
     return c
 
-def printable_vcharstring(vcs): 
+def printable_string(s): 
     # Convert a string with unprintable chars and/or weird printing chars into
     # something that can be printed without side effects.
     # For example, 
@@ -23,14 +23,12 @@ def printable_vcharstring(vcs):
     #
     # Want to be able to round trip the output of the Symbol hierarchy back
     # into valid Python code.
-
-    return "".join([printable_char(vc.char) for vc in vcs if not vc.hide])
-
-def printable_string(s): 
-    try:
-        # hopefully this is a VirtualLine
-        return s.printable_str()
-    except AttributeError:
-        # plain string ?
-        return "".join([printable_char(c) for c in s])
+    #
+    return "".join([printable_char(c) for c in s])
+#    try:
+#        # hopefully this is a VirtualLine
+#        return s.printable_str()
+#    except AttributeError:
+#        # plain string ?
+#        return "".join([printable_char(c) for c in s])
 
