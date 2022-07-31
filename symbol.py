@@ -184,6 +184,18 @@ class Expression(Symbol):
 
         return "".join([e.eval(symbol_table) for e in self.token_list])
 
+    def get_pos(self):
+        # Find the position (filename,(row,col)) of this Expression.
+        # An Expression contains a token_list.  That token_list also contains
+        # tokens.  Find the first symbol that contains the string (vs simply
+        # containing another symbol)
+        tok = self.token_list[0]
+        while tok.string is None:
+            tok = tok.token_list[0]
+
+        vchar = tok.string[0]
+        return vchar.filename, vchar.pos
+
 class VarRef(Expression):
     # A variable reference found in the token stream. Save as a nested set of
     # tuples representing a tree. 
@@ -308,13 +320,9 @@ class RuleExpression(Expression):
         s = ""
 
         # Embed the filename+pos of the rule in the output makefile.
-        # RuleExpression contains a token_list.
-        # That token_list also contains tokens. Peek at the first char of the
-        # first token within.
         if _debug:
-            breakpoint()
-            tok = self.token_list[0].token_list[0]
-            s += "# %s %s\n" % (tok.string[0].filename, tok.string[0].pos)
+            filename, pos = self.get_pos()
+            s += "# %s %s\n" % (filename, pos)
 
         # davep 03-Dec-2014 ; need spaces between targets, no spaces between
         # prerequisites

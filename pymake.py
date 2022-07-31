@@ -989,7 +989,8 @@ def tokenize_recipe(vchar_scanner):
 
         elif state==state_dollar : 
             if c=='$':
-                # literal $
+                # a $$ in a rule expression needs to be preserved as a double $$
+                token += vchar_scanner.peek_back() # capture the previous '$'
                 token += vchar
                 state = state_recipe
             else:
