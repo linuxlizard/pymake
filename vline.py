@@ -313,9 +313,9 @@ class VirtualLine(object):
             
             # sweep left to right, killing whitespace until we find a non-whitespace character
             col = 0
-            print("collapse1 row=%d col=%d c=%s" % (row, col, printable_char(self.virt_chars[row][col].char)))
+#            print("collapse1 row=%d col=%d c=%s" % (row, col, printable_char(self.virt_chars[row][col].char)))
             while col < len(self.virt_chars[row]) and self.virt_chars[row][col].char in whitespace :
-                print("collapse2 row=%d col=%d c=%s" % (row, col, printable_char(self.virt_chars[row][col].char)))
+#                print("collapse2 row=%d col=%d c=%s" % (row, col, printable_char(self.virt_chars[row][col].char)))
                 self.virt_chars[row][col].hide = True
                 col += 1
 
@@ -324,7 +324,7 @@ class VirtualLine(object):
 
             # start at eol
             col = len(self.virt_chars[row])-1
-            print("collapse3 row=%d col=%d c=%s" % (row, col, printable_char(self.virt_chars[row][col].char)))
+#            print("collapse3 row=%d col=%d c=%s" % (row, col, printable_char(self.virt_chars[row][col].char)))
 
             # kill EOL
             assert self.virt_chars[row][col].char in eol, (row, col, self.virt_chars[row][col].char)

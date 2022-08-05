@@ -100,20 +100,21 @@ class Symbol(object):
 
     def eval(self, symbol_table):
         # children should override
-        assert 0
-        return None
+        raise NotImplementedError
 
 class Literal(Symbol):
     # A literal found in the token stream. Store as a string.
 
     def __init__(self, vstring):
         # catch bugs where I create empty Literals
+        if not len(vstring):
+            breakpoint()
         assert len(vstring)
 
         super().__init__(vstring)
     
     def eval(self, symbol_table):
-        return printable_string(self.string)
+        return str(self.string)
 
 class Operator(Symbol):
     pass
@@ -239,6 +240,14 @@ class AssignmentExpression(Expression):
         op = self.token_list[1]
         logger.debug("assignment lhs=%s op=%s", lhs, op)
 
+        # from the gnu make pdf:
+        # immediate = deferred
+        # immediate ?= deferred
+        # immediate := immediate
+        # immediate ::= immediate
+        # immediate += deferred or immediate
+        # immediate != immediate
+
         # handle different styles of assignment
         if op == ":=" or op == "::=":
             # simply expanded
@@ -359,7 +368,8 @@ class RuleExpression(Expression):
     def eval(self, symbol_table):
         # TODO
         logger.error("%s eval not implemented yet", type(self))
-        raise NotImplementedError
+        return ""
+#        raise NotImplementedError
 
 class PrerequisiteList(Expression):
      # davep 03-Dec-2014 ; FIXME prereq list must be an array of expressions,

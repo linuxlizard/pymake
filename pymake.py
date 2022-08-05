@@ -134,7 +134,7 @@ def comment(vchar_scanner):
     # this could definitely be faster (method in ScannerIterator to eat until EOL?)
     for vchar in vchar_scanner : 
         c = vchar.char
-        print("# c={0} state={1}".format(printable_char(c), state))
+#        print("# c={0} state={1}".format(printable_char(c), state))
         if state==state_start:
             if c=='#':
                 state = state_eat_comment
@@ -270,7 +270,7 @@ def tokenize_statement(vchar_scanner):
     else:
         statement_type="????"
 #        print( "last_token={0} \u2234 statement is {1}".format(last_symbol,statement_type).encode("utf-8"))
-        print( "last_token={0} ∴ statement is {1}".format(last_symbol, statement_type))
+#        print( "last_token={0} ∴ statement is {1}".format(last_symbol, statement_type))
 
         # should not get here
         assert 0, last_symbol
@@ -330,8 +330,8 @@ def tokenize_statement_LHS(vchar_scanner, separators=""):
         c = vchar.char
         logger.debug("s c={} state={} idx={} token=\"{}\" pos={} src={}".format(
             printable_char(c), state, vchar_scanner.idx, str(token), vchar.pos, vchar.filename))
-        print("s c={} state={} idx={} token=\"{}\" pos={} src={}".format(
-            printable_char(c), state, vchar_scanner.idx, str(token), vchar.pos, vchar.filename))
+#        print("s c={} state={} idx={} token=\"{}\" pos={} src={}".format(
+#            printable_char(c), state, vchar_scanner.idx, str(token), vchar.pos, vchar.filename))
 
         if state==state_start:
             # always eat whitespace while in the starting state
@@ -400,7 +400,9 @@ def tokenize_statement_LHS(vchar_scanner, separators=""):
             elif c=='=':
                 # definitely an assignment 
                 # strip trailing whitespace
-                token_list.append(Literal(token.rstrip()))
+                t = token.rstrip()
+                if len(t):
+                    token_list.append(Literal(t))
                 return Expression(token_list), AssignOp(vline.VCharString([vchar]))
 
             elif c in eol : 
@@ -440,8 +442,8 @@ def tokenize_statement_LHS(vchar_scanner, separators=""):
             if c in eol : 
                 # line continuation
                 # davep 04-Oct-2014 ; XXX   should not see anymore
-                print("vchar_scanner={0} data={1}".format(type(vchar_scanner), type(vchar_scanner.data)))
-                print(vchar_scanner.data)
+#                print("vchar_scanner={0} data={1}".format(type(vchar_scanner), type(vchar_scanner.data)))
+#                print(vchar_scanner.data)
                 assert 0, (vchar_scanner, vchar)
             else :
                 # literal '\' + somechar
@@ -589,7 +591,7 @@ def tokenize_rule_RHS(vchar_scanner):
     
     for vchar in vchar_scanner :
         c = vchar.char
-        print("p state={1} c={0} pos={2}".format(printable_char(c), state, vchar.pos))
+        logger.debug("p state={1} c={0} pos={2}".format(printable_char(c), state, vchar.pos))
 
         if state==state_start :
             if c==';':
@@ -703,8 +705,8 @@ def tokenize_rule_RHS(vchar_scanner):
 
                 # jump to var_ref tokenizer
                 token_list.append( tokenize_variable_ref(vchar_scanner) )
-                print("token_list=",token_list)
-                print("token_list=", " ".join([t.makefile() for t in token_list]))
+#                print("token_list=",token_list)
+#                print("token_list=", " ".join([t.makefile() for t in token_list]))
 
             state = state_word
 
@@ -778,7 +780,7 @@ def tokenize_assign_RHS(vchar_scanner):
 
     for vchar in vchar_scanner :
         c = vchar.char
-        print("a c={0} state={1} idx={2}".format(printable_char(c), state, vchar_scanner.idx, vchar_scanner.remain()))
+        logger.debug("a c={0} state={1} idx={2}".format(printable_char(c), state, vchar_scanner.idx, vchar_scanner.remain()))
         if state==state_start :
             if c in whitespace :
                 state = state_whitespace
@@ -804,7 +806,8 @@ def tokenize_assign_RHS(vchar_scanner):
                 # assignment terminates at end of line
                 # end of scanner
                 # save what we've seen so far
-                token_list.append(Literal(token))
+                if len(token):
+                    token_list.append(Literal(token))
                 return Expression(token_list)
             else:
                 token += vchar
@@ -815,7 +818,8 @@ def tokenize_assign_RHS(vchar_scanner):
                 token += vchar
             else:
                 # save token so far; note no rstrip()!
-                token_list.append(Literal(token))
+                if len(token):
+                    token_list.append(Literal(token))
                 # restart token
                 token = vline.VCharString()
 
@@ -834,8 +838,9 @@ def tokenize_assign_RHS(vchar_scanner):
             assert 0, state
 
     # end of scanner
-    # save what we've seen so far
-    token_list.append(Literal(token))
+    # save what we've seen so far (if any)
+    if len(token):
+        token_list.append(Literal(token))
     return Expression(token_list)
 
 #@depth_checker
@@ -883,7 +888,8 @@ def tokenize_variable_ref(vchar_scanner):
                 # TODO make sure to match the open/close chars
 
                 # save what we've read so far
-                token_list.append( Literal(token) )
+                if len(token):
+                    token_list.append( Literal(token) )
 
                 # do we have a function call?
                 try:
@@ -945,7 +951,7 @@ def tokenize_recipe(vchar_scanner):
 
     for vchar in vchar_scanner :
         c = vchar.char
-        print("r c={} state={} idx={} token=\"{}\" pos={}".format(
+        logger.debug("r c={} state={} idx={} token=\"{}\" pos={}".format(
             printable_char(c), state, vchar_scanner.idx, printable_string(str(token)), vchar.pos))
 
         sanity_count += 1
@@ -996,7 +1002,8 @@ def tokenize_recipe(vchar_scanner):
             else:
                 # definitely a variable ref of some sort
                 # save token so far; note no rstrip()!
-                token_list.append(Literal(token))
+                if len(token):
+                    token_list.append(Literal(token))
                 # restart token
                 token = vline.VCharString()
 
@@ -1062,7 +1069,7 @@ def parse_recipes(line_scanner, semicolon_vline=None):
     starting_row = []
 
     for line in line_scanner : 
-        print( "r state={0}".format(state))
+        logger.debug( "r state={0}".format(state))
 
         # file line of 'line'
         row = line_scanner.idx - 1
@@ -1170,7 +1177,7 @@ def seek_elseif(virt_line):
 
     d = seek_directive(phys_line)
     if d in conditional_directive :
-        print("found elseif condition=\"{0}\"".format(d))
+#        print("found elseif condition=\"{0}\"".format(d))
         return d,VirtualLine.from_string(phys_line)
 
     # found junk after else
@@ -1205,8 +1212,8 @@ def handle_conditional_directive(directive_inst, vline_iter, line_scanner):
     # call should have sent us a Directive instance (stupid human check)
     assert isinstance(directive_inst,ConditionalDirective), type(directive_inst)
 
-    print( "handle_conditional_directive() \"{0}\" line={1}".format(
-        directive_inst.name, line_scanner.idx-1))
+#    print( "handle_conditional_directive() \"{0}\" line={1}".format(
+#        directive_inst.name, line_scanner.idx-1))
 
     state_if = 1
     state_else = 3
@@ -1231,7 +1238,7 @@ def handle_conditional_directive(directive_inst, vline_iter, line_scanner):
     starting_pos = directive_inst.code.starting_pos
 
     for virt_line in vline_iter : 
-        print("c state={0}".format(state))
+#        print("c state={0}".format(state))
 #        print("={0}".format(str(virt_line)), end="")
 
         # search for nested directive in the physical line (consolidates the
@@ -1259,7 +1266,7 @@ def handle_conditional_directive(directive_inst, vline_iter, line_scanner):
             # save the block of stuff we've read
             line_list = save_block(line_list)
 
-            print("phys_line={0}".format(printable_string(phys_line)))
+#            print("phys_line={0}".format(printable_string(phys_line)))
 
             # handle "else if"
             elseif = seek_elseif(virt_line)
@@ -1289,7 +1296,7 @@ def handle_conditional_directive(directive_inst, vline_iter, line_scanner):
 
         else : 
             # save the line into the block
-            print("save \"{0}\"".format(printable_string(str(virt_line))))
+#            print("save \"{0}\"".format(printable_string(str(virt_line))))
             line_list.append(virt_line)
 
         if state==state_endif : 
@@ -1322,11 +1329,11 @@ def tokenize_define_directive(vchar_scanner):
 
     # get the starting position of this scanner (for error reporting)
     starting_pos = vchar_scanner.lookahead().pos
-    print("starting_pos=", starting_pos)
+#    print("starting_pos=", starting_pos)
 
     for vchar in vchar_scanner : 
         c = vchar.char
-        print("m c={0} state={1} pos={2} ".format( 
+        logger.debug("m c={0} state={1} pos={2} ".format( 
                 printable_char(c), state, vchar.pos))
 
         if state==state_start:
@@ -1478,7 +1485,7 @@ def tokenize_directive(directive_str, virt_line, vline_iter, line_scanner):
         # now feed to the chosen tokenizer
         expression = d["tokenizer"](viter)
 
-    print("{0} expression=\"{1}\"".format(directive_str, printable_string(str(expression))))
+#    print("{0} expression=\"{1}\"".format(directive_str, printable_string(str(expression))))
 
     # construct a Directive instance
     try : 
@@ -1680,7 +1687,13 @@ def execute(makefile):
     # tinkering with how to evaluate
     logger.info("Starting execute of %s", id(makefile))
     from symtable import SymbolTable
+#    breakpoint()
     symtable = SymbolTable()
+
+#    for tok in makefile.token_list:
+#        s = tok.eval(symtable)
+#        logger.debug("execute result s=\"%s\"", s)
+
     for tok in makefile.token_list:
         try:
             s = tok.eval(symtable)
@@ -1689,12 +1702,13 @@ def execute(makefile):
             # let ParseError propagate
             raise
         except:
+#            breakpoint()
             # My code crashed. For shame!
             logger.error("eval exception during token makefile=%s", tok.makefile())
             logger.error("eval exception during token string=%s", tok.string)
-            logger.error("eval exception during token token_list=%s", tok.token_list)
-            for t in tok.token_list:
-                logger.error("token=%s string=%s", t, t.string)
+#            logger.error("eval exception during token token_list=%s", tok.token_list)
+#            for t in tok.token_list:
+#                logger.error("token=%s string=%s", t, t.string)
             find_pos(tok)
             logger.exception("INTERNAL ERROR")
 #            logger.error("eval failed tok file=%s pos=%s", tok.
@@ -1717,7 +1731,6 @@ def parse_args():
 
 if __name__=='__main__':
     args = parse_args()
-    print(args)
 
 #    logging.basicConfig(level=logging.INFO)
     logging.basicConfig(level=logging.DEBUG)
@@ -1733,7 +1746,6 @@ if __name__=='__main__':
         # TODO dump lots of lovely useful information about the failure.
         sys.exit(1)
 
-
     # print the S Expression
 #    print("makefile={0}".format(makefile))
 
@@ -1744,4 +1756,4 @@ if __name__=='__main__':
             print(makefile.makefile(), file=outfile)
         print("# end makefile")
 
-#    execute(makefile)
+    execute(makefile)

@@ -32,13 +32,13 @@ def validate(infile):
 		if line.startswith("-c "):
 			line = line[3:]
 
-		print("line={0}".format(line))
+#		print("line={0}".format(line))
 		separator = line[0]
 		fields = line[2:].split(separator)
 		assert len(fields)==2,(len(fields),(line,fields))
 
 		for z in zip( (fields[0],), (fields[1],) ):
-			print( z )
+#			print( z )
 			msg = "\"{0}\"!=\"{1}\"".format(z[0],z[1])
 			if z[0]!=z[1] :
 				print("fail lhs=^",z[0],"$")
