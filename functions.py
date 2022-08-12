@@ -10,6 +10,12 @@ from symbol import VarRef, Literal
 from evaluate import evaluate
 from vline import VCharString, whitespace
 from error import *
+from functions_base import Function, FunctionWithArguments
+from functions_fs import *
+from functions_cond import *
+from functions_str import *
+from todo import TODOMixIn
+
 import shell
 
 __all__ = [ "Info", 
@@ -21,46 +27,46 @@ __all__ = [ "Info",
           ]
 
 # built-in functions GNU Make 3.81(ish?)
-builtins = {
-    "subst",
-    "patsubst",
-    "strip",
-    "findstring",
-    "filter",
-    "filter-out",
-    "sort",
-    "word",
-    "words",
-    "wordlist",
-    "firstword",
-    "lastword",
-    "dir",
-    "notdir",
-    "suffix",
-    "basename",
-    "addsuffix",
-    "addprefix",
-    "join",
-    "wildcard",
-    "realpath",
-    "absname",
-    "error",
-    "warning",
-    "shell",
-    "origin",
-    "flavor",
-    "foreach",
-    "if",
-    "or",
-    "and",
-    "call",
-    "eval",
-    "file",
-    "value",
-    "info",
-}
+#builtins = {
+#    "subst",
+#    "patsubst",
+#    "strip",
+#    "findstring",
+#    "filter",
+#    "filter-out",
+#    "sort",
+#    "word",
+#    "words",
+#    "wordlist",
+#    "firstword",
+#    "lastword",
+#    "dir",
+#    "notdir",
+#    "suffix",
+#    "basename",
+#    "addsuffix",
+#    "addprefix",
+#    "join",
+#    "wildcard",
+#    "realpath",
+#    "absname",
+#    "error",
+#    "warning",
+#    "shell",
+#    "origin",
+#    "flavor",
+#    "foreach",
+#    "if",
+#    "or",
+#    "and",
+#    "call",
+#    "eval",
+#    "file",
+#    "value",
+#    "info",
+#}
 
-class Function(VarRef):
+class old_Function(VarRef):
     def __init__(self, args):
         logger.debug("function=%s args=%s", self.name, args)
         super().__init__(args)
@@ -111,42 +117,7 @@ class Error(PrintingFunction):
         print("{}:{}: *** {}. Stop.".format(t.string[0].filename, t.string[0].linenumber, s), file=self.fh)
         sys.exit(1)
 
-class Words(Function):
-    name = "words"
-    def eval(self, symbol_table):
-        s = evaluate(self.token_list, symbol_table)
-        return str(len(s.split()))
-
-class FirstWord(Function):
-    name = "firstword"
-    def eval(self, symbol_table):
-        s = evaluate(self.token_list, symbol_table)
-        try:
-            return s.split()[0]
-        except IndexError:
-            return ""
-
-class IfClass(Function):
-    name = "if"
-    def eval(self, symbol_table):
-        result = self.token_list[0].eval(symbol_table)
-        if len(result):
-            breakpoint()
-            print(":::".join([str(t) for t in self.token_list]))
-            return self.token_list[2].eval(symbol_table)
-        else:
-            return self.token_list[4].eval(symbol_table)
-
-class LastWord(Function):
-    name = "lastword"
-    def eval(self, symbol_table):
-        s = evaluate(self.token_list, symbol_table)
-        try:
-            return s.split()[-1]
-        except IndexError:
-            return ""
-
-class FunctionWithArguments(Function):
+class old_FunctionWithArguments(Function):
     def __init__(self, token_list):
         super().__init__(token_list)
         self.args = []
@@ -159,8 +130,8 @@ class FunctionWithArguments(Function):
         arg_idx = 0
         self.args = [[] for n in range(self.num_args)]
 
-        for t in self.token_list:
-            print(t)
+#        for t in self.token_list:
+#            print(t)
 
         # Walk along the token list looking for Literals which should contain
         # the commas.  Inside the literal(s), look for our comma(s).
@@ -175,8 +146,8 @@ class FunctionWithArguments(Function):
 
             # peek inside the literal for commas 
             lit = []
-            str_iter = iter(t.string)
-            for vchar in str_iter:
+            vstr_iter = iter(t.string)
+            for vchar in vstr_iter:
                 # looking for commas separating the args
                 if vchar.char != ',':
                     # consume leading whitespace
@@ -186,7 +157,7 @@ class FunctionWithArguments(Function):
                         lit.append(vchar)
                     continue
 
-                logger.debug("found comma idx=%d", arg_idx)
+                logger.debug("found comma idx=%d pos=%r", arg_idx, vchar.pos)
                 if lit:
                     # save whatever we've seen so far (if anything)
                     self.args[arg_idx].append(Literal(VCharString(lit)))
@@ -196,14 +167,18 @@ class FunctionWithArguments(Function):
                 if arg_idx+1 == self.num_args:
                     # Done. Have everything we need.
                     # consume the rest of this string
-                    self.args[arg_idx].append(Literal(VCharString(list(str_iter))))
+                    # (this will break from the inner loop)
+                    remaining = list(vstr_iter)
+                    if remaining:
+                        self.args[arg_idx].append(Literal(VCharString(remaining)))
 
                     # consume the rest of the token stream
+                    # (this will break from the outer loop)
                     self.args[arg_idx].extend(list(token_iter))
 
-        for arg in self.args:
-            for field in arg:
-                print(field)
+#        for arg in self.args:
+#            for field in arg:
+#                print(field)
 
         if arg_idx+1 != self.num_args:
             # TODO better error
@@ -211,50 +186,20 @@ class FunctionWithArguments(Function):
             logger.error(errmsg)
             raise ParseError(errmsg)
 
+class Call(TODOMixIn, Function):
+    name = "call"
 
-class Subst(FunctionWithArguments):
-    name = "subst"
-    num_args = 3
+class Eval(TODOMixIn, Function):
+    name = "eval"
 
-    def eval(self, symbol_table):
-        # needs 3 args
-        logger.debug("%s len=%d args=%s", self.name, len(self.args), self.args)
+class Flavor(TODOMixIn, Function):
+    name = "flavor"
 
-        from_s = "".join(t.eval(symbol_table) for t in self.args[0])
-        to_s = "".join(t.eval(symbol_table) for t in self.args[1])
-        text_s = "".join(t.eval(symbol_table) for t in self.args[2]) 
+class Foreach(TODOMixIn, Function):
+    name = "foreach"
 
-        logger.debug("%s from=\"%s\" to=\"%s\" text=\"%s\"", self.name, from_s, to_s, text_s)
-        if not from_s:
-            # empty "from" leaves text unchanged
-            return text_s
-        s = text_s.replace(from_s, to_s)
-        logger.debug("%s \"%s\"", self.name, s)
-
-        return s
-
-class Word(FunctionWithArguments):
-    name = "word"
-    num_args = 2
-
-    def eval(self, symbol_table):
-        n_s = "".join(t.eval(symbol_table) for t in self.args[0])
-        text_s = "".join(t.eval(symbol_table) for t in self.args[1])
-
-        try:
-            idx = int(n_s)
-        except ValueError:
-            raise ParseError
-
-        if idx <= 0:
-            errmsg = "first argument to '{.name}' must be greater than 0.".format(self)
-            logger.error(errmsg)
-            raise EvalError(description=errmsg)
-
-        try:
-            return text_s.split()[idx]
-        except IndexError:
-            return ""
+class Origin(TODOMixIn, Function):
+    name = "origin"
 
 class Shell(Function):
     name = "shell"
@@ -263,6 +208,9 @@ class Shell(Function):
         s = "".join([t.eval(symbol_table) for t in self.token_list])
         logger.debug("%s s=\"%s\"", self.name, s)
         return shell.execute(s)
+
+class ValueClass(TODOMixIn, Function):
+    name = "value"
 
 def split_function_call(s):
     # break something like "info hello world" that needs a secondary parse
@@ -306,15 +254,40 @@ def split_function_call(s):
 
 _classes = {
     # please keep in alphabetical order
+    "abspath" : AbsPath,
+    "addprefix" : AddPrefix,
+    "addsuffix" : AddSuffix,
+    "and" : AndClass,
+    "call" : Call,
+    "dir" : DirClass,
     "error" : Error,
+    "eval" : Eval,
+    "file" : FileClass,
+    "filter" : FilterClass,
+    "filter-out" : FilterOutClass,
+    "findstring" : FindString,
     "firstword" : FirstWord,
+    "flavor" : Flavor,
+    "foreach" : Foreach,
     "if" : IfClass,
     "info" : Info,
+    "join" : JoinClass,
     "lastword" : LastWord,
+    "notdir" : NotDirClass,
+    "or" : OrClass,
+    "origin" : Origin,
+    "patsubst" : Patsubst,
+    "realpath" : RealPath,
     "shell" : Shell,
+    "sort" : SortClass,
+    "strip" : StripClass,
     "subst" : Subst,
+    "suffix" : Suffix,
+    "value" : ValueClass,
     "warning" : WarningClass,
+    "wildcard" : Wildcard,
     "word" : Word,
+    "wordlist" : WordList,
     "words" : Words,
 }
 
@@ -341,5 +314,7 @@ def make_function(arglist):
 
     logger.debug("make_function fname=\"%s\" rest=\"%s\" fcls=%s", fname, rest, fcls)
 
-    if rest: return fcls([Literal(rest)] + arglist[1:])
+    if rest: 
+        return fcls([Literal(rest)] + arglist[1:])
+
     return fcls(arglist[1:])

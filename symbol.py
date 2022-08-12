@@ -102,6 +102,9 @@ class Symbol(object):
         # children should override
         raise NotImplementedError
 
+    def get_pos(self):
+        return self.string[0].filename, self.string[0].pos
+
 class Literal(Symbol):
     # A literal found in the token stream. Store as a string.
 

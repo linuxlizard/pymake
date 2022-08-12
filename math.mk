@@ -12,7 +12,7 @@ ifndef range
 $(error missing range)
 endif
 
-# communative compare two strings (numbers)
+# Commutative compare two strings (numbers)
 # $1,$2 operands
 # $3,$4 comparators
 # if ($1==$3 and $2==$4) or ($1==$4 and $2==$3) then true else false
@@ -79,8 +79,8 @@ $(info $x-$y=$(call sub,$x,$y))
 
 # kinda slow (duh)
 $(info slow calculation...)
-x=5000
-y=9000
+x=5999
+y=7999
 $(info $x+$y=$(call add,$x,$y))
 
 @:;@:
