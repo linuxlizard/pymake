@@ -909,8 +909,9 @@ def tokenize_variable_ref(vchar_scanner):
                     c = next(vchar_scanner)
                     state = state_in_var_ref
                 else:
-                    # save token so far
-                    token_list.append( Literal(token) )
+                    # save token so far (if any)
+                    if len(token):
+                        token_list.append( Literal(token) )
                     # restart token
                     token = vline.VCharString()
                     # push the '$' back onto the scanner

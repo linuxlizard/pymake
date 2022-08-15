@@ -142,6 +142,9 @@ class VChar(object):
         """ one-based line number (vs the zero-based row/col)"""
         return self.pos[VCHAR_ROW]+1
 
+    def get_pos(self):
+        return self.filename, self._pos
+
     def __str__(self):
         return self.char
 
@@ -194,6 +197,7 @@ class VCharString(object):
         # 
         # !! WARNING !! Modifies the "string" in-place! Regular strings return a copy.
         # 
+        # FIXME I hate that this modifies string in-place. Smells bad.
         while len(self.chars) and self.chars[-1].char in whitespace:
             self.chars.pop()
         return self
@@ -212,6 +216,10 @@ class VCharString(object):
         # see also printable_str() in VirtualLine
         s = "".join([printable_char(vchar.char) for vchar in self.chars if not vchar.hide]) 
         return s
+
+    def get_pos(self):
+        # XXX what about empty VCharString ?
+        return self.chars[0].filename, self.chars[0].pos
 
 class VirtualLine(object):
     def __init__(self, phys_lines_list, starting_pos, filename):
