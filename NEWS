@@ -1,0 +1,23 @@
+202208017.  Welcome to PyMake. 
+
+Hello! Welcome!
+
+My goal is a source level debugger for GNU Makefiles. (Nothing against other
+Make implementations but I have to start somewhere.) The plan is to have a text
+interface like gdb.
+
+The project is very early. I can parse almost all of fully formed makefiles.  I
+can output S-expressions, regenerate the makefile. 
+
+As of this writing, I am implementing the GNU make $() functions. I cannot yet
+execute rules so I'm not yet actually a fully functioning Make.
+
+Example usage:
+	# read a makefile, dumps incredible amounts of debugging while parsing.
+	# Output of the makefile got to stdout
+	python3 pymake.py Makefile
+
+	# Example: parse/execute functions.mk, rewrite the makefile from the parsed
+	# source to out.mk (very useful for seeing a cleaned makefile)
+	python3 pymake.py -o out.mk functions.mk
+

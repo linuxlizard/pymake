@@ -1722,6 +1722,8 @@ def usage():
 def parse_args():
     parser = argparse.ArgumentParser(description="Makefile Debugger")
     parser.add_argument('-o', '--output', help="write regenerated makefile to file") 
+    parser.add_argument('-d', '--debug', action='count', help="set log level to DEBUG (default is INFO)") 
+    parser.add_argument('-S', dest='s_expr', action='store_true', help="output the S-expression to stdout") 
     parser.add_argument('filename', help='read as a makefile')
 
     args = parser.parse_args()
@@ -1733,14 +1735,16 @@ def parse_args():
 if __name__=='__main__':
     args = parse_args()
 
-#    logging.basicConfig(level=logging.INFO)
-    logging.basicConfig(level=logging.DEBUG)
+    if args.debug:
+        logging.basicConfig(level=logging.DEBUG)
+    else:
+        logging.basicConfig(level=logging.INFO)
 
     if len(sys.argv) < 2 : 
         usage()
         sys.exit(1)
 
-    infilename = sys.argv[1]
+    infilename = args.filename
     try : 
         makefile = parse_makefile(infilename)
     except ParseError:
@@ -1748,7 +1752,10 @@ if __name__=='__main__':
         sys.exit(1)
 
     # print the S Expression
-#    print("makefile={0}".format(makefile))
+    if args.s_expr:
+        print("# start S-expression")
+        print("makefile={0}".format(makefile))
+        print("# end S-expression")
 
     # regenerate the makefile
     if args.output:
@@ -1758,3 +1765,4 @@ if __name__=='__main__':
         print("# end makefile")
 
     execute(makefile)
+
