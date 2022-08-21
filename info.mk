@@ -21,8 +21,11 @@ $(info q=$q)
 s=$(info hello, world)
 $(info info returns s="$s")
 
-a=
-$(info a="$(value a)")
+# TODO value() not yet implemented 
+#a=
+#$(info value a=>>$(value a)<<)
+#a=42
+#$(info value a=>>$(value a)<<)
 #a=
 #$(if $a,$(error foo),$(info ok))
 #$(if "",$(error foo),$(info ok))

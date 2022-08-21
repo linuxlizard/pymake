@@ -29,7 +29,7 @@ def run():
 
     for test in comments_test_list:
         s, expected_remain = test
-        print("test={0}".format(printable_string(s))
+        print("test={0}".format(printable_string(s)))
 
         line_scanner = ScannerIterator(s.split("\n"), "/dev/null")
         vline_iter = vline.get_vline("/dev/null", line_scanner)

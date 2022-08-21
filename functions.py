@@ -211,6 +211,17 @@ class Shell(Function):
 
 class ValueClass(TODOMixIn, Function):
     name = "value"
+    num_args = 1
+
+    # 20220820 ; start implementing this, ran into some pretty big problems, so
+    # leaving it for now. (put TODO back)
+
+    def eval(self, symbol_table):
+#        assert len(self.args)==1, len(self.args)
+        result = evaluate(self.token_list, symbol_table)
+        sym = symbol_table.fetch(result)
+        breakpoint()
+        return sym.eval(symbol_table)
 
 def split_function_call(s):
     # break something like "info hello world" that needs a secondary parse

@@ -3,6 +3,6 @@
 #
 class TODOMixIn:
     def __init__(self, *na):
-        raise NotImplementedError
+        raise NotImplementedError(self.name)
 
 

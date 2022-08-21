@@ -37,8 +37,22 @@ class LastWord(Function):
 class Patsubst(TODOMixIn, Function):
     name = "patsubst"
 
-class SortClass(TODOMixIn, Function):
+class SortClass(Function):
     name = "sort"
+
+    # Sort does not take arguments function-style (commas are not interpreted
+    # as separate arguments. Rather the entire single arg is interpretted as a
+    # space separated list.
+    def eval( self, symbol_table):
+        print(self.token_list)
+        # evalutate all the things
+        step1 = "".join([t.eval(symbol_table) for t in self.token_list])
+        print(f"step1={step1}")
+        # split on whitespace, discarding extra whitespace
+        step2 = [s for s in step1.split() if len(s.strip())]
+        s = " ".join(sorted(step2))
+        return s
+        
 
 class StripClass(TODOMixIn, Function):
     name = "strip"
