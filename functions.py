@@ -7,7 +7,6 @@ import logging
 logger = logging.getLogger("pymake.functions")
 
 from symbol import VarRef, Literal
-from evaluate import evaluate
 from vline import VCharString, whitespace
 from error import *
 from functions_base import Function, FunctionWithArguments
@@ -15,6 +14,7 @@ from functions_fs import *
 from functions_cond import *
 from functions_str import *
 from todo import TODOMixIn
+from flatten import flatten
 
 import shell
 
@@ -66,27 +66,16 @@ __all__ = [ "Info",
 #    "info",
 #}
 
-class old_Function(VarRef):
-    def __init__(self, args):
-        logger.debug("function=%s args=%s", self.name, args)
-        super().__init__(args)
-
-    def makefile(self):
-        s = "$(" + self.name + " "
-        for t in self.token_list : 
-            s += t.makefile()
-        s += ")"
-        return s
-
-    def eval(self, symbol_table):
-        return ""
-
 class PrintingFunction(Function):
     def eval(self, symbol_table):
-        s = evaluate(self.token_list, symbol_table)
-        logger.debug("%s \"%s\"", self.name, s)
-        print(s, file=self.fh)
-        return ""
+        step1 = [t.eval(symbol_table) for t in self.token_list]
+#        print(f"print step1={step1}")
+
+        for s in step1:
+            print(" ".join(s), file=self.fh, end="")
+        print("",file=self.fh)
+
+        return [""]
 
 class Info(PrintingFunction):
     name = "info"
@@ -117,74 +106,6 @@ class Error(PrintingFunction):
         print("{}:{}: *** {}. Stop.".format(t.string[0].filename, t.string[0].linenumber, s), file=self.fh)
         sys.exit(1)
 
-class old_FunctionWithArguments(Function):
-    def __init__(self, token_list):
-        super().__init__(token_list)
-        self.args = []
-        self._parse_args()
-
-    def _parse_args(self):
-        """Parse the token list into an array of arguments separated by literal commas."""
-        logger.debug("parse_args \"%s\"", self.name)
-
-        arg_idx = 0
-        self.args = [[] for n in range(self.num_args)]
-
-#        for t in self.token_list:
-#            print(t)
-
-        # Walk along the token list looking for Literals which should contain
-        # the commas.  Inside the literal(s), look for our comma(s).
-        # Split the Literal into new Literals around the commas.
-        # Preserve everything else as-is.
-        token_iter = iter(self.token_list)
-        for t in token_iter:
-            if not isinstance(t, Literal):
-                # no touchy
-                self.args[arg_idx].append(t)
-                continue
-
-            # peek inside the literal for commas 
-            lit = []
-            vstr_iter = iter(t.string)
-            for vchar in vstr_iter:
-                # looking for commas separating the args
-                if vchar.char != ',':
-                    # consume leading whitespace
-                    if arg_idx == 0 and vchar.char in whitespace:
-                        pass
-                    else:
-                        lit.append(vchar)
-                    continue
-
-                logger.debug("found comma idx=%d pos=%r", arg_idx, vchar.pos)
-                if lit:
-                    # save whatever we've seen so far (if anything)
-                    self.args[arg_idx].append(Literal(VCharString(lit)))
-                    lit = []
-                arg_idx += 1
-
-                if arg_idx+1 == self.num_args:
-                    # Done. Have everything we need.
-                    # consume the rest of this string
-                    # (this will break from the inner loop)
-                    remaining = list(vstr_iter)
-                    if remaining:
-                        self.args[arg_idx].append(Literal(VCharString(remaining)))
-
-                    # consume the rest of the token stream
-                    # (this will break from the outer loop)
-                    self.args[arg_idx].extend(list(token_iter))
-
-#        for arg in self.args:
-#            for field in arg:
-#                print(field)
-
-        if arg_idx+1 != self.num_args:
-            # TODO better error
-            errmsg = "found args=%d but needed=%d" % (arg_idx, self.num_args)
-            logger.error(errmsg)
-            raise ParseError(errmsg)
 
 class Call(TODOMixIn, Function):
     name = "call"

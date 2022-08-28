@@ -2,6 +2,7 @@
 
 import sys
 import logging
+import itertools
 
 _debug = True
 
@@ -11,8 +12,8 @@ from printable import printable_char, printable_string
 from vline import VirtualLine, VCharString
 from version import Version
 from error import *
-from evaluate import evaluate
 import shell
+from flatten import flatten
 
 _debug = True
 
@@ -117,7 +118,8 @@ class Literal(Symbol):
         super().__init__(vstring)
     
     def eval(self, symbol_table):
-        return str(self.string)
+        # everything returns an array of string
+        return [str(self.string)]
 
 class Operator(Symbol):
     pass
@@ -186,7 +188,10 @@ class Expression(Symbol):
         for e in self.token_list:
             logger.debug("expression e=%s", e)
 
-        return "".join([e.eval(symbol_table) for e in self.token_list])
+        step1 = [e.eval(symbol_table) for e in self.token_list]
+#        print(f"e step1={step1}")
+#        print(f"e step1={list(flatten(step1))}")
+        return flatten(step1)
 
     def get_pos(self):
         # Find the position (filename,(row,col)) of this Expression.
@@ -215,22 +220,17 @@ class VarRef(Expression):
         return "$(" + "".join([t.makefile() for t in self.token_list]) + ")"
 
     def eval(self, symbol_table):
-        s = ""
+        result = []
         for sym in self.token_list:
-#            print(type(sym), sym)
             value = sym.eval(symbol_table)
-#            print(type(value), value)
             ref = symbol_table.fetch(value)
-#            print(type(ref), ref)
             if isinstance(ref,Expression):
                 # execute the expression
                 ref_value = ref.eval(symbol_table)
-#                print(type(ref_value), ref_value)
-                s += ref_value
+                result.extend(ref_value)
             else:
-                s += ref
-        return s
-#        return "".join([symbol_table.fetch(sym.eval(symbol_table)) for sym in self.token_list])
+                result.extend(ref)
+        return result
 
 class AssignmentExpression(Expression):
     def __init__(self, token_list):
@@ -242,6 +242,10 @@ class AssignmentExpression(Expression):
         lhs = self.token_list[0].eval(symbol_table)
         op = self.token_list[1]
         logger.debug("assignment lhs=%s op=%s", lhs, op)
+
+        # FIXME I have a sneaking suspicion the rhs can be token_list[3:]
+        # pyfiles := $(wildcard foo*.py) $(wildcard bar*.py) $(wildcard baz*.py)
+        assert len(self.token_list) == 3
 
         # from the gnu make pdf:
         # immediate = deferred
@@ -272,9 +276,15 @@ class AssignmentExpression(Expression):
             raise Unimplemented("op=%s"%op)
 
         logger.debug("assignment rhs=%s", rhs)
-        symbol_table.add(lhs, rhs)
 
-        return None
+        # lhs should be an iterable of strings
+#        assert isinstance(lhs,list), type(lhs)
+#        assert isinstance(lhs[0],str), type(lhs[0])
+
+        key = "".join(lhs)
+        symbol_table.add(key, list(rhs))
+
+        return ""
 
     def sanity(self):
         # AssignmentExpression :=  Expression AssignOp Expression

@@ -4,6 +4,7 @@ sinclude noname.mk
 
 # this tries to include four files: =,foo,bar,baz
 include = foo bar baz
+$(info include=$(include))
 
 # an assignment expression
 include=foo bar baz

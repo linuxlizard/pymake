@@ -7,7 +7,8 @@ $(info hello, world)
 # legal (see "missing separator" notes below)
 $(if "$(FOO)",$(BAR),$(BAZ))
 
-$(info hello, world)
+myinfo=info
+$(eval $(myinfo) hello, world)
 
 $(info $(.FEATURES))
 

@@ -35,6 +35,9 @@ class FunctionWithArguments(Function):
         # check for proper num_args
         # [0]==min [1]==max ; min/max number of arguments
         # num_args is None 
+        #
+        # TODO need to handle min,max args like gnu make does
+        # (rather than assuming fns have an exact number of arguments)
 
     def _parse_args(self):
         """Parse the token list into an array of arguments separated by literal commas."""
@@ -72,6 +75,7 @@ class FunctionWithArguments(Function):
             # to separately parse for commas to make a function argument list
             #
             # peek inside the literal for commas 
+            breakpoint()
             lit = []
             vstr_iter = iter(t.string)
             for vchar in vstr_iter:
@@ -110,7 +114,7 @@ class FunctionWithArguments(Function):
                     except IndexError:
                         self.args.append(new_arg)
 
-            # verify we haven't left anything danglint
+            # verify we haven't left anything dangling
             if lit:
                 new_arg = Literal(VCharString(lit))
                 _save_arg(new_arg)

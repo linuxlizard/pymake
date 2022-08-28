@@ -1678,11 +1678,13 @@ def find_pos(tok):
     # associated with it but contains the Symbols that do.
     try:
         for t in tok.token_list:
-            find_pos(t)
+            return find_pos(t)
     except AttributeError:
         # we found a Symbol
-        for c in tok.string:
-            logger.debug("%s %s %s", c, c.pos, c.filename)
+        c = tok.string[0]
+        return c.filename, c.pos
+#        for c in tok.string:
+#            logger.debug("f %s %s %s", c, c.pos, c.filename)
 
 def execute(makefile):
     # tinkering with how to evaluate
@@ -1705,14 +1707,14 @@ def execute(makefile):
         except:
 #            breakpoint()
             # My code crashed. For shame!
-            logger.error("eval exception during token makefile=%s", tok.makefile())
-            logger.error("eval exception during token string=%s", tok.string)
+            logger.error("INTERNAL ERROR eval exception during token makefile=%s", tok.makefile())
+            logger.error("INTERNAL ERROR eval exception during token string=%s", tok.string)
 #            logger.error("eval exception during token token_list=%s", tok.token_list)
 #            for t in tok.token_list:
 #                logger.error("token=%s string=%s", t, t.string)
-            find_pos(tok)
-            logger.exception("INTERNAL ERROR")
-#            logger.error("eval failed tok file=%s pos=%s", tok.
+            filename,pos = find_pos(tok)
+#            logger.exception("INTERNAL ERROR")
+            logger.error("eval failed tok file=%s pos=%s", filename, pos)
             raise
 
 def usage():
