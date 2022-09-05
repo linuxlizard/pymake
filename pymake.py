@@ -1690,7 +1690,6 @@ def execute(makefile):
     # tinkering with how to evaluate
     logger.info("Starting execute of %s", id(makefile))
     from symtable import SymbolTable
-#    breakpoint()
     symtable = SymbolTable()
 
 #    for tok in makefile.token_list:
