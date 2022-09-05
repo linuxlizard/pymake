@@ -3,6 +3,7 @@
 import os
 import logging
 
+from symbol import Symbol
 from flatten import flatten
 
 logger = logging.getLogger("pymake.symtable")
@@ -23,10 +24,23 @@ class SymbolTable(object):
 
         self.symbols[name] = value
 
+    def maybe_eval(self, value):
+        # handle the case where an expression is stored in the symbol table vs
+        # a value 
+        # e.g.,  a=10  (evaluated whenever $a is used)
+        # vs   a:=10  (evaluated immediately and "10" stored in symtable)
+        #
+        if len(value) and isinstance(value[0],Symbol):
+            step1 = [t.eval(self) for t in value]
+            return flatten(step1)
+
+        return value
+
     def fetch(self, key):
         # now try a var lookup 
         # Will always return an empty string on any sort of failure. 
         logger.debug("fetch key=\"%r\"", key)
+#        print("fetch key=\"%r\"" % key)
 
         assert isinstance(key,list), type(key)
 
@@ -34,9 +48,13 @@ class SymbolTable(object):
         logger.debug("fetch s=\"%r\"", s)
 
         if not len(s):
+            # XXX why am I handling an empty key?
+            assert 0
             return [""]
+
         try:
-            return self.symbols[s]
+#            print("fetch value=\"%r\"" % self.symbols[s])
+            return self.maybe_eval(self.symbols[s])
         except KeyError:
             pass
 
@@ -48,5 +66,4 @@ class SymbolTable(object):
         if value is None:
             return [""]
         logger.debug("sym=%s found in environ", s)
-        return value
-
+        return [value]
