@@ -67,15 +67,33 @@ __all__ = [ "Info",
 #}
 
 class PrintingFunction(Function):
-    def eval(self, symbol_table):
-        step1 = [t.eval(symbol_table) for t in self.token_list]
-#        print(f"print step1={step1}")
+    fmt = None
 
-        for s in step1:
-            print(" ".join(s), file=self.fh, end="")
-        print("",file=self.fh)
+    # gnu make has some very particular behaviors around spacing in printing output.
+    def eval(self, symbol_table):
+        msg = ""
+        for t in self.token_list:
+            isfn = isinstance(t, Function)
+#            print(f"t={t} isfn={isfn}")
+            if isfn:
+                s = " ".join(t.eval(symbol_table))
+            else:
+                s = "".join(t.eval(symbol_table))
+            msg += s
+
+        # GNU Make discards whitespace between fn call and 1st arg
+        # e.g., $(info   5)  ->  "5"  (not "   5")
+        # Trailing whitespace is preserved.
+        msg = msg.lstrip()
+
+        if self.fmt:
+            t = self.token_list[0]
+            print(self.fmt.format(t.string[0].filename, t.string[0].linenumber, msg), file=self.fh)
+        else:
+            print("%s" % msg, file=self.fh)
 
         return [""]
+
 
 class Info(PrintingFunction):
     name = "info"
@@ -85,25 +103,17 @@ class WarningClass(PrintingFunction):
     # name Warning is used by Python builtins so use WarningClass instead
     name = "warning"
     fh = sys.stderr
+    fmt = "{}:{}: {}"
 
-    def eval(self, symbol_table):
-        logger.debug("self=%s", self)
-        t = self.token_list[0]
-        s = evaluate(self.token_list, symbol_table)
-        print("{}:{}: {}".format(t.string[0].filename, t.string[0].linenumber, s), file=self.fh)
-        return ""
 
 class Error(PrintingFunction):
     name = "error"
     fh = sys.stderr
+    fmt = "{}:{}: *** {}. Stop."
 
     def eval(self, symbol_table):
-        logger.debug("self=%s", self)
-
-        t = self.token_list[0]
-
-        s = evaluate(self.token_list, symbol_table)
-        print("{}:{}: *** {}. Stop.".format(t.string[0].filename, t.string[0].linenumber, s), file=self.fh)
+        super().eval(symbol_table)
+        # buh-bye
         sys.exit(1)
 
 
@@ -126,9 +136,13 @@ class Shell(Function):
     name = "shell"
 
     def eval(self, symbol_table):
-        s = "".join([t.eval(symbol_table) for t in self.token_list])
-        logger.debug("%s s=\"%s\"", self.name, s)
-        return shell.execute(s)
+        # TODO condense these steps
+        step1 = [t.eval(symbol_table) for t in self.token_list]
+        step2 = flatten(step1)
+        step3 = "".join(step2)
+        step4 = shell.execute(step3)
+        # everything returns an iterable of strings
+        return step4.split()
 
 class ValueClass(TODOMixIn, Function):
     name = "value"
@@ -225,6 +239,10 @@ _classes = {
 
 def make_function(arglist):
     logger.debug("make_function arglist=%s", arglist)
+
+    # $() is valid (empty varref)
+    if not arglist:
+        raise KeyError("")
 
 #    for a  in arglist:
 #        print(a)

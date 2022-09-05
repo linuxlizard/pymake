@@ -101,7 +101,7 @@ class Symbol(object):
 
     def eval(self, symbol_table):
         # children should override
-        raise NotImplementedError
+        raise NotImplementedError(self.name)
 
     def get_pos(self):
         return self.string[0].filename, self.string[0].pos
@@ -226,6 +226,7 @@ class VarRef(Expression):
             ref = symbol_table.fetch(value)
             if isinstance(ref,Expression):
                 # execute the expression
+                assert 0  # do I need this case anymore now that I eval() inside symtable.fetch() ?
                 ref_value = ref.eval(symbol_table)
                 result.extend(ref_value)
             else:

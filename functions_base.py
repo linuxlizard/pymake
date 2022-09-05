@@ -24,6 +24,9 @@ class Function(VarRef):
 
 
 class FunctionWithArguments(Function):
+    min_args = 0
+    max_args = 0
+
     def __init__(self, token_list):
         super().__init__(token_list)
         self.args = []
@@ -46,8 +49,11 @@ class FunctionWithArguments(Function):
         arg_idx = 0
         self.args = []
 
+        # ugh
+        start = True
+
 #        for t in self.token_list:
-#            print(t)
+#            print(f"_parse-args t={t}")
 
         def _save_arg(new_arg):
             # fn arguments are stored as an array self.args
@@ -68,8 +74,15 @@ class FunctionWithArguments(Function):
             if not isinstance(t, Literal):
                 # no touchy
 #                print(f"save {t}")
+                start = False
                 _save_arg(t)
                 continue
+
+            # ugly special case: throw away leading spaces between the fn name
+            # and the 1st argument. All other spaces need to be preserved. GNU
+            # Make handles spaces in arguments differently depending on the fn.
+            # For example, $(if) wants the spaces but the string fns will
+            # discard them (split on the whitespace)
 
             # at this point, we have some sort of literal string that we have
             # to separately parse for commas to make a function argument list
@@ -79,14 +92,18 @@ class FunctionWithArguments(Function):
             lit = []
             vstr_iter = iter(t.string)
             for vchar in vstr_iter:
+#                if start:
+#                    breakpoint()
+
+                if start and vchar.char in whitespace:
+                    continue
+
+                # FIXME yuk ; I hate one-time flags
+                start = False
+
                 # looking for commas separating the args
                 if vchar.char != ',':
-                    # consume leading whitespace
-                    if arg_idx == 0 and vchar.char in whitespace:
-                        # nom nom nom eat whitespace
-                        pass
-                    else:
-                        lit.append(vchar)
+                    lit.append(vchar)
                     continue
 
                 logger.debug("found comma idx=%d pos=%r", arg_idx, vchar.pos)
@@ -120,11 +137,12 @@ class FunctionWithArguments(Function):
                 _save_arg(new_arg)
 
         # sanity checks
-        for arg in self.args:
-            for field in arg:
-#                print(f"arg={field} at {field.get_pos()}")
-                field.get_pos()
+        for arg_list in self.args:
+            for arg in arg_list:
+#                print(f"arg={arg} at {arg.get_pos()}")
+                arg.get_pos()
 
+        # TODO catch improper arguments
 #        if arg_idx+1 < self.num_args:
 #            # TODO better error
 #            errmsg = "found args=%d but needed=%d" % (arg_idx, self.num_args)
