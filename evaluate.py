@@ -8,6 +8,7 @@ import logging
 logger = logging.getLogger("pymake.evaluate")
 
 def evaluate(symbol_list, symbol_table):
+    # do not use this fn anymore
     assert 0
 
     s = ""
