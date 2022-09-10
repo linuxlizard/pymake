@@ -1,5 +1,9 @@
 # functions for string substitution and analysis
 
+import logging
+
+logger = logging.getLogger("pymake.functions")
+
 from functions_base import Function, FunctionWithArguments
 from todo import TODOMixIn
 from flatten import flatten
@@ -25,6 +29,58 @@ class StringFnEval():
             for word in s.split():
                 yield word
 
+# Make is very whitespace sensitive so this is a little strange.  I'm
+# going to comment this like crazy because the "why" will all leak
+# from my brain the moment I move on.
+#
+# GNU Make works on whitespace separated strings. GNU Make will build a new
+# string then split it on whitespace later. 
+#
+# My make works with arrays of Python strings (functions return an array of
+# python strings). However, when I'm working with a Literal string
+# containing spaces, I still need to treat those spaces as signifigant.
+#
+# My functions return an array of strings. My functions work with arrays of
+# strings. An expression will be an array of function calls returning arrays of
+# strings (yielding an array of array of strings). However, a literal string
+# containing spaces will eval to the literal string which needs to be split
+# into individual strings.
+#
+def strings_evaluate(token_list, symbol_table):
+    # hilarious one liner
+    return "".join( [" ".join(s_list) for s_list in [t.eval(symbol_table) for t in token_list]] ).split()
+
+#    step1 = [t.eval(symbol_table) for t in token_list]
+    # step1 will be an array of arrays of strings
+    #
+    # Contrived Example:
+    # x=a e i o u
+    # a=a ; b=b
+    # $(filter $a$b $a $b  e  i  o  u   $(shell seq 1 1 10), $(x))
+    # 
+    # The eval'd array of array of string would be:
+    #   [['a'], ['b'], [' '], ['a'], [' '], ['b'], [' e  i  o  u   '], ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10']]
+    # I need to collapse that to:
+    #   ['ab', 'a', 'b', 'e', 'i', 'o', 'u', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10']
+    # Note the literal "e i o u" contains spaces.
+    #
+    # The inner " ".join combines neighboring strings of the inner lists ; each
+    # inner list is a list of strings from Symbol.eval() (a function call or a
+    # symbol table lookup; the function call result will be a list of strings
+    # but a symbol table lookup could be a literal string containing spaces)
+    # ['1', '2', '3', ...]  ->  "1 2 3 "...
+    # [' e  i  o  u   '] -> " e  i  o  u   "
+    #
+    # outer "".join combines separate fields
+    # ['a'],['b'] -> "ab"
+    # ['a'],[' '],['b'] -> "a b"
+    #
+    # Then we have to re-split it on whitespace. Now we have an 1-D array of
+    # python strings that can be used for any string fn operation.
+    #
+#    s = "".join( [" ".join(s_list) for s_list in step1] )
+#    return s.split()
+                
 
 class FilterClass(FunctionWithArguments):
     name = "filter"
@@ -33,44 +89,16 @@ class FilterClass(FunctionWithArguments):
     def eval(self, symbol_table):
         assert len(self.args)==2, len(self.args)
 
-        breakpoint()
-        step1 = [a.eval(symbol_table) for a in self.args[0]]
-        filter_on = "".join(flatten(step1)).split()
+        filter_on = strings_evaluate(self.args[0], symbol_table)
+                
+        targets = strings_evaluate(self.args[1], symbol_table)
 
-        step1 = [a.eval(symbol_table) for a in self.args[1]]
-        targets = "".join(flatten(step1)).split()
-
-#        breakpoint()
-        """
-        for a in self.args[1]:
-            # eval() returns a list of strings
-            s_list = a.eval(symbol_table)
-            for s in s_list:
-                for f in s.split():
-#                    print(f"split f={f}")
-                    pass
-        """
-
-#        filter_on = [f for a in self.args[0] for s in a.eval(symbol_table) for f in s.split()]
-#        targets = [f for a in self.args[1] for s in a.eval(symbol_table) for f in s.split()]
-
+        # TODO wildcards (yikes)
+        print(f"filter filter_on={filter_on}")
+        print(f"filter targets={targets}")
         value = [t for t in targets if t in filter_on]
         return value
 
-
-        step2 = flatten(step1)
-        filter_on = list(flatten([s.split() for s in step2]))
-        print(f"split filter={filter_on}")
-
-        step1 = [a.eval(symbol_table) for a in self.args[1]]
-        step2 = flatten(step1)
-        targets = list(flatten([s.split() for s in step2]))
-        print(f"split targets={targets}")
-
-        value = [t for t in targets if t in filter_on]
-        print(f"split value={value}")
-
-        return value
 
 class FilterOutClass(TODOMixIn, Function):
     name = "filter-out"
@@ -121,14 +149,16 @@ class Patsubst(TODOMixIn, Function):
 class SortClass(Function, StringFnEval):
     name = "sort"
 
+    # "Sorts the words of list in lexical order, removing duplicate words. The
+    # output is a list of words separated by single spaces." -- GNU Make manual
+
     # Sort does not take arguments function-style (commas are not interpreted
     # as separate arguments. Rather the entire single arg is interpreted as a
     # space separated list.
     def eval( self, symbol_table):
-        step1 = self.evaluate(symbol_table)
-
-        # returns an iterable of strings
-        return sorted(step1)
+        s = strings_evaluate(self.token_list, symbol_table)
+        # set() remove duplicates
+        return sorted(set(s))
         
 
 class StripClass(Function, StringFnEval):
@@ -143,21 +173,32 @@ class Subst(FunctionWithArguments):
     num_args = 3
 
     def eval(self, symbol_table):
-        # needs 3 args
+        # Needs 3 args. The number of args shall be three. Five is right out.
+        assert len(self.args)==3, len(self.args)
         logger.debug("%s len=%d args=%s", self.name, len(self.args), self.args)
+        from_s = "".join(strings_evaluate(self.args[0], symbol_table))
+        to_s = "".join(strings_evaluate(self.args[1], symbol_table))
+#        text_s = strings_evaluate(self.args[2], symbol_table)
 
-        from_s = "".join(t.eval(symbol_table) for t in self.args[0])
-        to_s = "".join(t.eval(symbol_table) for t in self.args[1])
-        text_s = "".join(t.eval(symbol_table) for t in self.args[2]) 
+#        breakpoint()
+        out_s = ""
+        for a in self.args[2]:
+            s = "".join(a.eval(symbol_table))
+            out_s += s.replace(from_s, to_s)
+        return [out_s]
 
-        logger.debug("%s from=\"%s\" to=\"%s\" text=\"%s\"", self.name, from_s, to_s, text_s)
-        if not from_s:
-            # empty "from" leaves text unchanged
-            return text_s
-        s = text_s.replace(from_s, to_s)
-        logger.debug("%s \"%s\"", self.name, s)
+#        from_s = "".join(t.eval(symbol_table) for t in self.args[0])
+#        to_s = "".join(t.eval(symbol_table) for t in self.args[1])
+#        text_s = "".join(t.eval(symbol_table) for t in self.args[2]) 
 
-        return s
+#        logger.debug("%s from=\"%s\" to=\"%s\" text=\"%s\"", self.name, from_s, to_s, text_s)
+#        if not from_s:
+#            # empty "from" leaves text unchanged
+#            return text_s
+#        s = text_s.replace(from_s, to_s)
+#        logger.debug("%s \"%s\"", self.name, s)
+#
+#        return s
 
 class Word(FunctionWithArguments):
     name = "word"
@@ -216,5 +257,4 @@ class Words(Function, StringFnEval):
         for s in step1:
             len_ += 1
         return [str(len_)]
-
 

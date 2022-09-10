@@ -1,9 +1,14 @@
 # davep 20170225 ; subst first real function to be implemented
 
 $(info $(subst ee,EE,feet on the street))
+$(info $(subst ee,EE,feet   on    the    street  <<))
+
+feet:=feet
+street:=street
+$(info $(subst ee,EE,$(feet) on the $(street)))
 
 # make seems to ignore whitespace between "subst" and first arg
-path:=$(subst           bin,dave ,$(PATH))
+path:=$(subst           :, dave ,$(PATH))
 $(info $(path))
 
 #$(error stop)

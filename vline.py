@@ -60,6 +60,10 @@ def validate_vchars(vchar_list):
     for vchar in vchar_list:
         logger.debug("validating \"%s\" @ %d,%d %s %r", vchar.printable(), vchar.row, vchar.col, vchar.filename, vchar.hide)
 
+        if vchar.filename == "/dev/null":
+            # test/debug code ; ignore
+            continue
+
         if infilename is None:
             infilename = vchar.filename
 

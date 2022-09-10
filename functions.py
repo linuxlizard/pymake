@@ -75,10 +75,12 @@ class PrintingFunction(Function):
         for t in self.token_list:
             isfn = isinstance(t, Function)
 #            print(f"t={t} isfn={isfn}")
+            # TODO Ooooo do I still need to test for function???
+            # functions.py string_evaluate() might handle all this for me now
             if isfn:
                 s = " ".join(t.eval(symbol_table))
             else:
-                s = "".join(t.eval(symbol_table))
+                s = " ".join(t.eval(symbol_table))
             msg += s
 
         # GNU Make discards whitespace between fn call and 1st arg

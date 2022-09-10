@@ -1665,10 +1665,15 @@ print("# end makefile")
         print(dumpmakefile, file=outfile)
         
 
-def find_pos(tok):
+def find_location(tok):
     # recursively descend into a token tree to find a token with a non-null vcharstring
     # which will show the starting filename/position of the token
-    logger.debug("find_pos tok=%s", tok)
+    logger.debug("find_location tok=%s", tok)
+
+    if isinstance(tok, ConditionalBlock):
+        # conditionals don't have a token_list so we have to drill into the
+        # instance to find something that does
+        return find_location(tok.cond_exprs[0].expression)
 
     # If the tok has a token_list, it's an Expression
     # otherwise, is a Symbol.
@@ -1678,7 +1683,7 @@ def find_pos(tok):
     # associated with it but contains the Symbols that do.
     try:
         for t in tok.token_list:
-            return find_pos(t)
+            return find_location(t)
     except AttributeError:
         # we found a Symbol
         c = tok.string[0]
@@ -1692,10 +1697,6 @@ def execute(makefile):
     from symtable import SymbolTable
     symtable = SymbolTable()
 
-#    for tok in makefile.token_list:
-#        s = tok.eval(symtable)
-#        logger.debug("execute result s=\"%s\"", s)
-
     for tok in makefile.token_list:
         try:
             s = tok.eval(symtable)
@@ -1704,14 +1705,13 @@ def execute(makefile):
             # let ParseError propagate
             raise
         except:
-#            breakpoint()
             # My code crashed. For shame!
             logger.error("INTERNAL ERROR eval exception during token makefile=%s", tok.makefile())
             logger.error("INTERNAL ERROR eval exception during token string=%s", tok.string)
 #            logger.error("eval exception during token token_list=%s", tok.token_list)
 #            for t in tok.token_list:
 #                logger.error("token=%s string=%s", t, t.string)
-            filename,pos = find_pos(tok)
+            filename,pos = find_location(tok)
 #            logger.exception("INTERNAL ERROR")
             logger.error("eval failed tok file=%s pos=%s", filename, pos)
             raise

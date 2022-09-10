@@ -1,4 +1,5 @@
 $(info $(words foo bar baz))
+$(info $(words      foo       bar 				baz			))
 $(info $(words $(shell ls *.mk)))
 
 foo=
@@ -17,6 +18,21 @@ $(info $(word				1, foo bar baz))
 
 $(info $(firstword foo bar baz))
 $(info $(lastword foo bar baz))
+
+s=foo bar baz
+$(info $(findstring foo, $s))
+$(info $(findstring foo, a b c $s d e f g))
+
+$(info $(findstring foo, foo bar baz))
+$(info $(findstring qux, foo bar baz))
+
+s:=foo bar baz
+$(info $(findstring foo, $s))
+$(info $(findstring foo, a b c $s d e f g))
+
+s=foo bar baz
+$(info $(findstring foo, $s))
+$(info $(findstring foo, a b c $s d e f g))
 
 @:;@:
 

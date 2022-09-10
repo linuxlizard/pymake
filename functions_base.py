@@ -88,7 +88,6 @@ class FunctionWithArguments(Function):
             # to separately parse for commas to make a function argument list
             #
             # peek inside the literal for commas 
-            breakpoint()
             lit = []
             vstr_iter = iter(t.string)
             for vchar in vstr_iter:

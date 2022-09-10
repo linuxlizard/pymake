@@ -9,7 +9,7 @@ _debug = True
 logger = logging.getLogger("pymake.symbol")
 
 from printable import printable_char, printable_string
-from vline import VirtualLine, VCharString
+from vline import VirtualLine, VChar, VCharString
 from version import Version
 from error import *
 import shell
@@ -61,8 +61,11 @@ class Symbol(object):
             try:
                 vstring.chars, vstring[0].pos, vstring[0].filename
             except AttributeError:
-                logger.error(type(vstring))
-                raise
+                if _debug:
+                    vstring = VCharString([VChar(c,(0,0),"/dev/null") for c in vstring])
+                else:
+                    logger.error(type(vstring))
+                    raise
             logger.debug("new Symbol vstring=\"%s\"", printable_string(str(vstring)))
             vstring.validate()
 
@@ -541,7 +544,7 @@ class LineBlock(Symbol):
         return "LineBlock([{0}])".format(s)
 
 class ConditionalBlock(Directive):
-    name = "(should not see this)"
+    name = "<ConditionalBlock>"
 
     # A ConditionalBlock represents a conditional and all its contents
     # (if/elseif/else/endif). 
@@ -682,11 +685,14 @@ class ConditionalBlock(Directive):
         s += ")"
         return s
 
+#    def eval(self, symbol_table):
+#        breakpoint()
+
 class ConditionalDirective(Directive):
     name = "(should not see this)"
     
-    def save(self, code):
-        self.code = code
+#    def save(self, code):
+#        self.code = code
 
 class IfdefDirective(ConditionalDirective):
     name = "ifdef"
@@ -696,6 +702,15 @@ class IfndefDirective(ConditionalDirective):
 
 class IfeqDirective(ConditionalDirective):
     name = "ifeq"
+
+    # "The ifeq directive begins the conditional, and specifies the condition. It contains two
+    # arguments, separated by a comma and surrounded by parentheses. Variable substitution
+    # is performed on both arguments and then they are compared. The lines of the makefile
+    # following the ifeq are obeyed if the two arguments match; otherwise they are ignored."
+    #  GNU Make Manual 7.1 pg 81
+
+#    def eval(self, symbol_table):
+#        breakpoint()
 
 class IfneqDirective(ConditionalDirective):
     name = "ifneq"

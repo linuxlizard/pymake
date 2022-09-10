@@ -8,6 +8,9 @@ from flatten import flatten
 
 logger = logging.getLogger("pymake.symtable")
 
+#_fail_on_undefined = True
+_fail_on_undefined = False
+
 class DuplicateFunction(Exception):
     pass
 
@@ -21,6 +24,9 @@ class SymbolTable(object):
         # an attempt to store empty string is a bug
         assert isinstance(name,str), type(name)
         assert len(name)
+
+#        breakpoint()
+#        assert isinstance(value,Symbol), type(value)
 
         self.symbols[name] = value
 
@@ -56,6 +62,8 @@ class SymbolTable(object):
 #            print("fetch value=\"%r\"" % self.symbols[s])
             return self.maybe_eval(self.symbols[s])
         except KeyError:
+            if _fail_on_undefined:
+                raise
             pass
 
         # TODO read gnu make manual on how env vars are referenced
@@ -67,3 +75,4 @@ class SymbolTable(object):
             return [""]
         logger.debug("sym=%s found in environ", s)
         return [value]
+

@@ -38,6 +38,10 @@ $(info spaces x=$(filter a b,$x))
 $(info spaces x=$(filter              a      b     ,     $x      ))
 $(info spaces x=$(filter              a      b   $(comma)  ,     $x    $(comma) $(comma) ))
 
+# wildcards
+SRC=hello.c there.c all.c you.c rabbits.c lol.S
+$(info C_FILES=$(filter %.c,$(SRC)))
+$(info h=$(filter h%.c,$(SRC)))
 
 @:;@:
 
