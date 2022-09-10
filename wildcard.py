@@ -1,5 +1,8 @@
+import itertools
 
 def split_percent(s):
+    assert isinstance(s,str), type(s)
+
     # break a string into sub-string before/after a '%'
     # Make sure to check for 
     #   \% (escaped %) 
@@ -29,9 +32,29 @@ def split_percent(s):
 def wildcard_match(pattern, strlist):
     p = split_percent(pattern)
     if p is None:
-        return [str_==pattern for str_ in strlist]
+        return [str_ for str_ in strlist if str_ == pattern]
 
-    return [ str_.startswith(p[0]) and str_.endswith(p[1]) for str_ in strlist ]
+    return [ str_ for str_ in strlist if str_.startswith(p[0]) and str_.endswith(p[1]) ]
+
+def wildcard_match_list(pattern_list, target_list):
+    # pre-calculate all the patterns
+    p_list = [split_percent(p) for p in pattern_list]
+
+    print(f"targets={target_list}")
+
+#       value = [t for t in targets if t in filter_on]
+    for t in target_list:
+        for p,pattern in zip(p_list,pattern_list):
+#            print(t,p,pattern)
+            if p is None:
+                # no '%' so just a string compare
+                if t==pattern:
+                    yield t
+                    break
+            elif t.startswith(p[0]) and t.endswith(p[1]):
+                yield t
+                break
+
 
 def wildcard_replace(search, replace, strlist):
     s = split_percent(search)
@@ -56,33 +79,11 @@ def wildcard_replace(search, replace, strlist):
 
     return new_list
 
-new = wildcard_replace("%.c", "%.o", ["foo.c", ".c"])
-print(new)
+filter_on=['a', 'a', 'a', 'a', 'a', 'a', 'a', 'a', 'a', 'a', 'a', 'b', 'a', 'a', 'a', 'a', 'a', 'a', 'a', 'a', 'a', 'a', 'a', 'b', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z']
+targets=['a', 'a', 'a', 'a', 'a', 'a', 'a', 'a', 'a', 'a', 'a', 'b', 'b', 'b', 'b', 'a', 'a', 'a']
+5
 
-new = wildcard_replace("%.c", "%.o", ["foo.S", "bar.S"])
-print(new)
+#x = list(wildcard_match_list(filter_on, targets))
+#print(x)
 
-new = wildcard_replace("abc%", "xyz%", ["abcdefg", "abcdqrst",])
-print(new)
-
-new = wildcard_replace("abc%", "xyz%123", ["abcdefg", "abcdqrst",])
-print(new)
-
-new = wildcard_replace("%", "xyz%123", ["abcdef", "abcdqrst",])
-print(new)
-
-# no matches, nothing changed
-new = wildcard_replace("foo", "bar", ["abcdef", "tuvwxyz",])
-print(new)
-
-# no wildcards
-new = wildcard_replace("foo", "bar", ["foo", "bar", "baz"])
-print(new)
-
-new = wildcard_replace("f%", "bar", ["foo", "bar", "baz"])
-print(new)
-
-# no wildcards in 2nd arg (everything replaced)
-new = wildcard_replace("%", "bar", ["foo", "bar", "baz"])
-print(new)
 

@@ -60,30 +60,68 @@ def test_split():
 
 def test_match():
     flags = wildcard_match("hello.c", ("hello.c",))
-    assert all(flags)
+    assert flags and flags == ["hello.c"]
 
     flags = wildcard_match("hello.c", ("there.c",))
-    assert not all(flags)
+    assert len(flags)==0
 
     flags = wildcard_match("%.c", ("hello.c",))
-    assert all(flags)
+    assert flags and flags == ["hello.c"]
 
     flags = wildcard_match("hello.c", ("hello.c", "there.c", "all.c", "you.c", "rabbits.c"))
-    assert flags[0]
-    assert not(all(flags[1:]))
+    assert flags and flags == ["hello.c"]
 
     flags = wildcard_match("%.c", ("hello.c", "there.c", "all.c", "you.c", "rabbits.c"))
-    assert all(flags)
+    assert flags == ["hello.c", "there.c", "all.c", "you.c", "rabbits.c"]
 
     flags = wildcard_match("hello.%", ("hello.c", "there.c", "all.c", "you.c", "rabbits.c"))
-    assert flags[0]
-    assert not(all(flags[1:]))
+    assert flags == ["hello.c"]
 
 #    flag = wildcard_match("hello.c", "%.c")
 #    assert flag
 
 def test_replace():
     filenames = wildcard_replace("%.c", "%.o", ("hello.c",))
-#    assert filenames[0]=="hello.o"
+    assert filenames[0]=="hello.o"
 
-    filenames = wildcard_replace("h%.c", "h%.o", ("hello.c","there.c"))
+    # weird ; no basename
+    new = wildcard_replace("%.c", "%.o", ["foo.c", ".c"])
+    print(new)
+    assert new==["foo.o", ".o"]
+
+    # nothing should change
+    new = wildcard_replace("%.c", "%.o", ["foo.S", "bar.S"])
+    print(new)
+    assert new == ["foo.S", "bar.S"]
+
+    new = wildcard_replace("abc%", "xyz%", ["abcdefg", "abcdqrst",])
+    print(new)
+    assert new == ["xyzdefg", "xyzdqrst"]
+
+    new = wildcard_replace("abc%", "xyz%123", ["abcdefg", "abcdqrst",])
+    print(new)
+    assert new == ["xyzdefg123", "xyzdqrst123"]
+
+    new = wildcard_replace("%", "xyz%123", ["abcdef", "abcdqrst",])
+    print(new)
+    assert new == ["xyzabcdef123", "xyzabcdqrst123"]
+
+    # no matches, nothing changed
+    new = wildcard_replace("foo", "bar", ["abcdef", "tuvwxyz",])
+    print(new)
+    assert new == ["abcdef", "tuvwxyz"]
+
+    # no wildcards
+    new = wildcard_replace("foo", "bar", ["foo", "bar", "baz"])
+    print(new)
+    assert new == ["bar", "bar", "baz"]
+
+    new = wildcard_replace("f%", "bar", ["foo", "bar", "baz"])
+    print(new)
+    assert new == ["bar", "bar", "baz"]
+
+    # no wildcards in 2nd arg (everything replaced)
+    new = wildcard_replace("%", "bar", ["foo", "bar", "baz"])
+    print(new)
+    assert new == ["bar", "bar", "bar"]
+

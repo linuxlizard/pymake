@@ -7,6 +7,7 @@ logger = logging.getLogger("pymake.functions")
 from functions_base import Function, FunctionWithArguments
 from todo import TODOMixIn
 from flatten import flatten
+from wildcard import wildcard_replace, wildcard_match_list
 
 __all__ = [ "FilterClass", "FilterOutClass", "FindString", "FirstWord", 
     "LastWord", "Patsubst", "SortClass", "StripClass", "Subst", 
@@ -96,8 +97,9 @@ class FilterClass(FunctionWithArguments):
         # TODO wildcards (yikes)
         print(f"filter filter_on={filter_on}")
         print(f"filter targets={targets}")
-        value = [t for t in targets if t in filter_on]
-        return value
+        return wildcard_match_list(filter_on, targets)
+
+#       value = [t for t in targets if t in filter_on]
 
 
 class FilterOutClass(TODOMixIn, Function):
@@ -143,8 +145,17 @@ class LastWord(Function, StringFnEval):
             pass
         return [last]
 
-class Patsubst(TODOMixIn, Function):
+class Patsubst(FunctionWithArguments):
     name = "patsubst"
+    num_args = 3
+
+    def eval(self, symbol_table):
+        assert len(self.args)==3, len(self.args)
+
+        pattern = strings_evaluate(self.args[0], symbol_table)
+        replacement= strings_evaluate(self.args[1], symbol_table)
+        text = strings_evaluate(self.args[2], symbol_table)
+        return wildcard_replace(pattern[0], replacement[0], text)
 
 class SortClass(Function, StringFnEval):
     name = "sort"

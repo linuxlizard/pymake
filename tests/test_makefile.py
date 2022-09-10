@@ -20,7 +20,7 @@ def test_all():
     for infilename in infilename_list:
         ground_truth = _run_makefile(infilename)
         test_output = _run_pymake(infilename)
-        assert ground_truth == test_output
+        assert ground_truth == test_output, infilename
 
     print(os.getcwd())
     makefile = pymake.parse_makefile(infilename)
