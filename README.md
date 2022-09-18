@@ -7,6 +7,10 @@ I want to debug my GNU Makefiles.
 
 Ultimate long-term goal is a GNU Make visual debugger. I want breakpoints on variables changing. I want to single step through the rules. I want to put a breakpoint on a rule.
 
+## Update 20220917. Whitespace Whitespace Whitespace.
+
+Whitespace is incredibly finicky in GNU Make.  I have almost all of the string functions implemented but I keep running into strange whitespace problems.
+
 ## Update 202208017.  Welcome to PyMake. 
 
 Hello! Welcome! Someone noticed my silly little project.
