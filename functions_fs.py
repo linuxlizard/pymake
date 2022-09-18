@@ -83,8 +83,9 @@ class Wildcard(Function):
 
     def eval(self, symbol_table):
         # TODO obviously need to condense this a bit
+        # FIXME use strings_evaluate() probably
 
-        # evalutate all the things
+        # evaluate all the things
         step1 = [t.eval(symbol_table) for t in self.token_list]
 #        print(f"wild step1={step1}")
 

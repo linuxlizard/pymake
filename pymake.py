@@ -28,9 +28,10 @@ from error import *
 from version import Version
 import functions 
 import source
+from whitespace import whitespace
 
 #whitespace = set( ' \t\r\n' )
-whitespace = set(' \t')
+#whitespace = set(' \t')
 
 # davep 04-Dec-2014 ; FIXME ::= != are not in Make 3.81, 3.82 (Introduced in 4.0)
 assignment_operators = {"=", "?=", ":=", "::=", "+=", "!="}

@@ -91,8 +91,6 @@ class FunctionWithArguments(Function):
             lit = []
             vstr_iter = iter(t.string)
             for vchar in vstr_iter:
-#                if start:
-#                    breakpoint()
 
                 if start and vchar.char in whitespace:
                     continue
@@ -106,11 +104,14 @@ class FunctionWithArguments(Function):
                     continue
 
                 logger.debug("found comma idx=%d pos=%r", arg_idx, vchar.pos)
+                # save whatever we've seen so far (if anything)
                 if lit:
-                    # save whatever we've seen so far (if anything)
                     new_arg = Literal(VCharString(lit))
                     _save_arg(new_arg)
                     lit = []
+                else:
+                    # empty argument
+                    self.args.append([])
                 arg_idx += 1
 
                 if arg_idx+1 == self.num_args:

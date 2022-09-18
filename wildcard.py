@@ -1,4 +1,3 @@
-import itertools
 
 def split_percent(s):
     assert isinstance(s,str), type(s)
@@ -40,7 +39,7 @@ def wildcard_match_list(pattern_list, target_list):
     # pre-calculate all the patterns
     p_list = [split_percent(p) for p in pattern_list]
 
-    print(f"targets={target_list}")
+#    print(f"targets={target_list}")
 
 #       value = [t for t in targets if t in filter_on]
     for t in target_list:
@@ -57,10 +56,15 @@ def wildcard_match_list(pattern_list, target_list):
 
 
 def wildcard_replace(search, replace, strlist):
+    #
+    # Must carefully preserve whitespace!!
+    #
+
     s = split_percent(search)
 
     if s is None:
         # no wildcards so just a simple string replace
+        assert 0 # do I still hit this case?  $(patsubst) decaying to $(subst) handled elsewhere
         return [replace if search==str_ else str_ for str_ in strlist]
 
     r = split_percent(replace)
@@ -78,12 +82,5 @@ def wildcard_replace(search, replace, strlist):
             new_list.append(str_)
 
     return new_list
-
-filter_on=['a', 'a', 'a', 'a', 'a', 'a', 'a', 'a', 'a', 'a', 'a', 'b', 'a', 'a', 'a', 'a', 'a', 'a', 'a', 'a', 'a', 'a', 'a', 'b', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z']
-targets=['a', 'a', 'a', 'a', 'a', 'a', 'a', 'a', 'a', 'a', 'a', 'b', 'b', 'b', 'b', 'a', 'a', 'a']
-5
-
-#x = list(wildcard_match_list(filter_on, targets))
-#print(x)
 
 

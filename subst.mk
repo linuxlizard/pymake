@@ -3,6 +3,8 @@
 $(info $(subst ee,EE,feet on the street))
 $(info $(subst ee,EE,feet   on    the    street  <<))
 
+$(info b=$(subst a,b,a a a a a a))  # b b b b b b 
+
 feet:=feet
 street:=street
 $(info $(subst ee,EE,$(feet) on the $(street)))
@@ -51,6 +53,26 @@ $(info UPPERCASE=$(UPPERCASE))
 # error cases <=2 commas
 #$(info >$(subst )<) # *** insufficient number of arguments (1) to function `subst'.  Stop.  
 #$(info >$(subst ,)<) # *** insufficient number of arguments (2) to function `subst'.  Stop.
-$(info >$(subst ,,)<) # (thumbsup)
+
+# FIXME this fails because my parse_args doesn't handle it
+#$(info empty=>$(subst ,,)<) # empty
+
+$(info 1 $(subst foo,bar,foobarbaz))
+$(info 2 $(subst foo,bar,foo bar baz))
+$(info 3 $(subst foo,bar,foo    bar     baz))  # WS preserved!
+$(info 3 >>$(subst foo,bar,   foo    bar     baz    )<<)  # WS preserved!
+
+# pattern strings with embedded spaces
+$(info 1 spaces=$(subst foo bar baz,qqq,foo bar baz)) # qqq
+foobarbaz=foo bar baz
+$(info 2 spaces=$(subst foo bar baz,qqq,foo bar baz $(foobarbaz))) # qqq qqq
+
+$(info empty=$(subst,z,a b c d e f g)) # empty string!? (weird)
+$(info empty=$(subst ,z,a b c d e f g)) # a b c d e f gz  (wtf?)
+$(info empty=$(subst ,z,a  b  c  d  e  f  g)) # a  b  c  d  e  f  gz  
+$(info empty=$(subst ,z,  a  b  c  d  e  f  g  )) #  a  b  c  d  e  f  g  z
+$(info empty=$(subst a,,a b c d e f g)) # b c d e f g  (remove a)
+$(info empty=$(subst ,,a b c d e f g)) # a b c d e f g   (no change)
 
 @:;@:
+

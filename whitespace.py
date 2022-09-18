@@ -1,0 +1,2 @@
+whitespace = set(' \t')
+
