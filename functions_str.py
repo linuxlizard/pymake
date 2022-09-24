@@ -1,10 +1,24 @@
-# functions for string substitution and analysis
+# Functions for string substitution and analysis
+#
+# Make is very whitespace sensitive so this is a little strange.  I'm
+# going to comment this like crazy because the "why" will all leak
+# from my brain the moment I move on.
+#
+# GNU Make works on whitespace separated strings. GNU Make will build a new
+# string then split it on whitespace later. 
+#
+# 20220918  Passing around array of strings won't work, there are too many
+# corner cases for whitespace and printing. Let's try mimicing gnu-make itself
+# and simply operate on strings. Each function eval() returns a python string.
+# Any function that needs to operate on whitespace separated words within that
+# string will need to split() (then " ".join() the results).
 
 import re
 import logging
 
 logger = logging.getLogger("pymake.functions")
 
+from error import *
 from functions_base import Function, FunctionWithArguments
 from todo import TODOMixIn
 from flatten import flatten
@@ -15,121 +29,72 @@ from whitespace import whitespace
 __all__ = [ "FilterClass", "FilterOutClass", "FindString", "FirstWord", 
     "LastWord", "Patsubst", "SortClass", "StripClass", "Subst", 
     "Word", "WordList", "Words" ]
-
-def evaluate_gen(token_list, symbol_table):
-#        print(self.name, "token_list=", self.token_list)
-
-    # evalutate all the things
-    step1 = [t.eval(symbol_table) for t in token_list]
-#        print(f"{self.name} step1={step1}")
-
-    # returns an iterable across a 1-D array of strings
-    step2 = flatten(step1)
-
-    # strings within our iterable could be space separated words so break
-    # up the individual strings into their space separated selves
-    for s in step2:
-        for word in s.split():
-            yield word
-
-class StringFnEval():
-    def evaluate(self, symbol_table):
-#        print(self.name, "token_list=", self.token_list)
-
-        # evalutate all the things
-        step1 = [t.eval(symbol_table) for t in self.token_list]
-#        print(f"{self.name} step1={step1}")
-
-        # returns an iterable across a 1-D array of strings
-        step2 = flatten(step1)
-
-        # strings within our iterable could be space separated words so break
-        # up the individual strings into their space separated selves
-        for s in step2:
-            for word in s.split():
-                yield word
-
     
-# Make is very whitespace sensitive so this is a little strange.  I'm
-# going to comment this like crazy because the "why" will all leak
-# from my brain the moment I move on.
-#
-# GNU Make works on whitespace separated strings. GNU Make will build a new
-# string then split it on whitespace later. 
-#
-# My make works with arrays of Python strings (functions return an array of
-# python strings). However, when I'm working with a Literal string
-# containing spaces, I still need to treat those spaces as signifigant.
-#
-# My functions return an array of strings. My functions work with arrays of
-# strings. An expression will be an array of function calls returning arrays of
-# strings (yielding an array of array of strings). However, a literal string
-# containing spaces will eval to the literal string which needs to be split
-# into individual strings.
-#
-# NOTE! This function destroys whitespace.  Cannot use this function when
-#       whitespace must be preserved.
-#
-def strings_evaluate(token_list, symbol_table):
-    # hilarious one liner
-    return "".join( [" ".join(s_list) for s_list in [t.eval(symbol_table) for t in token_list]] ).split()
+# mix-in to parse an arg that needs to be interpretted as a non-zero integer
+class IntegerArgument:
+    def int_parse(self, token_list, symbol_table, **kwargs):
+        # array of strings
+        step1 = [t.eval(symbol_table) for t in token_list]
 
-#    step1 = [t.eval(symbol_table) for t in token_list]
-    # step1 will be an array of arrays of strings
-    #
-    # Contrived Example:
-    # x=a e i o u
-    # a=a ; b=b
-    # $(filter $a$b $a $b  e  i  o  u   $(shell seq 1 1 10), $(x))
-    # 
-    # The eval'd array of array of string would be:
-    #   [['a'], ['b'], [' '], ['a'], [' '], ['b'], [' e  i  o  u   '], ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10']]
-    # I need to collapse that to:
-    #   ['ab', 'a', 'b', 'e', 'i', 'o', 'u', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10']
-    # Note the literal "e i o u" contains spaces.
-    #
-    # The inner " ".join combines neighboring strings of the inner lists ; each
-    # inner list is a list of strings from Symbol.eval() (a function call or a
-    # symbol table lookup; the function call result will be a list of strings
-    # but a symbol table lookup could be a literal string containing spaces)
-    # ['1', '2', '3', ...]  ->  "1 2 3 "...
-    # [' e  i  o  u   '] -> " e  i  o  u   "
-    #
-    # outer "".join combines separate fields
-    # ['a'],['b'] -> "ab"
-    # ['a'],[' '],['b'] -> "a b"
-    #
-    # Then we have to re-split it on whitespace. Now we have an 1-D array of
-    # python strings that can be used for any string fn operation.
-    #
-#    s = "".join( [" ".join(s_list) for s_list in step1] )
-#    return s.split()
-                
+        # squish together to make a single string
+        str_ = "".join(step1)
+
+        errmsg = None
+
+        # TODO need "first", "second" strings for arg_position
+
+        try:
+            num = int(str_)
+        except ValueError:
+            errmsg = "non-numeric {0} argument to '{1}' function: ".format(
+                arg_position, self.name)
+            raise ParseError
+
+        min_value = kwargs.get("min", None)
+        max_value = kwargs.get("max", None)
+
+        if min_value is not None and num < min_value:
+            errmsg = "argument to '{0}' must be greater than {1}.".format(
+                self.name, min_value)
+        elif max_value is not None and num > max_value:
+            errmsg = "argument to '{0}' must be less than {1}.".format(
+                self.name, max_value)
+
+        if errmsg:
+            logger.error(errmsg)
+            filename, pos = self.get_pos()
+            raise EvalError(filename=filename, pos=pos, description=errmsg)
+
+        return num 
+
 
 class FilterClass(FunctionWithArguments):
     name = "filter"
     num_args = 2
-    preserve_ws = False
 
+    # $(filter pattern...,text)
+    # "Returns all whitespace-separated words in text that do match any of the pattern
+    # words, removing any words that do not match. The patterns are written using
+    # ‘%’, just like the patterns used in the patsubst function above."
+    #
     def eval(self, symbol_table):
         assert len(self.args)==2, len(self.args)
+        
+        # $(filter) destroys intermediate whitespace
 
-        tmp = list(evaluate_gen(self.args[0], symbol_table))
+        # array of strings
+        pattern_step1 = [t.eval(symbol_table) for t in self.args[0]]
+#        pattern_step2 = flatten([str_.split() for str_ in pattern_step1])
+        pattern_step2 = "".join(pattern_step1).split()
 
-        filter_on = strings_evaluate(self.args[0], symbol_table)
-        if tmp!=filter_on:
-            print(f"FAILURE {tmp} != {filter_on}")
-#        assert list(tmp)==filter_on
-                
-        targets = strings_evaluate(self.args[1], symbol_table)
+        text_step1 = [t.eval(symbol_table) for t in self.args[1]]
+#        text_step2 = flatten([str_.split() for str_ in text_step1])
+        text_step2 = "".join(text_step1).split()
 
-        # TODO wildcards (yikes)
-#        print(f"filter filter_on={filter_on}")
-#        print(f"filter targets={targets}")
-        return wildcard_match_list(filter_on, targets)
+#        breakpoint()
 
-#       value = [t for t in targets if t in filter_on]
-
+        # FIXME first arg to wildcard_match_list() must be a list not an iterable
+        return " ".join(wildcard_match_list(pattern_step2, text_step2))
 
 class FilterOutClass(TODOMixIn, Function):
     name = "filter-out"
@@ -137,10 +102,11 @@ class FilterOutClass(TODOMixIn, Function):
 class FindString(FunctionWithArguments):
     name = "findstring"
     num_args = 2
-    preserve_ws = False
 
+    # $(findstring find,in)
     # "Searches in for an occurrence of find. If it occurs, the value is find; otherwise,
     # the value is empty."
+    #
     # No duplicates. Substring finds are valid ("the" in "their")
     #
     # Whitespace is preserved in both the search and target strings ("a b"
@@ -150,53 +116,42 @@ class FindString(FunctionWithArguments):
         seek = [t.eval(symbol_table) for t in self.args[0]]
         text = [t.eval(symbol_table) for t in self.args[1]]
 
+        # whitespace must be preserved!!!
         seek_str = "".join(flatten(seek))
         text_str = "".join(flatten(text))
 
-        return [seek_str] if seek_str in text_str else [""]
+        return seek_str if seek_str in text_str else ""
 
 
-class FirstWord(Function, StringFnEval):
+class FirstWord(Function):
     name = "firstword"
-    preserve_ws = False
 
     def eval(self, symbol_table):
-        s = strings_evaluate(self.token_list, symbol_table)
+        # array of strings
+        step1 = [t.eval(symbol_table) for t in self.token_list]
+        step2 = "".join(step1).split()
+
         try:
-            return [ s[0] ]
+            return step2[0]
         except IndexError:
-            return [""]
+            return ""
 
-#        s = self.evaluate(symbol_table)
-#        try:
-#            # s should be an iterable
-#            # all fns must return an iterable
-#            return [next(s)]
-#        except StopIteration:
-#            return [""]
-
-class LastWord(Function, StringFnEval):
+class LastWord(Function):
     name = "lastword"
-    preserve_ws = False
 
     def eval(self, symbol_table):
-        s = strings_evaluate(self.token_list, symbol_table)
-        if len(s) == 0:
-            return [""]
-        return [ s[-1] ]
+        # array of strings
+        step1 = [t.eval(symbol_table) for t in self.token_list]
+        step2 = "".join(step1).split()
 
-#        s = self.evaluate(symbol_table)
-#        last = ""
-#        # s should be an iterable but we need the last element so have to
-#        # walk the whole list ; don't want to store the intermediate steps
-#        for last in s:
-#            pass
-#        return [last]
+        if len(step2) == 0:
+            return ""
+
+        return step2[-1]
 
 class Patsubst(FunctionWithArguments):
     name = "patsubst"
     num_args = 3
-    preserve_ws = True
 
     # "Finds whitespace-separated words in text that match pattern and replaces them
     # with replacement. Here pattern may contain a ‘%’ which acts as a wildcard,
@@ -223,6 +178,12 @@ class Patsubst(FunctionWithArguments):
         # any exact match of our from_s surrounded by whitespace or at beginning or end of line
         rex = re.compile( r"(^|\s)" + re.escape(from_s) + r"(\s|$)" )
 
+        # tricky part is I need overlapping regex matches
+        #   <space1>a<space2>b<space3>
+        # needs to make matches:
+        #   <space1>a<space2>
+        #   <space2>b<space3>
+        # finditer() doesn't do overlapping
         start = 0
         new_s = ""
         while 1 :
@@ -230,7 +191,7 @@ class Patsubst(FunctionWithArguments):
             if not robj:
                 new_s += target[start:]
                 break
-            print(f"re_sub target={target} robj={robj}")
+#            print(f"re_sub target={target} robj={robj}")
 
             # g0 - char that matched before our substring
             # g1 - char that matched after our substring
@@ -246,7 +207,7 @@ class Patsubst(FunctionWithArguments):
             # The len(g1) pulls in char after substring except for end of line
             start = robj.end() - len(g1)
 
-        print(f"re_subst new_s={new_s}")
+#        print(f"re_subst new_s={new_s}")
         return new_s
 
     def subst(self, from_s, to_s, symbol_table):
@@ -264,6 +225,7 @@ class Patsubst(FunctionWithArguments):
 #        breakpoint()
 #        print(f"patsubst-subst from_s=\"{from_s}\" to_s=\"{to_s}\"")
 
+        # array of strings where whitespace must be carefully preserved
         text_list = [a.eval(symbol_table) for a in self.args[2] ]
 #        print(f"subst text={text_list}")
 
@@ -272,17 +234,14 @@ class Patsubst(FunctionWithArguments):
         # $(subst ,z,a c d e f g) -> a b c d e f gz
         # $(patsubst a,,a c d e f g) ->  b c d e f g
         if not from_s:
-            # FIXME I need to return an array
-            return "".join(flatten(text_list))
+            # I need to return a string
+            return "".join(text_list)
 
         # when patsubst decays to subst(ish), GNU make will only replace whole
         # whitespace delimited words (exact match required)
         # !!! whitespace must be preserved !!!
-        # therefore cannot use strings_evaluate()
 
-        # The "".join() is weird ; I'd be returning a single string rather than array of string(s).
-        # The patsubst->subst needs to preserve all intermediate whitespace, adding no new whitespace
-        return [ "".join( [ self._re_subst(from_s, to_s, str_) for str_ in flatten(text_list)] ) ]
+        return "".join( [ self._re_subst(from_s, to_s, str_) for str_ in text_list] )
 
 
     def eval(self, symbol_table):
@@ -296,34 +255,23 @@ class Patsubst(FunctionWithArguments):
         pattern = "".join(flatten([a.eval(symbol_table) for a in self.args[0]]))
         replacement = "".join(flatten([a.eval(symbol_table) for a in self.args[1]]))
 
-        breakpoint()
 #        print(f"pattern={pattern} replace={replacement}")
         if not '%' in pattern:
             # decays to strange sub-case of $(subst) substitution
             return self.subst(pattern, replacement, symbol_table)
 
-        # NOW can use strings_evaluate()  (whitespace can be destroyed)
-        text = strings_evaluate(self.args[2], symbol_table)
-
-        # array of array of strings
-#        text_list = [a.eval(symbol_table) for a in self.args[2]]
-
-#        pattern = strings_evaluate(self.args[0], symbol_table)
-#        replacement= strings_evaluate(self.args[1], symbol_table)
-#        text = strings_evaluate(self.args[2], symbol_table)
-#        assert len(pattern)==1, len(pattern)
-#        assert len(replacement)==1, len(replacement)
+        # NOW can whitespace can be destroyed
+        text = flatten([a.eval(symbol_table).split() for a in self.args[2]])
 
         new_ = wildcard_replace(pattern, replacement, text)
 #        print(f"new={new_}")
 
         # This class marked whitespace preserving so need to add new whitespace
         # between the strings where we destroyed the whitespace
-        return [" ".join(new_)]
+        return " ".join(new_)
 
-class SortClass(Function, StringFnEval):
+class SortClass(Function):
     name = "sort"
-    preserve_ws = False
 
     # "Sorts the words of list in lexical order, removing duplicate words. The
     # output is a list of words separated by single spaces." 
@@ -337,26 +285,36 @@ class SortClass(Function, StringFnEval):
     # as separate arguments. Rather the entire single arg is interpreted as a
     # space separated list.
     def eval( self, symbol_table):
-        s = strings_evaluate(self.token_list, symbol_table)
+
+        # list of strings
+        str_list = [t.eval(symbol_table) for t in self.token_list]
+
+        s = "".join(str_list).split()
+
         # set() remove duplicates
-        return sorted(set(s))
+        return " ".join(sorted(set(s)))
         
 
-class StripClass(Function, StringFnEval):
+class StripClass(Function):
     name = "strip"
-    preserve_ws = False
 
+    # "Removes leading and trailing whitespace from string and replaces each inter-
+    # nal sequence of one or more whitespace characters with a single space."
+    #
     def eval(self, symbol_table):
-#        s = strings_evaluate(self.token_list, symbol_table)
-#        breakpoint()
+        # TODO collapse this to fewer steps
 
-        step1 = self.evaluate(symbol_table)
-        return [s.strip() for s in step1]
+        # array of strings
+        step1 = [t.eval(symbol_table) for t in self.token_list]
+
+        step2 = [str_.split() for str_ in step1]
+
+        return " ".join(flatten(step2))
+
 
 class Subst(FunctionWithArguments):
     name = "subst"
     num_args = 3
-    preserve_ws = True
 
     # $(subst from,to,text)
     # "Performs a textual replacement on the text text: each occurrence of from is
@@ -379,33 +337,38 @@ class Subst(FunctionWithArguments):
         # $(subst ,z,a c d e f g) -> a b c d e f gz
         if not from_s:
             # need to carefully preserve whitespace
-            return "".join(flatten(text_list)) + to_s
+            return "".join(text_list) + to_s
 
         # TODO make a list comprehension because more nifitier
         out_s = ""
         for t in text_list:
             s = "".join(t)
             out_s += s.replace(from_s, to_s)
-        return [out_s]
+        return out_s
 
-#        out_s = ""
-#        for a in self.args[2]:
-#            s = "".join(a.eval(symbol_table))
-#            out_s += s.replace(from_s, to_s)
-#        return [out_s]
-
-#        return "".join([s.replace(from_s, to_s) for s in text_list])
 
 class Word(FunctionWithArguments):
     name = "word"
     num_args = 2
-    preserve_ws = False
 
+    # $(word n,text)
+    # "Returns the nth word of text. The legitimate values of n start from 1. If n is
+    # bigger than the number of words in text, the value is empty."
+    #
+    # killall the whitespace! woo!
     def eval(self, symbol_table):
+        # index wil be array of strings
         index = [t.eval(symbol_table) for t in self.args[0]]
-        text = [t.eval(symbol_table) for t in self.args[1]]
 
-        index_str = "".join(flatten(index))
+        # TODO does gnu make evaluate the 2nd argument before or after
+        # determining the 1st argument (the index) is correct?
+        # (ie, is gnu make short circuiting the expression?)
+        # Is important because the eval() might have side effects.
+        text = flatten([t.eval(symbol_table).split() for t in self.args[1]])
+
+        # TODO convert to int_parse()
+        # squish together to make a single string
+        index_str = "".join(index)
 
         try:
             index_num = int(index_str)
@@ -417,46 +380,135 @@ class Word(FunctionWithArguments):
             logger.error(errmsg)
             raise EvalError(description=errmsg)
 
+        # text is an iterable yielding strings
         counter = 0
-        for s in flatten(text):
-            for word in s.split():
-                counter += 1
-                if counter == index_num:
-                    return [word]
-        return [""]
+        for word in text:
+            counter += 1
+            if counter == index_num:
+                return word
+        return ""
 
 
-class WordList(TODOMixIn, FunctionWithArguments):
+class WordList(FunctionWithArguments, IntegerArgument):
     name = "wordlist"
     num_args = 3
-    preserve_ws = False
 
+    # $(wordlist s,e,text)
     # "Returns the list of words in text starting with word s and ending with word e
     # (inclusive). The legitimate values of s start from 1; e may start from 0. If s is
     # bigger than the number of words in text, the value is empty. If e is bigger than
     # the number of words in text, words up to the end of text are returned. If s is
     # greater than e, nothing is returned." -- GNU Make manual
 
+    # Leading/trailing whitespace is discarded.
+    # Intermediate whitespace is preserved.
+    def eval(self, symbol_table):
+        start_idx = self.int_parse(self.args[0], symbol_table, min=1)
+        end_idx = self.int_parse(self.args[1], symbol_table, min=0)
 
-class Words(Function, StringFnEval):
+        # TODO see also Word()
+        # Does gnu make short-circuit the checks?  No.
+        # $(wordlist 3,2,$(shell touch /tmp/tmp.txt))  <-- /tmp/tmp.txt will exist
+
+        # array of strings into a single string
+        text = "".join([t.eval(symbol_table) for t in self.args[2]])
+
+        # GNU make slicing is 1-based, python slicing is zero based.
+        # Don't need to modify end_idx because python slicing is [) (end is not
+        # included) but gnu make slicing is [] (end is included).  So the end
+        # index is already one larger than it needs to be.
+#        start_idx -= 1
+
+        if start_idx >= end_idx :
+            return ""
+
+        # whitespace between symbols is preserved.
+        # Leading/trailing whitespace discarded.
+        text = text.strip()
+
+        if not len(text):
+            return ""
+
+        state_word = 1
+        state_ws = 2
+
+        word_start_pos = 0
+        word_counter = 0
+        slice_start = -1 
+        pos = 0
+
+        # starting state
+        if text[pos] in whitespace:
+            state = state_ws
+        else:
+            state = state_word
+            word_start_pos = pos
+        pos += 1
+
+        while pos < len(text) :
+            if state == state_ws:
+                if not text[pos] in whitespace:
+                    # Transition from whitespace to word.
+                    # Save the startion position of this word.
+                    state = state_word
+                    word_start_pos = pos
+
+            elif state == state_word:
+                if text[pos] in whitespace:
+                    # Transition from word to whitespace.
+                    # Check our wordlist boundaries.
+                    word_counter += 1
+                    if word_counter == start_idx:
+                        slice_start = word_start_pos
+                    elif word_counter == end_idx:
+                        # yay! we're done
+                        return text[slice_start:pos]
+
+                    state = state_ws
+
+            else:
+                assert 0, state # wtf?
+
+            pos += 1
+
+        # at this point, we have run out of string without finding our
+        # start/end
+        if state == state_word:
+            # end of string means end of word
+            word_counter += 1
+            if word_counter == start_idx:
+                slice_start = word_start_pos
+            elif word_counter == end_idx:
+                # yay! we're done
+                return text[slice_start:pos]
+
+        if slice_start == -1:
+            # we ain't found sh*t
+            return ""
+
+        # at this point, we've run off the end of the string without finding
+        # the end_idx word so just return as much string from the start_idx
+        # to the end
+        return text[slice_start:]
+
+        # aw fuck whitespace between symbols is preserved.
+        # Leading/trailing whitespace discarded.
+        # So this won't work.
+#        text_list = list(flatten([str_.split() for str_ in text]))
+
+#        return " ".join(text_list[start_idx:end_idx])
+
+class Words(Function):
     name = "words"
-    preserve_ws = False
 
     # "Returns the number of words in text." -- GNU make manual
 
     def eval(self, symbol_table):
-        step1 = self.evaluate(symbol_table)
-        # step1 is an interable of strings
-        # don't make into a list since we just want the length
-        len_ = 0
-        # strings within our iterable could be space separated words so break
-        # up the individual strings into their space separated selves
-#        for s in step1:
-#            words = s.split()            
-#            for w in words:
-#                len_ += 1
-
-        for s in step1:
-            len_ += 1
-        return [str(len_)]
+        # array of strings
+        step1 = [t.eval(symbol_table) for t in self.token_list]
+        # array of array of strings
+        step2 = [str_.split() for str_ in step1]
+        # TODO is there a better way to do this? w/o creating a list() 
+        # (iterate over the flatten()'d result with a counter?)
+        return str(len(list(flatten(step2))))
 

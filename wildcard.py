@@ -36,13 +36,16 @@ def wildcard_match(pattern, strlist):
     return [ str_ for str_ in strlist if str_.startswith(p[0]) and str_.endswith(p[1]) ]
 
 def wildcard_match_list(pattern_list, target_list):
+    # first arg must be a list, not an iterable, because we use it twice
+    assert isinstance(pattern_list,list), type(pattern_list)
+
     # pre-calculate all the patterns
     p_list = [split_percent(p) for p in pattern_list]
 
-#    print(f"targets={target_list}")
+#    print(f"targets={target_list} p_list={p_list}")
 
-#       value = [t for t in targets if t in filter_on]
     for t in target_list:
+#        print(f"t={t}")
         for p,pattern in zip(p_list,pattern_list):
 #            print(t,p,pattern)
             if p is None:

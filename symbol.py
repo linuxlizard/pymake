@@ -121,8 +121,8 @@ class Literal(Symbol):
         super().__init__(vstring)
     
     def eval(self, symbol_table):
-        # everything returns an array of string
-        return [str(self.string)]
+        # everything returns a single string
+        return str(self.string)
 
 class Operator(Symbol):
     pass
@@ -192,9 +192,7 @@ class Expression(Symbol):
             logger.debug("expression e=%s", e)
 
         step1 = [e.eval(symbol_table) for e in self.token_list]
-#        print(f"e step1={step1}")
-#        print(f"e step1={list(flatten(step1))}")
-        return flatten(step1)
+        return "".join(step1)
 
     def get_pos(self):
         # Find the position (filename,(row,col)) of this Expression.
@@ -225,16 +223,18 @@ class VarRef(Expression):
     def eval(self, symbol_table):
         result = []
         for sym in self.token_list:
-            value = sym.eval(symbol_table)
-            ref = symbol_table.fetch(value)
-            if isinstance(ref,Expression):
-                # execute the expression
-                assert 0  # do I need this case anymore now that I eval() inside symtable.fetch() ?
-                ref_value = ref.eval(symbol_table)
-                result.extend(ref_value)
-            else:
-                result.extend(ref)
-        return result
+            # FIXME make this a list comprehension
+            key = sym.eval(symbol_table)
+            value = symbol_table.fetch(key)
+            result.append(value)
+#            if isinstance(ref,Expression):
+#                # execute the expression
+#                assert 0  # do I need this case anymore now that I eval() inside symtable.fetch() ?
+#                ref_value = ref.eval(symbol_table)
+#                result.extend(ref_value)
+#            else:
+#                result.extend(ref)
+        return "".join(result)
 
 class AssignmentExpression(Expression):
     def __init__(self, token_list):
@@ -286,7 +286,7 @@ class AssignmentExpression(Expression):
 #        assert isinstance(lhs[0],str), type(lhs[0])
 
         key = "".join(lhs)
-        symbol_table.add(key, list(rhs))
+        symbol_table.add(key, rhs)
 
         return ""
 

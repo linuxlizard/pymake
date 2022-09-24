@@ -70,34 +70,43 @@ class PrintingFunction(Function):
     fmt = None
 
     # gnu make has some very particular behaviors around spacing in printing output.
-    def eval(self, symbol_table):
+    # Need to carefully duplicate all those behaviors.
+
+    def _makestr(self, symbol_table):
+        # If the called Symbol contains whitespace between symbols, don't add more.
+        # Otherwise, add whitespace.
         msg = ""
-        for t in self.token_list:
-            isfn = isinstance(t, Function)
-#            print(f"t={t} isfn={isfn}")
-            if isfn:
-                if t.preserve_ws:
-                    msg += "".join(t.eval(symbol_table))
-                else:
-                    msg += " ".join(t.eval(symbol_table))
-            else:
-                s = "".join(t.eval(symbol_table))
-#                s = " ".join(t.eval(symbol_table))
-                msg += s
-#            print(f"msg=**{msg}**")
+
+        # results will be an array of array of python strings
+        results = [t.eval(symbol_table) for t in self.token_list]
+
+#        breakpoint()
+
+        # a nice place for a sanity test
+        for r in results:
+            assert isinstance(r,str), (type(r), results)
+
+        for str_list in results:
+            msg += "".join(str_list)
 
         # GNU Make discards whitespace between fn call and 1st arg
         # e.g., $(info   5)  ->  "5"  (not "   5")
         # Trailing whitespace is preserved.
         msg = msg.lstrip()
 
+        return msg
+
+    def eval(self, symbol_table):
+        msg = self._makestr(symbol_table)
+
         if self.fmt:
             t = self.token_list[0]
-            print(self.fmt.format(t.string[0].filename, t.string[0].linenumber, msg), file=self.fh)
+            filename, linenumber = t.get_pos()
+            print(self.fmt.format(filename, linenumber, msg), file=self.fh)
         else:
             print("%s" % msg, file=self.fh)
 
-        return [""]
+        return ""
 
 
 class Info(PrintingFunction):
@@ -140,14 +149,26 @@ class Origin(TODOMixIn, Function):
 class Shell(Function):
     name = "shell"
 
+    # "The shell function performs the same function that backquotes (‘‘’) perform in most
+    # shells: it does command expansion. This means that it takes as an argument a shell
+    # command and evaluates to the output of the command. The only processing make does on
+    # the result is to convert each newline (or carriage-return / newline pair) to a single space. If
+    # there is a trailing (carriage-return and) newline it will simply be removed."
+    #
+    # "After the shell function or ‘!=’ assignment operator is used, its exit status is placed in
+    # the .SHELLSTATUS variable."
+    #
     def eval(self, symbol_table):
         # TODO condense these steps
         step1 = [t.eval(symbol_table) for t in self.token_list]
         step2 = flatten(step1)
         step3 = "".join(step2)
         step4 = shell.execute(step3)
-        # everything returns an iterable of strings
-        return step4.split()
+#        breakpoint()
+        # "convert each newline ... to a single space
+        # TODO multiple blank lines become a single space?
+        # everything returns a string
+        return step4.replace("\n", " ")
 
 class ValueClass(TODOMixIn, Function):
     name = "value"

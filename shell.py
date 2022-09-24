@@ -26,6 +26,7 @@ def execute(s, ignore_error=True):
 
 def test():
     s = execute('ls')
+    assert isinstance(s,str)
     print(s)
 
     s = execute("ls *.py")

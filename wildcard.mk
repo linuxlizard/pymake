@@ -3,8 +3,11 @@
 #
 # use $(sort) on $(wildcard) to guarantee file order
 
-pyfiles := $(wildcard functions*.py)
-$(info pyfiles=$(pyfiles))
+#pyfiles := $(wildcard functions*.py)
+#$(info pyfiles=$(pyfiles))
+
+files := $(sort $(wildcard *.py *.mk /usr/share/doc/make/*))
+$(info files=$(files))
 
 pyfiles := $(sort $(wildcard functions*.py))
 $(info pyfiles=$(pyfiles))

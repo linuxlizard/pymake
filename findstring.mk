@@ -22,10 +22,11 @@ $(info 3 a=$(findstring a,$x $x $x))  # single a (no duplicates)
 $(info 4 a=$(findstring a,$x$x$x))  # single a (no duplicates)
 
 $(info a b=$(findstring a b,$x))  # a b ; whitespace in "find" param is preserved as part of the string
-$(info a  b=$(findstring a  b,$x))  # a b ; whitespace in "find" preserved
-$(info a  b=$(findstring a  b, a  b  c  d  e  f  g ))  # a  b
+$(info a  b=$(findstring a  b,$x))  # empty (whitespace mismatch)
+$(info a  b=$(findstring a  b, a  b  c  d  e  f  g ))  # a  b  (whitespace match)
 
 $(info blank=>>$(findstring a b q,$x)<<)  # >><<  (blank)
+$(info notblank=>>$(findstring a b q,$(subst c,q,$x))<<)  # >>a b q<< 
 
 $(info 1 the=$(findstring the,hello there all you rabbits))  # the (partial string match is valid)
 $(info 2 the=$(findstring the,now is the time for all good men to come to the aid of their country))  # the (only single match)
@@ -35,6 +36,8 @@ h=h
 e=e
 $(info 3 the=$(findstring $t$h$e,now is the time for all good men to come to the aid of their country))  # the (only single match)
 $(info 4 the=$(findstring $t$h$e,now is the time for all good men to come to the aid of their country))  # the (only single match)
+# case insensitve but will find 'the' in 'their'
+$(info 5 the=$(findstring $t$h$e,now is THE time for all good men to come to THE aid of their country))  # the (only single match)
 
 @:;@:
 

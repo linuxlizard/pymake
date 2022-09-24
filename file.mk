@@ -1,5 +1,10 @@
+# $(file) VarRef vs $(file ) Function
+file=hello.c
+include= $(shell cat $(file) | grep include)
+$(info include=$(include))
+
 test=$(file < firstword.mk)
-#$(info test=$(test))
+$(info $(words $(test)))
 
 dollar=$$
 $(info dollar=$(dollar))

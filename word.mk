@@ -2,7 +2,7 @@
 $(info $(word 1, foo bar baz))
 $(info $(word 2, foo bar baz))
 $(info $(word 3, foo bar baz))
-$(info $(word 4, foo bar baz))
+$(info $(word 4, foo bar baz))  # empty
 
 $(info $(word       1, foo bar baz))
 $(info $(word				1, foo bar baz))

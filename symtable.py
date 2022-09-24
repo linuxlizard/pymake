@@ -36,9 +36,9 @@ class SymbolTable(object):
         # e.g.,  a=10  (evaluated whenever $a is used)
         # vs   a:=10  (evaluated immediately and "10" stored in symtable)
         #
-        if len(value) and isinstance(value[0],Symbol):
+        if isinstance(value,Symbol):
             step1 = [t.eval(self) for t in value]
-            return flatten(step1)
+            return "".join(step1)
 
         return value
 
@@ -48,9 +48,10 @@ class SymbolTable(object):
         logger.debug("fetch key=\"%r\"", key)
 #        print("fetch key=\"%r\"" % key)
 
-        assert isinstance(key,list), type(key)
+        assert isinstance(key,str), type(key)
 
-        s = "".join(flatten(key))
+#        s = "".join(flatten(key))
+        s = key
         logger.debug("fetch s=\"%r\"", s)
 
         if not len(s):
@@ -72,7 +73,7 @@ class SymbolTable(object):
         # try environment
         value = os.getenv(s)
         if value is None:
-            return [""]
+            return ""
         logger.debug("sym=%s found in environ", s)
-        return [value]
+        return value
 

@@ -17,6 +17,9 @@ a=10 9 8 7 6 5 4 3 2 1
 x=$(sort $(a))
 $(info a sort=$(x))
 
+duplicates=1 1 2 2 3 3 4 4 5 5 6 6 7 7 8 8 9 9 10 10
+$(info dups sort=$(sort $(duplicates)))
+
 b=e d c b a
 c=8 7 6 5 3 0 9
 $(info sortme=$a,$b,$c)
@@ -56,6 +59,15 @@ $(info spaces3 abc sort=>>$(x)<<)
 # tabs
 x = $(sort 		$a	$b	$c  )
 $(info spaces3 abc sort=>>$(x)<<)
+
+a := $(findstring a,a b c)
+$(info a=$(a))
+
+a := $(filter a,a a a a a a a a a a a b)
+$(info a=$(a))
+
+sources := foo.c bar.c baz.s ugh.h
+$(info cc $(filter %.c %.s,$(sources)) -o foo)
 
 @:;@:
 

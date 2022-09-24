@@ -61,6 +61,9 @@ $(info 1 $(subst foo,bar,foobarbaz))
 $(info 2 $(subst foo,bar,foo bar baz))
 $(info 3 $(subst foo,bar,foo    bar     baz))  # WS preserved!
 $(info 3 >>$(subst foo,bar,   foo    bar     baz    )<<)  # WS preserved!
+$(info 3 >>$(strip $(subst foo,bar,   foo    bar     baz    ))<<)  # WS lost by strip()
+3:=>>$(strip $(subst foo,bar,   foo    bar     baz    ))<<  # WS lost by strip()
+$(info 3=$3)
 
 # pattern strings with embedded spaces
 $(info 1 spaces=$(subst foo bar baz,qqq,foo bar baz)) # qqq

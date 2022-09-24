@@ -1,43 +1,47 @@
 # davep 20220902 ; let's figure out how GNU Make's filter() sees the world.
 
-x:=a a a a a a a a a a a b
+x:=aa aa aa aa aa aa aa aa aa aa aa bb
 
-$(info   5   x=$(filter   $(strip $(x)) $(x) $(shell seq 1 10) a   b   c   d   e   f   g   h   i   j   k   l   m   n   o   p   q   r   s   t   u   v   w   x   y   z,$(x)   b   b   b   a   a   a))
-$(info 5 x=$(filter a b c d e f g h i j k l m n o p q r s t u v w x y z,$(x) b b b a a a))
-$(info 1 x=$(filter a,$(x)))
-$(info 2 x=$(filter a,$(x) b b b ))
-$(info 3 x=$(filter a,$(x) b b b a a a))
-$(info 4 x=$(filter a b,$(x) b b b a a a))
-$(info 5 x=$(filter a b c d e f g h i j k l m n o p q r s t u v w x y z,$(x) b b b a a a))
-$(info 6 x=$(filter $(x) b b b a a a,a b c d e f g h i j k l m n o p q r s t u v w x y z))
+$(info   5   x=$(filter   $(strip $(x)) $(x) $(shell seq 1 10)aa bb cc dd ee ff gg hh ii jj kk ll mm nn oo pp qq rr ss tt uu vv ww xx yy  zz,$(x)  bb bb bb aa aa  aa))
+$(info 5 x=$(filter aa bb cc dd ee ff gg hh ii jj kk ll mm nn oo pp qq rr ss tt uu vv ww xx yy zz,$(x) bb bb bb aa aa aa))
+$(info 1 x=$(filter aa,$(x)))
+$(info 2 x=$(filter aa,$(x) bb bb bb ))
+$(info 3 x=$(filter aa,$(x) bb bb bb aa aa aa))
+$(info 4 x=$(filter aa bb,$(x) bb bb bb aa aa aa))
+$(info 5 x=$(filter aa bb cc dd ee ff gg hh ii jj kk ll mm nn oo pp qq rr ss tt uu vv ww xx yy zz,$(x) bb bb bb aa aa aa))
+$(info 6 x=$(filter $(x) bb bb bb aa aa aa,aa bb cc dd ee ff gg hh ii jj kk ll mm nn oo pp qq rr ss tt uu vv ww xx yy zz))
+$(info 7 x=$(filter aa,aa  aa  aa  aa  aa  aa  aa  aa  aa  aa  aa  bb))
+$(info 7 x=$(filter aa,  aa  aa  aa  aa  aa  aa  aa  aa  aa  aa  aa  bb   ))
+$(info 7 x=$(filter aa aa,  aa  aa  aa  aa  aa  aa  aa  aa  aa  aa  aa  bb   ))
+$(info 7 x=$(filter aa,aa	aa	aa	aa	aa	aa	aa	aa	aa	aa	aa	bb))
 
-a:=a
-$(info 6 x=$(filter $(a),$(x)))
-b:=b
-$(info 7 x=$(filter $(a) $(b),$(x)))
+a:=aa
+$(info 8 x=$(filter $(a),$(x)))
+b:=bb
+$(info 9 x=$(filter $(a) $(b),$(x)))
 
-$(info 8 x=$(filter $(a)$(b),$(x)b $(x)b))
+$(info a x=$(filter $(a)$(b),$(x)bb $(x)b))
 
-$(info 9 x=$(filter $(a), a))
-$(info a x=$(filter a,a,a,a,a,a))
+$(info b x=$(filter $(a), a))
+$(info c x=$(filter aa,aa,aa,aa,aa,aa))
 
 acomma=a,a
-$(info acomma x=$(filter $(acomma),a,a,a,a,a))
-$(info acomma x=$(filter $(acomma),a,a a,a a))
-$(info acomma x=$(filter a $(acomma),a,a a,a a))
+$(info acomma x=$(filter $(acomma),aa,aa,aa,aa,aa))
+$(info acomma x=$(filter $(acomma),aa,aa aa,aa aa))
+$(info acomma x=$(filter aa $(acomma),aa,aa aa,aa aa))
 
 # confusing but I think Make is seeing this
 # as filter "a" in ("a", ",", "a", ",", ... "a")
-$(info x=>>$(filter a, a , a , a , a , a)<<)
+$(info x=>>$(filter aa, aa , aa , aa , aa , aa)<<)
 
 comma=,
-$(info comma x=$(filter $(comma),a,a,a,a,a))
-$(info comma x=$(filter $(comma),a , a , a , a , a))
+$(info comma x=$(filter $(comma),aa,aa,aa,aa,aa))
+$(info comma x=$(filter $(comma),aa , aa , aa , aa , aa))
 
-x=       a    b   c    d    e   f    g 
-$(info spaces x=$(filter a b,$x))
-$(info spaces x=$(filter              a      b     ,     $x      ))
-$(info spaces x=$(filter              a      b   $(comma)  ,     $x    $(comma) $(comma) ))
+x=       aa    bb   cc    dd    ee   ff    gg 
+$(info spaces x=$(filter aa bb,$x))
+$(info spaces x=$(filter              aa      bb     ,     $x      ))
+$(info spaces x=$(filter              aa      bb   $(comma)  ,     $x    $(comma) $(comma) ))
 
 # wildcards
 SRC=hello.c there.c all.c you.c rabbits.c lol.S foo.h

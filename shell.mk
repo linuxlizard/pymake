@@ -3,13 +3,22 @@
 
 now != date
 $(info now=$(now))
+
+now != date --help
+status=$(.SHELLSTATUS)
+$(info now=$(words $(now)) status=$(status))
 #$(info date=$(date))
 
-file=hello.c
-include= $(shell cat $(file) | grep include)
+
+# FIXME pymake doesn't yet recognize $(file) varref vs $(file) function)
+#file=hello.c
+#$(info $(file))
+
+filename=hello.c
+include= $(shell cat $(filename) | grep include)
 $(info includes=$(include))
 
-file=mulmer.c
+filename=mulmer.c
 $(info includes=$(include))
 
 date = $(shell date)
@@ -25,10 +34,11 @@ foo = $(shell ls '*.py')
 $(info foo=$(foo))
 
 foo = $(shell abcdefghijklmnopqrstuvwxyz)
-$(info foo=$(foo))
+status:=$(.SHELLSTATUS)
+$(info foo=$(foo) status=$(status))
 
-file=$(shell cat shell.mk)
-$(info $(file))
+filename=$(shell cat shell.mk)
+$(info $(filename))
 
 @:;@:
 
