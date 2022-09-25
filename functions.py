@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0
 
 # davep 20-Mar-2016 ; built-in functions
 
@@ -163,7 +164,7 @@ class Shell(Function):
         step1 = [t.eval(symbol_table) for t in self.token_list]
         step2 = flatten(step1)
         step3 = "".join(step2)
-        step4 = shell.execute(step3)
+        step4 = shell.execute(step3, symbol_table)
 #        breakpoint()
         # "convert each newline ... to a single space
         # TODO multiple blank lines become a single space?
@@ -230,6 +231,7 @@ _classes = {
     "addprefix" : AddPrefix,
     "addsuffix" : AddSuffix,
     "and" : AndClass,
+    "basename" : BasenameClass,
     "call" : Call,
     "dir" : DirClass,
     "error" : Error,

@@ -1,5 +1,9 @@
 out=(if a,b,c,d,e,f,g,h,i,j)
 $(info out=$(out))
+out=$(if a,b,c,d,e,f,g,h,i,j)
+$(info out=$(out))
+out=$(if a b c,d e f,g h i j)
+$(info out=$(out))
 
 a=1
 b=2
@@ -49,6 +53,11 @@ foo=$(or $a,$b,$c,$d,$e,$f,$g,$h)
 $(info or4-foo=$(foo))
 foo=$(or $a$b,$c,$d,$e,$f,$g,$h)
 $(info or5-foo=$(foo))
+a=1
+b=2
+c=3
+foo=$(or $a $b $c $d $e $f $g $h)
+$(info or6-foo=$(foo))
 
 blank=#
 space  = ${blank} ${blank}

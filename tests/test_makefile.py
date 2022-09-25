@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0
 
 import os
 import subprocess
@@ -18,6 +19,8 @@ def _run_pymake(infilename):
 def test_all():
     infilename_list = ( 
         # same order as gnu make manual to make my brain work less
+
+        # string functions
         "subst.mk",
         "patsubst.mk",
         "strip.mk",
@@ -30,7 +33,33 @@ def test_all():
         "words.mk",
         "firstword.mk",
         "lastword.mk",
-        "functions_str.mk"
+        "functions_str.mk", # test all the things
+
+        # filesystem functions
+        "dir.mk",
+        "notdir.mk",
+        "suffix.mk",
+        "basename.mk",
+        "addsuffix.mk",
+        "addprefix.mk",
+        "join.mk",
+        "wildcard.mk",
+        "realpath.mk",
+        "abspath.mk",
+
+        # conditional functions
+        "conditional.mk",
+
+        # the Super Special Stuff
+        # "foreach.mk",
+        # "file.mk",
+        # "call.mk",
+        # "value.mk",
+        # "eval.mk",
+        # "origin.mk",
+        # "flavor.mk",
+        # "shell.mk",
+        #
     )
 
     for infilename in infilename_list:

@@ -274,7 +274,7 @@ class AssignmentExpression(Expression):
 
             # execute RHS as shell
             s = self.token_list[2].eval(symbol_table)
-            rhs = shell.execute(s)
+            rhs = shell.execute(s, symbol_table)
         else:
             # TODO
             raise Unimplemented("op=%s"%op)
