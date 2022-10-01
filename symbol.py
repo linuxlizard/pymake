@@ -14,6 +14,7 @@ from version import Version
 from error import *
 import shell
 from flatten import flatten
+from todo import TODOMixIn
 
 _debug = True
 
@@ -273,8 +274,8 @@ class AssignmentExpression(Expression):
                 raise VersionError("!= not in this version of make")
 
             # execute RHS as shell
-            s = self.token_list[2].eval(symbol_table)
-            rhs = shell.execute(s, symbol_table)
+#            s = self.token_list[2].eval(symbol_table)
+            rhs = shell.execute_tokens(list(self.token_list[2]), symbol_table )
         else:
             # TODO
             raise Unimplemented("op=%s"%op)
@@ -286,8 +287,7 @@ class AssignmentExpression(Expression):
 #        assert isinstance(lhs[0],str), type(lhs[0])
 
         key = "".join(lhs)
-        symbol_table.add(key, rhs)
-
+        symbol_table.add(key, rhs, self.token_list[0].get_pos())
         return ""
 
     def sanity(self):
@@ -487,7 +487,7 @@ class SIncludeDirective(MinusIncludeDirective):
 class VpathDirective(Directive):
     name = "vpath"
 
-class OverrideDirective(Directive):
+class OverrideDirective(TODOMixIn,Directive):
     name = "override"
 
     def __init__(self, expression=None ):
@@ -500,6 +500,12 @@ class OverrideDirective(Directive):
             raise ParseError(description=description)
 
         super().__init__(expression)
+
+    def eval(self, symbol_table):
+        o = self.expression.eval(symbol_table)
+#        breakpoint()
+        # TODO I'm unsure how to get this integrated with the symbol table yet
+
 
 class LineBlock(Symbol):
     # Pile of unparsed code inside a conditional directive or a define

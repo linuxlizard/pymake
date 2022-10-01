@@ -73,12 +73,42 @@ class PrintingFunction(Function):
     # gnu make has some very particular behaviors around spacing in printing output.
     # Need to carefully duplicate all those behaviors.
 
+    def __init__(self, token_list):
+        # GNU Make discards whitespace between fn call and 1st arg
+        # e.g., $(info   5)  ->  "5"  (not "   5")
+        # Trailing whitespace is preserved.
+
+        # To hide any leading spaces between the function name and the
+        # first argument, if the first token is a literal, mark any leading
+        # whitespace as hidden.  
+        # $(info   a  b   )  will print "a b   "
+        #        ^^-- marked as hidden
+        #
+        # The arguments to the printing function could result in leading spaces
+        # so can't just lstrip() the result (which was my first idea)
+
+        super().__init__(token_list)
+
+        if not self.token_list:
+            # empty list so quit now
+            return
+
+        first_token = self.token_list[0]
+        if not isinstance(first_token, Literal):
+            # no literal whitespace so quit now
+            return
+
+        for vchar in first_token.string:
+            if not vchar.char in whitespace:
+                break
+            vchar.hide = True
+
     def _makestr(self, symbol_table):
         # If the called Symbol contains whitespace between symbols, don't add more.
         # Otherwise, add whitespace.
         msg = ""
 
-        # results will be an array of array of python strings
+        # results will be an array of python strings
         results = [t.eval(symbol_table) for t in self.token_list]
 
 #        breakpoint()
@@ -89,11 +119,6 @@ class PrintingFunction(Function):
 
         for str_list in results:
             msg += "".join(str_list)
-
-        # GNU Make discards whitespace between fn call and 1st arg
-        # e.g., $(info   5)  ->  "5"  (not "   5")
-        # Trailing whitespace is preserved.
-        msg = msg.lstrip()
 
         return msg
 
@@ -132,20 +157,86 @@ class Error(PrintingFunction):
         sys.exit(1)
 
 
-class Call(TODOMixIn, Function):
+class Call(FunctionWithArguments):
     name = "call"
+    num_args = -1 # no max
+
+    # $(call variable,param,param,...)
+    def eval(self, symbol_table):
+        var = "".join([a.eval(symbol_table) for a in self.args[0]])
+
+        arg_stack = []
+        for idx, arg_list in enumerate(self.args[1:]):
+            arg = "".join([a.eval(symbol_table) for a in arg_list])
+            varname = "%d" % (idx+1)
+            symbol_table.push(varname)
+            symbol_table.add(varname, arg)
+            # save the arg name so we can pop it from the symbol table 
+            arg_stack.append(varname)
+
+
+        # all we need to do is fetch() from the symbol table and the expression
+        # will be eval'd
+        s = symbol_table.fetch(var)
+#        breakpoint()
+
+        # pop the args off the symbol table in reverse order because why not
+        while 1:
+            try:
+                symbol_table.pop(arg_stack.pop())
+            except IndexError:
+                break
+
+        return s
+
 
 class Eval(TODOMixIn, Function):
     name = "eval"
 
-class Flavor(TODOMixIn, Function):
+class Flavor(Function):
     name = "flavor"
 
-class Foreach(TODOMixIn, Function):
-    name = "foreach"
+    def eval(self, symbol_table):
+        # single string that is a variable name
+        var = "".join([a.eval(symbol_table) for a in self.token_list])
 
-class Origin(TODOMixIn, Function):
+        return symbol_table.flavor(var)
+
+class Foreach(FunctionWithArguments):
+    name = "foreach"
+    num_args = 3
+
+    # $(foreach var,list,text)
+    def eval(self, symbol_table):
+        # single string that is a variable name
+        var = "".join([a.eval(symbol_table) for a in self.args[0]])
+
+        # array of strings
+        list_  = "".join([a.eval(symbol_table) for a in self.args[1]]).split()
+
+#        breakpoint()
+
+        out_str_list = []
+        symbol_table.push(var)
+        for item in list_:
+            symbol_table.add(var, item, self.args[0][0].get_pos())
+            text = "".join([a.eval(symbol_table) for a in self.args[2]])
+            out_str_list.append(text)
+
+        symbol_table.pop(var)
+
+        return " ".join(out_str_list)
+
+
+class Origin(Function):
     name = "origin"
+
+    # $(origin variable)
+    def eval(self, symbol_table):
+        # single string that is a variable name
+        var = "".join([a.eval(symbol_table) for a in self.token_list])
+
+        return symbol_table.origin(var)
 
 class Shell(Function):
     name = "shell"
@@ -160,30 +251,31 @@ class Shell(Function):
     # the .SHELLSTATUS variable."
     #
     def eval(self, symbol_table):
+        return shell.execute_tokens(self.token_list, symbol_table)
+
         # TODO condense these steps
         step1 = [t.eval(symbol_table) for t in self.token_list]
-        step2 = flatten(step1)
-        step3 = "".join(step2)
-        step4 = shell.execute(step3, symbol_table)
+#        step2 = flatten(step1)
+        step3 = "".join(step1)
+        exe_result = shell.execute(step3, symbol_table)
+        if exe_result.exitcode == 0:
+            return exe_result.stdout
+
 #        breakpoint()
         # "convert each newline ... to a single space
         # TODO multiple blank lines become a single space?
         # everything returns a string
         return step4.replace("\n", " ")
 
-class ValueClass(TODOMixIn, Function):
+class ValueClass(Function):
     name = "value"
     num_args = 1
 
-    # 20220820 ; start implementing this, ran into some pretty big problems, so
-    # leaving it for now. (put TODO back)
-
     def eval(self, symbol_table):
-#        assert len(self.args)==1, len(self.args)
-        result = evaluate(self.token_list, symbol_table)
-        sym = symbol_table.fetch(result)
-        breakpoint()
-        return sym.eval(symbol_table)
+        # single string that is a variable name
+        var = "".join([a.eval(symbol_table) for a in self.token_list])
+
+        return symbol_table.value(var)
 
 def split_function_call(s):
     # break something like "info hello world" that needs a secondary parse

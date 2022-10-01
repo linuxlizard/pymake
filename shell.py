@@ -6,30 +6,61 @@ import os
 import os.path
 import errno
 import subprocess
+from error import *
 
 logger = logging.getLogger("pymake.shell")
 
-from error import *
-
+default_shell="/bin/sh"
 shellstatus = ".SHELLSTATUS"
 
-def _save_shellstatus(num, symbol_table):
+# TODO optimization opportunity: lru_cache
+#def in_path(cmd):
+#    # search path
+#    path = os.getenv("PATH")
+#    if not path:
+#        return False
+#
+#    for dir_ in path.split(":"):
+#        if os.path.exists(os.path.join(dir_, cmd)):
+#            return True
+#    return False
+        
 
-    symbol_table.add(shellstatus, str(num))
-#    breakpoint()
-    
+def execute(cmd_str):
+    """execute a string with the shell, returning a bunch of useful info"""
 
-def execute(s, symbol_table):
-    """execute a string with the shell, returning stdout"""
+    shell = os.getenv("SHELL") or default_shell
 
-    logger.debug("execute %s", s)
+    logger.debug("execute %s", cmd_str)
 
-    # GNU Make searches for the executable before spawning the shell. Will report
-    # 'No such file or directory' (errno==2) if the file does not exist
-    if not os.path.exists(s):
-        _save_shellstatus(127, symbol_table)
-        error_message("{0}: {1}".format(s, os.strerror(errno.ENOENT)))
-        return ""
+    return_status = {
+        "stdout" : None,
+        "stderr" : None,
+        "exit_code" : None,
+        "errmsg" : None,
+    }
+
+    # TODO .SHELLFLAGS
+    # TODO .ONESHELL
+
+
+    # GNU Make searches for the executable before spawning (vfork/exec or
+    # posix_spawn) the shell. Will report 'No such file or directory'
+    # (errno==2) if the file does not exist
+    #
+    # TODO but how to handle shell built-ins ?
+    # Well, turns out GNU Make has a huge table of shells and their associated
+    # built-ins. That's how they can report ENOENT (2). GNU Make is optimized
+    # for speed in that they will avoid loading the shell unless absolutely
+    # necessary.
+    #
+    # I'm not concerned about speed. So I'm going to always run $(shell) and rules with the actual shell.
+    #
+
+#    if not os.path.exists(cmd_list[0]) and not in_path(cmd_list[0]):
+#        return_status["exit_code"] = 127
+#        return_status["errmsg"] = "make: {0}: {1}".format(cmd_list[0], os.strerror(errno.ENOENT))
+#        return return_status
         
     # Exit value depends on which shell we're using.
     #
@@ -38,41 +69,47 @@ def execute(s, symbol_table):
     # the return status is 126."
     # man page: GNU Bash 5.1 2020 October 29
 
-    try:
-        p = subprocess.run(s, shell=True, 
-                stdout=subprocess.PIPE, 
-                stderr=subprocess.PIPE,
-                universal_newlines=True,
-                check=False, 
-            )
-    except subprocess.CalledProcessError:
-        # TODO
-        raise
+    p = subprocess.run(cmd_str, 
+            shell=True,
+            stdout=subprocess.PIPE, 
+            stderr=subprocess.PIPE,
+            universal_newlines=True,
+            check=False, # we'll check returncode
+        )
 
-    print(p.args)
-    print(p.stderr)
-    print(p.returncode)
+    logger.debug("shell exit status=%r", p.returncode)
+    return_status["exit_code"] = p.returncode
 
-
-    
-    # make returns one whitespace separated string, no CR/LF
+    # GNU Make returns one whitespace separated string, no CR/LF
     # "all other newlines are replaced by spaces." gnu_make.pdf
-    s = p.stdout.strip().replace("\n", " ")
-#    s = p.stdout.decode("utf8")
+    return_status["stdout"] = p.stdout.strip().replace("\n", " ")
+    return_status["stderr"] = p.stderr.strip().replace("\n", " ")
 
-    return s
+    return return_status
 
-def test():
-    s = execute('ls')
-    assert isinstance(s,str)
-    print(s)
+def execute_tokens(token_list, symbol_table):
+    # TODO condense these steps
+    step1 = [t.eval(symbol_table) for t in token_list]
+    step2 = "".join(step1)
 
-    s = execute("ls *.py")
-    print(s)
+    exe_result = execute(step2)
 
-    s = execute("ls '*.py'")
-    print(s)
+    # save shell status
+    symbol_table.add(shellstatus, str(exe_result["exit_code"]))
 
-if __name__=='__main__':
-    test()
+    if exe_result["exit_code"] == 0:
+        # success!
+        return exe_result["stdout"]
+
+    # "If we don't succeed, we run the chance of failure." -- D. Quayle 
+
+    # if we have a specific internal error message, report it here
+    # (e.g., "No such file or directory")
+    if exe_result["errmsg"]:
+        error_message(exe_result["errmsg"])
+        return ""
+
+    # report stderr
+    error_message(exe_result["stderr"])
+    return ""
 

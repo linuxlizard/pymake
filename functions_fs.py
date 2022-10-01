@@ -211,7 +211,9 @@ class RealPath(Function):
                 return ""
             return s
 
-        return " ".join([realpath(fname) for fname in filename_list])
+        # extra hoops to throw away empty strings
+        new_names = filter( lambda s : bool(s), [realpath(fname) for fname in filename_list] )
+        return " ".join(new_names)
         
 class Suffix(Function):
     name = "suffix"

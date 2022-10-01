@@ -51,10 +51,10 @@ def test_all():
         "conditional.mk",
 
         # the Super Special Stuff
-        # "foreach.mk",
+        "foreach.mk",
         # "file.mk",
-        # "call.mk",
-        # "value.mk",
+        "call.mk",
+#        "value.mk",  # FIXME my .makefile() surrounds single letter varrefs with () even if not in the original
         # "eval.mk",
         # "origin.mk",
         # "flavor.mk",
@@ -72,4 +72,13 @@ def test_all():
 #    print(os.getcwd())
 #    makefile = pymake.parse_makefile(infilename)
     
-    
+def test_value():
+    # TODO need some way of testing value() function w/o running afoul of my $(P) problem
+    # GNU Make: FOO = $PATH
+    # I parse and regenerate that expression to:
+    # FOO = $(P)ATH
+    #
+    # I like having my output with explicit varref even for single char names.
+    # I just need to create a test that will work around this $(P) problem.
+    pass
+
