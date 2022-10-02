@@ -222,20 +222,11 @@ class VarRef(Expression):
         return "$(" + "".join([t.makefile() for t in self.token_list]) + ")"
 
     def eval(self, symbol_table):
-        result = []
-        for sym in self.token_list:
-            # FIXME make this a list comprehension
-            key = sym.eval(symbol_table)
-            value = symbol_table.fetch(key)
-            result.append(value)
-#            if isinstance(ref,Expression):
-#                # execute the expression
-#                assert 0  # do I need this case anymore now that I eval() inside symtable.fetch() ?
-#                ref_value = ref.eval(symbol_table)
-#                result.extend(ref_value)
-#            else:
-#                result.extend(ref)
-        return "".join(result)
+        logger.debug("varref=%r eval start", self)
+        key = [t.eval(symbol_table) for t in self.token_list]
+        logger.debug("varref=%r key=%r", self, key)
+#        key = "".join([t.eval(symbol_table) for t in self.token_list])
+        return symbol_table.fetch("".join(key))
 
 class AssignmentExpression(Expression):
     def __init__(self, token_list):

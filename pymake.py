@@ -856,13 +856,19 @@ def tokenize_variable_ref(vchar_scanner):
     state_dollar = 2
     state_in_var_ref = 3
 
+    # open char .e.g. ( or {
+    # (so we can match open/close chars)
+    open_char = None
+
     state = state_start
     token = vline.VCharString()
     token_list = []
 
+    # TODO optimization opportunity.  Move state==state_start outside the loop
+    # since we're only hitting it once
     for vchar in vchar_scanner : 
         c = vchar.char
-#        print("v c={0} state={1} idx={2}".format(printable_char(c), state, scanner.idx))
+#        print("v c={0} state={1} idx={2}".format(printable_char(c), state, vchar_scanner.idx))
         if state==state_start:
             if c=='$':
                 state=state_dollar
@@ -872,21 +878,30 @@ def tokenize_variable_ref(vchar_scanner):
         elif state==state_dollar:
             # looking for '(' or '$' or some char
             if c=='(' or c=='{':
-                opener = c
+                open_char = c
                 state = state_in_var_ref
             elif c=='$':
                 # literal "$$"
                 token += vchar
             elif not c in whitespace :
                 # single letter variable, e.g., $@ $x $_ etc.
-                token_list.append(Literal(vline.VCharString([vchar])))
+                token += vchar
+                token_list.append(Literal(token))
                 return VarRef(token_list)
                 # done tokenizing the var ref
+            else:
+                # Can I hit a case of $<whitespace> ?
+                # Yes. GNU Make 4.3 is ignoring it.
+                breakpoint()
+                assert 0, "TODO"
+                return VarRef([])
 
         elif state==state_in_var_ref:
             if c==')' or c=='}':
                 # end of var ref
                 # TODO make sure to match the open/close chars
+                # () {} good
+                # (} {) bad 
 
                 # save what we've read so far
                 if len(token):
@@ -908,7 +923,6 @@ def tokenize_variable_ref(vchar_scanner):
                     token += vchar
                     # skip the extra $
                     c = next(vchar_scanner)
-                    state = state_in_var_ref
                 else:
                     # save token so far (if any)
                     if len(token):
@@ -1722,11 +1736,24 @@ def usage():
     print("usage: TODO")
 
 def parse_args():
+    print_version ="""PY Make %d.%d\n
+Copyright (C) 2006-2022 David Poole davep@mbuf.com, testcluster@gmail.com""" % (0,0)
+
     parser = argparse.ArgumentParser(description="Makefile Debugger")
     parser.add_argument('-o', '--output', help="write regenerated makefile to file") 
     parser.add_argument('-d', '--debug', action='count', help="set log level to DEBUG (default is INFO)") 
     parser.add_argument('-S', dest='s_expr', action='store_true', help="output the S-expression to stdout") 
-    parser.add_argument('filename', help='read as a makefile')
+
+    # var assignment(s)
+    #    e.g. make CC=gcc 
+    # or a target(s)
+    #    e.g. make clean all
+    parser.add_argument("args", metavar='args', nargs='*')
+    # result (if any) will be in args.args
+    
+    # arguments 100% compatible with GNU Make
+    parser.add_argument('-f', '--file', '--makefile', dest='filename', help='read FILE as a makefile', default="Makefile" )
+    parser.add_argument('-v', '--version', action='version', version=print_version, help="Print the version number of make and exit.")
 
     args = parser.parse_args()
 

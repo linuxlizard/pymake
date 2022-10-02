@@ -138,11 +138,19 @@ class SymbolTable(object):
         # calling code)
         logger.debug("pop name=%s", name)
 
+        # The stack will contain values previously in the symbol table.
+        # If there was no previous value in the symbol table, there will be no
+        # entry for it in the stack. In this case, just delete the value from
+        # the symbol table.
+        # For example, the $(call) function will push each arg $1 $2 $3 $4 etc
+        # then pop them after the call.  Very likely $1 $2 $3, etc, are not in
+        # the symbol table originally.
         try:
             entry = self.stack[name].pop()
         except KeyError:
-            # can push a varname that doesn't exist so the pop should just
-            # delete it from symbol table (if exists)
+            # allow KeyError to propagate if the name doesn't exist in the
+            # self.symbols{} because that would be a bug  (this might change in
+            # the future)
             del self.symbols[name]
             return
 

@@ -1,4 +1,7 @@
 # error "empty variable name"
-export = a b c d 
+
+# <space>=42
+ =42
 
 @:;@:
+

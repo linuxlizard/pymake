@@ -290,8 +290,6 @@ def split_function_call(s):
     state_init = 0
     state_searching = 1
 
-    iswhite = lambda c : c==" " or c=="\t"
-
     state = state_init
 
     # Find first whitespace, split the string into string before and after
@@ -303,12 +301,12 @@ def split_function_call(s):
         if state==state_searching:
             # we have seen at least one non-white so now seeking a next
             # whitespace
-            if iswhite(c):
+            if c in whitespace:
                 # don't return empty string, return None if there is nothing
                 logger.debug("s=\"%s\" idx=%d", s, idx)
                 return VCharString(s[:idx]), VCharString(s[idx+1:]) if idx+1<len(s) else None
         elif state==state_init:
-            if iswhite(c):
+            if c in whitespace:
                 # no functions start with whitespace
                 return s, None
             else:
@@ -362,13 +360,19 @@ def make_function(arglist):
 
     # $() is valid (empty varref)
     if not arglist:
-        raise KeyError("")
+        raise KeyError
 
 #    for a  in arglist:
 #        print(a)
 
     # do NOT .eval() here!!! will cause side effects. only want to look up the string
     vcstr = arglist[0].string
+
+    # if .string is None then we don't have a Literal in which case we're
+    # definitely not a function.
+    if vcstr is None:
+        raise KeyError
+
     # .string will be a VCharString
     # do NOT modify arglist; is a ref into the AST
 

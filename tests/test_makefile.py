@@ -12,7 +12,7 @@ def _run_makefile(infilename):
     return m.stdout
 
 def _run_pymake(infilename):
-    m = subprocess.run(("python3", "pymake.py", infilename), shell=False, check=True, capture_output=True)
+    m = subprocess.run(("python3", "pymake.py", "-f", infilename), shell=False, check=True, capture_output=True)
     print(m.stdout)
     return m.stdout
 
