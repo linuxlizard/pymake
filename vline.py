@@ -448,16 +448,11 @@ class VirtualLine(object):
 
         return recipe_lines
 
-    def starting_pos(self):
-        # position of this line (in a file) is the position of the first char
-        # of the first line
-        return self.virt_chars[0][0].pos
-
-    @classmethod
-    def from_string(cls, python_string):
-        # create a VirtualLine instance from a single string (convenience
-        # method for test/debug code)
-        return cls([python_string], 0)
+    def get_pos(self):
+        return (self.filename,
+            # position of this line (in a file) is the position of the first char
+            # of the first line
+            self.virt_chars[0][0].pos)
 
     def get_phys_line(self):
         # rebuild a single physical line (needed when tokenizing recipes)

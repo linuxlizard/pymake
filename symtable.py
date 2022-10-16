@@ -14,23 +14,41 @@ _fail_on_undefined = False
 
 
 # template for vars saved in SymbolTable
-_symbol = {
+_entry_template = {
     "name" : None,
     "value" : None,
     "origin" : None,  # see origin() ; used with env var override and $(foreach)
     "pos" : None,  # filename/position where last set
+    "flags" : 0
 }
+
+FLAG_NONE = 0
+FLAG_READ_ONLY = 1
 
 class SymbolTable(object):
     def __init__(self):
         # key: variable name
-        # value: _symbol dict instance
+        # value: _entry_template dict instance
         self.symbols = {}
 
         # push/pop a name/value so $(foreach) (and other functions) can re-use
         # the var name (and we don't have to make a complete new copy of a
         # symbol table just to save/restore a single var)
         self.stack = {}
+
+        self._init_builtins()
+
+    def _init_builtins(self):
+        entry = dict(_entry_template)
+        entry['name'] = '.VARIABLES'
+        entry['origin'] = 'default'
+        entry['flags'] = FLAG_READ_ONLY
+        self.symbols[entry['name']] = entry
+
+        self.built_ins = {
+            ".VARIABLES" : self.variables,
+        }
+        
 
     def add(self, name, value, pos=None):
         logger.debug("%s store \"%s\"=\"%s\"", self, name, value)
@@ -46,10 +64,14 @@ class SymbolTable(object):
         try:
             entry = self.symbols[name]
         except KeyError:
-            entry = dict(_symbol)
+            entry = dict(_entry_template)
             entry['name'] = name
             # TODO this can change when I implement 'override'
             entry['origin'] = 'file'
+
+        # XXX not sure read-only is a good idea yet
+        if entry['flags'] & FLAG_READ_ONLY:
+            raise PermissionDenied
 
         if pos:
             entry['pos'] = pos
@@ -80,24 +102,27 @@ class SymbolTable(object):
         assert isinstance(key,str), type(key)
         assert len(key)  # empty key bad
 
-        s = key
-        logger.debug("fetch s=\"%r\"", s)
+        # built-in variable ?
+        try:
+            return self.built_ins[key](key)
+        except KeyError:
+            pass
 
         try:
-#            print("fetch value=\"%r\"" % self.symbols[s])
-            return self._maybe_eval(self.symbols[s])
+#            print("fetch value=\"%r\"" % self.symbols[key])
+            return self._maybe_eval(self.symbols[key])
         except KeyError:
             if _fail_on_undefined:
                 raise
 
         # TODO read gnu make manual on how env vars are referenced
-        logger.debug("sym=%s not in symbol table", s)
+        logger.debug("sym=%s not in symbol table", key)
 
         # try environment
-        value = os.getenv(s)
+        value = os.getenv(key)
         if value is None:
             return ""
-        logger.debug("sym=%s found in environ", s)
+        logger.debug("sym=%s found in environ", key)
         return value
 
 
@@ -118,7 +143,7 @@ class SymbolTable(object):
             if value is None:
                 # nothing to save
                 return
-            entry = dict(_symbol)
+            entry = dict(_entry_template)
             entry['origin'] = 'environment'
             entry['name'] = name
             
@@ -229,3 +254,15 @@ class SymbolTable(object):
             return value
         except KeyError:
             pass
+
+    def variables(self, _):
+        # return $(.VARIABLES)
+        return " ".join(self.symbols.keys())
+
+    def is_defined(self, name):
+        # is this varname in our symbol table (or other mechanisms)
+
+        return name in self.built_ins or\
+            name in self.symbols or\
+            os.getenv(name) is not None
+        

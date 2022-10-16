@@ -102,6 +102,7 @@ class Symbol(object):
             assert isinstance(t, Symbol), (type(t), t)
             if not t.string:
                 return
+            t.string.validate()
 
     def eval(self, symbol_table):
         # children should override
@@ -376,8 +377,8 @@ class RuleExpression(Expression):
     def eval(self, symbol_table):
         # TODO
         logger.error("%s eval not implemented yet", type(self))
+#        breakpoint()
         return ""
-#        raise NotImplementedError
 
 class PrerequisiteList(Expression):
      # davep 03-Dec-2014 ; FIXME prereq list must be an array of expressions,
@@ -682,20 +683,37 @@ class ConditionalBlock(Directive):
         s += ")"
         return s
 
-#    def eval(self, symbol_table):
-#        breakpoint()
+    def eval(self, symbol_table):
+        breakpoint()
+        for expr in self.cond_exprs:
+            result = expr.eval(symbol_table)
+            if result:
+                break
 
 class ConditionalDirective(Directive):
     name = "(should not see this)"
+    lut = {} # filled later
     
-#    def save(self, code):
-#        self.code = code
-
 class IfdefDirective(ConditionalDirective):
     name = "ifdef"
 
+    def eval(self, symbol_table):
+        name = self.expression.eval(symbol_table)
+
+        # don't use .fetch() because we don't want to eval the expression in
+        # the symbol table. We just want proof of exist.
+        return symbol_table.is_defined(name)
+
+
 class IfndefDirective(ConditionalDirective):
     name = "ifndef"
+
+    def eval(self, symbol_table):
+        name = self.expression.eval(symbol_table)
+
+        # don't use .fetch() because we don't want to eval the expression in
+        # the symbol table. We just want proof of exist.
+        return not symbol_table.is_defined(name)
 
 class IfeqDirective(ConditionalDirective):
     name = "ifeq"
@@ -706,11 +724,18 @@ class IfeqDirective(ConditionalDirective):
     # following the ifeq are obeyed if the two arguments match; otherwise they are ignored."
     #  GNU Make Manual 7.1 pg 81
 
-#    def eval(self, symbol_table):
-#        breakpoint()
+    def eval(self, symbol_table):
+        breakpoint()
 
 class IfneqDirective(ConditionalDirective):
     name = "ifneq"
+
+ConditionalDirective.lut = {
+      "ifdef" : IfdefDirective,
+       "ifndef" : IfndefDirective,
+       "ifeq"  : IfeqDirective,
+       "ifneq" : IfneqDirective 
+    }
 
 class DefineDirective(Directive):
     name = "define"

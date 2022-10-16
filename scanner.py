@@ -87,7 +87,6 @@ class ScannerIterator(object):
         # Requires the string be found in the data, like string's index method.
         # Requires the string start exactly at the current position.
 
-        errmsg = "\"{0}\" not found in {1}".format(s, self)
         for c in s :
             if self.idx >= self.max_idx:
                 # full substring not found so error!
@@ -97,6 +96,8 @@ class ScannerIterator(object):
                 self.next()
             else :
                 # full substring not found so error!
+                filename, pos = self.data[0].get_pos()
+                errmsg = "\"{0}\" not found in {1} filename={2} pos={3}".format(s, self, filename, pos)
                 raise ValueError(errmsg)
 
         # allow chaining

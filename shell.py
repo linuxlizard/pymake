@@ -29,7 +29,6 @@ shellstatus = ".SHELLSTATUS"
 def execute(cmd_str):
     """execute a string with the shell, returning a bunch of useful info"""
 
-    shell = os.getenv("SHELL") or default_shell
 
     logger.debug("execute %s", cmd_str)
 
@@ -40,6 +39,8 @@ def execute(cmd_str):
         "errmsg" : None,
     }
 
+    # TODO launch this shell (or verify python subprocess uses env $SHELL)
+    shell = os.getenv("SHELL") or default_shell
     # TODO .SHELLFLAGS
     # TODO .ONESHELL
 

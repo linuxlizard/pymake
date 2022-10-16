@@ -105,6 +105,22 @@ def test_env_var():
 
     assert "PATH" not in symtable.symbols
 
+def test_is_defined():
+    # verify we check all the ways a symbol can be defined
+    symtable = SymbolTable()
+
+    # env var
+    assert symtable.is_defined("PATH")
+
+    # built-in
+    assert symtable.is_defined(".VARIABLES")
+
+    # regular symbol
+    assert not symtable.is_defined("FOO")
+
+    symtable.add("FOO", "BAR")
+    assert symtable.is_defined("FOO")
+
 if __name__ == '__main__':
     breakpoint()
     test_push_push_pop_pop()

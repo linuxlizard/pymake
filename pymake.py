@@ -10,6 +10,7 @@
 import sys
 import logging
 import argparse
+import string
 
 logger = logging.getLogger("pymake")
 #logging.basicConfig(level=logging.DEBUG)
@@ -29,6 +30,8 @@ from version import Version
 import functions 
 import source
 from whitespace import whitespace
+from symtable import SymbolTable
+import makedb
 
 #whitespace = set( ' \t\r\n' )
 #whitespace = set(' \t')
@@ -177,6 +180,47 @@ def depth_checker(func):
 
     return check_depth
 
+def parse_expression(expr, virt_line, vline_iter, line_scanner):
+    # This is a second pass through an Expression.
+    # An Expression could be something like:
+    #   $(info blah blah)  # fn call ; most are invalid in standalone context
+    #   export 
+    #   export something
+    #   define foo   # start of multi-line variable
+
+    assert isinstance(expr,Expression), type(expr)
+
+    # If we do find a directive, we'll wind up re-parsing the entire line as a
+    # directive. Unnecessary and ugly but I first tried to handle directives
+    # before assignment and rules which didn't work (too much confusion in
+    # handling the case of directive names as as rule or assignments). So I'm
+    # parsing the line first, determining if it's a rule or staement or
+    # expression. If expression, look for a directive string, then connect
+    # to the original Directive handling code here.
+
+    # We're only interesting in Directives at this point. A Directive will be
+    # inside string Literal. 
+    #
+    # Leave anything else alone. Invalid context function calls will error out
+    # during execute().  For example,  $(subst ...) alone on a line will error
+    # with "*** missing separator. Stop."
+    #
+    #
+    # If the first token isn't a Literal, we're done.
+    tok = expr.token_list[0]
+    if not isinstance(tok, Literal):
+        return expr
+
+    # seek_directive() works on raw python strings so stringify the VCharString
+    d = seek_directive(str(tok.string))
+    if not d:
+        # nope, not a directive. Ignore this expression and let execute figure it out
+        return expr
+
+    # at this point, we definitely have some sort of directive.
+    dir_ = tokenize_directive(d, virt_line, vline_iter, line_scanner)
+    return dir_
+
 #@depth_checker
 def tokenize_statement(vchar_scanner):
     # at start of scanning, we don't know if this is a rule or an assignment
@@ -225,8 +269,8 @@ def tokenize_statement(vchar_scanner):
     
         # add rule RHS
         # rule RHS  ::= assignment
-        #           ::= prerequisite_list
-        #           ::= <empty>
+        #            | prerequisite_list
+        #            | <empty>
         statement = list(lhs)
         statement.append( tokenize_rule_prereq_or_assign(vchar_scanner) )
 
@@ -1151,23 +1195,65 @@ def parse_recipes(line_scanner, semicolon_vline=None):
 
     return RecipeList(recipe_list)
 
-def seek_directive(s):
+def seek_directive(s, seek=directive):
     # s - raw python string
-    def get_directive(s):
-        # (did I need this function outside seek???)
-        # Split apart a line seeking a directive. Handle stuff like:
-        #   else   <--- legal (duh)
-        #   else#  <--- legal
-        #
-        fields = s.strip().split()[0].split("#")
-        return fields[0]
-    # split apart a line seeking a directive
-    d = get_directive(s)
-    if d in directive:
+    # Working with a throwaway copy of the string so go nuts.
+    #
+    # Directive is the most broad of the GNU Make makefile language constructs. 
+    #
+    # Disect a line to decide how to handle.
+    # Is it a directive?
+    # Is it a rule?  
+    # Is it a recipe? 
+    # 
+    # "Makefiles contain five kinds of things: explicit rules, implicit rules, variable definitions,
+    # directives, and comments. Rules, variables, and directives are described at length in later
+    # chapters." -- "GNU make Version 4.3 January 2020"
+    #
+    # Usually leading .RECIPEPREFIX (default: tab) means a recipe. But there are some subtlties.
+    #
+    # <tab>FOO:=BAR   # variable definition
+    # <tab>ifdef FOO  # ERROR
+    # <tab># comment  # comment
+
+    # Split apart a line seeking a directive. Handle stuff like:
+    #   else   <--- legal (duh)
+    #   else#  <--- legal
+    #   #else  <--- comment
+
+    logger.debug("seek_directive()")
+
+    if s[0] == recipe_prefix:
+        # careful handling required.
+        print(s)
+        assert 0, "TODO"
+
+    # kill any whitespace.
+    s = s.strip()
+    if s[0] == '#':
+        # line comment
+        return None
+
+    # find the first whitespace
+    idx = 0
+    while idx < len(s) and not s[idx] in whitespace:
+        idx += 1
+
+    # grab the word
+    d = s[:idx]
+
+    if d in seek:
+        # At this point we have a directive.
+        logger.debug("seek_directive() found directive=\"%s\"", d)
         return d
+
+    # (waves hand) "These are not the directives you're looking for."
     return None
 
 def seek_elseif(virt_line):
+    # I don't think I need this
+    assert 0
+
     # Look for an "else if" directive (e.g., else ifdef, else ifeq, etc)
     #
     # Luckily Make seems to require whitespace after the else conditional
@@ -1180,21 +1266,53 @@ def seek_elseif(virt_line):
     # else ifeq ($a,$b) -> ifeq ($a,$b)
     # The returning value will be passed to the tokenizer recursively.
 
-    VirtualLine.validate(virt_line)
-
     # "When in doubt, use brute force."
-    phys_line = str(virt_line)
-    phys_line = phys_line.lstrip()
-    assert phys_line.startswith("else"), phys_line
-    phys_line = phys_line[4:].lstrip()
-    if not phys_line or phys_line[0]=='#' :
+    s = s.lstrip()    
+
+    # find the first whitespace
+    idx = 0
+    while idx < len(s) and not s[idx] in whitespace:
+        idx += 1
+    
+    # grab the word
+    d = s[:idx]
+
+    # else ... something
+    if d != "else":
+        return None
+
+    # do we have a something?
+
+
+    # keep the phys_line pristine
+    tmp_line = phys_line.lstrip()
+    assert tmp_line.startswith("else"), phys_line
+
+    # is there another expression?
+    tmp_line = tmp_line[4:].lstrip()
+    if not tmp_line or tmp_line[0]=='#' :
         # rest of line is empty or a comment
         return None
 
-    d = seek_directive(phys_line)
-    if d in conditional_directive :
-#        print("found elseif condition=\"{0}\"".format(d))
-        return d,VirtualLine.from_string(phys_line)
+    directive_str = seek_directive(tmp_line)
+    if directive_str in conditional_directive :
+        # we found an else condition of some sort
+        logger.debug("found elseif condition=\"%s\"", directive_str)
+        filename, pos = virt_line.get_pos()
+
+        # adjust the column to match where we find the else condition
+        col = phys_line.index("else") + 4
+
+        # we know something follows the else so this loop is safe
+        while phys_line[col] in whitespace:
+            col += 1
+        
+        pos = pos[vline.VCHAR_ROW], col
+
+        breakpoint()
+        else_vline = VirtualLine([phys_line], pos, filename)
+        else_vline.validate()
+        return directive_str, else_vline
 
     # found junk after else
     # .e.g, 
@@ -1259,11 +1377,9 @@ def handle_conditional_directive(directive_inst, vline_iter, line_scanner):
 
         # search for nested directive in the physical line (consolidates the
         # line continuations)
-        phys_line = str(virt_line)
-
         # directive is the first substring surrounded by whitespace
         # or None if substring is not a directive
-        directive_str = seek_directive(phys_line)
+        directive_str = seek_directive(str(virt_line))
 
         if directive_str in conditional_directive : 
             # save the block of stuff we've read
@@ -1285,20 +1401,19 @@ def handle_conditional_directive(directive_inst, vline_iter, line_scanner):
 #            print("phys_line={0}".format(printable_string(phys_line)))
 
             # handle "else if"
-            elseif = seek_elseif(virt_line)
-            if elseif : 
-                # found an "else if"something
-                directive_str, virt_line = elseif
+            # TODO doesn't work yet
+#            breakpoint()
 
-                lut = { "ifdef" : IfdefDirective,
-                        "ifndef" : IfndefDirective,
-                        "ifeq"  : IfeqDirective,
-                        "ifneq" : IfneqDirective 
-                      }
-                viter = iter(virt_line)
-                viter.lstrip().eat(directive_str).lstrip()
+            viter = iter(virt_line)
+            viter.lstrip().eat("else").lstrip()
+
+            directive_str = seek_directive(str(virt_line), conditional_directive)
+            if directive_str : 
+                # found an "else ifsomething"
+                viter.lstrip().eat("else").lstrip()
+
                 expression = tokenize_assign_RHS(viter)
-                directive_inst = lut[directive_str](expression)
+                directive_inst = ConditionalDirective.lut[directive_str](expression)
                 cond_block.add_conditional( directive_inst )
             else : 
                 # Just the else case. Must be the last conditional we see.
@@ -1538,14 +1653,20 @@ def tokenize(virt_line, vline_iter, line_scanner):
 
     logger.debug("tokenize()")
 
+    # what are we looking at here?
+    # Make doesn't have a formal grammar per se so it's a little tricky in some
+    # corner cases. Let's cheat and look at the whole line (using a disposable
+    # Python string) to decide if we have a directive, assignment, rule, recipe, etc.
+#    type_ = decide_parse(str(virt_line))
+
     # Is this a directive statement (e.g., ifdef ifeq define)?  Read the full
     # concatenated line from virtual line looking for first whitespace
     # surrounded string being a directive. (the vline will clean up the
     # backslash line continuations)
-    directive_str = seek_directive(str(virt_line))
-    if directive_str:
-        token = tokenize_directive(directive_str, virt_line, vline_iter, line_scanner)
-        return token
+#    directive_str = seek_directive(str(virt_line))
+#    if directive_str:
+#        token = tokenize_directive(directive_str, virt_line, vline_iter, line_scanner)
+#        return token
 
     # tokenize character by character across a VirtualLine
     vchar_scanner = iter(virt_line)
@@ -1555,6 +1676,15 @@ def tokenize(virt_line, vline_iter, line_scanner):
     # lines. (Recipes have different whitespace and backslash rules.)
     if not isinstance(statement,RuleExpression) : 
         logger.debug("statement=%s", str(statement))
+
+        # we found a bare Expression that needs a second pass
+        if isinstance(statement,Expression):
+            expr = parse_expression(statement, virt_line, vline_iter, line_scanner)
+            assert expr is not None
+            return expr
+
+        # do we ever get here now? 
+        assert 0
         return statement
 
     # At this point we have a Rule.
@@ -1638,6 +1768,10 @@ def parse_makefile_from_src(src):
     # Rest of tokenizer reads from vline_iter.
     token_list = [tokenize(vline, vline_iter, line_scanner) for vline in vline_iter] 
 
+    # good time for some sanity checks
+    for t in token_list:
+        assert t and isinstance(t,Symbol), t
+
     return Makefile(token_list)
 
 #def parse_makefile_string(s):
@@ -1706,11 +1840,26 @@ def find_location(tok):
 #        for c in tok.string:
 #            logger.debug("f %s %s %s", c, c.pos, c.filename)
 
+def _add_internal_db(symtable):
+    # grab gnu make's internal db, add to our own
+    # NOTE! this requires my code to be the same license as GNU Make (GPLv3 as of 20221002)
+    defaults, automatics = makedb.fetch_database()
+
+    # If I don't run this code, is my code still under GPLv3 ???
+
+    # now have a list of strings containing Make syntax.
+    for oneline in defaults:
+        # TODO mark these variables 'default'
+        vline = VirtualLine([oneline], (0,0), "/dev/null")
+        stmt = tokenize_statement(iter(vline))
+        stmt.eval(symtable)
+
 def execute(makefile):
     # tinkering with how to evaluate
     logger.info("Starting execute of %s", id(makefile))
-    from symtable import SymbolTable
     symtable = SymbolTable()
+
+    _add_internal_db(symtable)
 
     for tok in makefile.token_list:
         try:
