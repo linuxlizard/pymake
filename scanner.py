@@ -60,49 +60,6 @@ class ScannerIterator(object):
         # Test/debug method. Return what remains of the data.
         return self.data[self.idx:]
 
-#    def stop(self):
-#        # truncate the iterator at the current position
-#        assert self.idx < self.max_idx, self.idx
-#
-#        # kill anything after the current position
-#        self.data = self.data[:self.idx]
-#        self.max_idx = len(self.data)
-
-    def lstrip(self):
-        # strip left leading whitespace (like "".strip)
-        try : 
-            while str(self.data[self.idx]) in string.whitespace :
-                self.next()
-        except IndexError:
-            raise StopIteration
-
-        # allow chaining
-        return self
-
-    def eat(self, s):
-        # consume a string from the leading part of the data
-        # for example:  eat("hello") from "hello, world" will result in 
-        # ", world"
-        #
-        # Requires the string be found in the data, like string's index method.
-        # Requires the string start exactly at the current position.
-
-        for c in s :
-            if self.idx >= self.max_idx:
-                # full substring not found so error!
-                raise ValueError(errmsg)
-
-            if str(self.data[self.idx]) == c :
-                self.next()
-            else :
-                # full substring not found so error!
-                filename, pos = self.data[0].get_pos()
-                errmsg = "\"{0}\" not found in {1} filename={2} pos={3}".format(s, self, filename, pos)
-                raise ValueError(errmsg)
-
-        # allow chaining
-        return self
-
     def peek_back(self):
         # return one char previous (created to handle \ (backslashed)
         # characters) (does not modify our state)

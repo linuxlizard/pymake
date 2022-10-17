@@ -88,6 +88,9 @@ directive = {
     "vpath",
 } | conditional_directive
 
+# directives are all lowercase and the - from "-include"
+directive_chars = set(string.ascii_lowercase) | set("-")
+
 automatic_variables = {
     "@",
     "%",
@@ -211,14 +214,15 @@ def parse_expression(expr, virt_line, vline_iter, line_scanner):
     if not isinstance(tok, Literal):
         return expr
 
-    # seek_directive() works on raw python strings so stringify the VCharString
-    d = seek_directive(str(tok.string))
+    # seek_directive() needs a character iterator 
+    viter = ScannerIterator(tok.string, tok.string.get_pos()[0])
+    d = seek_directive(viter)
     if not d:
         # nope, not a directive. Ignore this expression and let execute figure it out
         return expr
 
     # at this point, we definitely have some sort of directive.
-    dir_ = tokenize_directive(d, virt_line, vline_iter, line_scanner)
+    dir_ = tokenize_directive(d, viter, virt_line, vline_iter, line_scanner)
     return dir_
 
 #@depth_checker
@@ -1195,133 +1199,72 @@ def parse_recipes(line_scanner, semicolon_vline=None):
 
     return RecipeList(recipe_list)
 
-def seek_directive(s, seek=directive):
-    # s - raw python string
-    # Working with a throwaway copy of the string so go nuts.
-    #
-    # Directive is the most broad of the GNU Make makefile language constructs. 
-    #
-    # Disect a line to decide how to handle.
-    # Is it a directive?
-    # Is it a rule?  
-    # Is it a recipe? 
-    # 
-    # "Makefiles contain five kinds of things: explicit rules, implicit rules, variable definitions,
-    # directives, and comments. Rules, variables, and directives are described at length in later
-    # chapters." -- "GNU make Version 4.3 January 2020"
-    #
-    # Usually leading .RECIPEPREFIX (default: tab) means a recipe. But there are some subtlties.
-    #
-    # <tab>FOO:=BAR   # variable definition
-    # <tab>ifdef FOO  # ERROR
-    # <tab># comment  # comment
+def seek_directive(viter, seek=directive):
+    # viter - character iterator
+    assert isinstance(viter, ScannerIterator), type(viter)
 
-    # Split apart a line seeking a directive. Handle stuff like:
-    #   else   <--- legal (duh)
-    #   else#  <--- legal
-    #   #else  <--- comment
-
-    logger.debug("seek_directive()")
-
-    if s[0] == recipe_prefix:
-        # careful handling required.
-        print(s)
-        assert 0, "TODO"
-
-    # kill any whitespace.
-    s = s.strip()
-    if s[0] == '#':
-        # line comment
+    if not len(viter.remain()):
+        # nothing to parse so nothing to find
         return None
 
-    # find the first whitespace
-    idx = 0
-    while idx < len(s) and not s[idx] in whitespace:
-        idx += 1
+    # we're looking ahead to see if we have a directive inside our set 'seek'
+    # so we need to save the state; we'll restore it on return if we haven't
+    # found a directive.
+    viter.push_state()
 
-    # grab the word
-    d = s[:idx]
+    # Consume leading whitespace; throw a fit if first char is the recipeprefix.
+    # We never call this fn for a recipe so we know there's a confusing parse
+    # ahead of us if we see a recipeprefix as first char.
+    s = ""
 
-    if d in seek:
-        # At this point we have a directive.
-        logger.debug("seek_directive() found directive=\"%s\"", d)
-        return d
+    vchar = next(viter)
+    if vchar.char == recipe_prefix:
+        # TODO need to mimic how GNU Make handles an ambiguous recipe char
+        raise NotImplementedError(vchar.get_pos())
 
-    # (waves hand) "These are not the directives you're looking for."
-    return None
+    state_whitespace = 1  # ignore leading whitespace
+    state_char = 2
 
-def seek_elseif(virt_line):
-    # I don't think I need this
-    assert 0
+    if vchar.char in whitespace:
+        state = state_whitespace
+    else:
+        state = state_char
+        s += vchar.char
 
-    # Look for an "else if" directive (e.g., else ifdef, else ifeq, etc)
-    #
-    # Luckily Make seems to require whitespace after the else conditional
-    #   else ifeq(  <--- fail
-    #   else ifeq#  <--- incorrect syntax
-    #   else ifeq ( <--- ok
-    #
-    # Returns the physical string and virtual line with the "else" removed
-    # else ifdef FOO    -> ifdef FOO
-    # else ifeq ($a,$b) -> ifeq ($a,$b)
-    # The returning value will be passed to the tokenizer recursively.
+    for vchar in viter:
+        # continue to ignore leading whitespace
+        if state == state_whitespace:
+            if vchar.char in whitespace:
+                continue
+            state = state_char
 
-    # "When in doubt, use brute force."
-    s = s.lstrip()    
+        if state == state_char:
+            if vchar.char not in directive_chars:
+                # we've found something that's not part of a directive word so
+                # pppfffttt we're done
+                viter.pop_state()
+                return None
 
-    # find the first whitespace
-    idx = 0
-    while idx < len(s) and not s[idx] in whitespace:
-        idx += 1
-    
-    # grab the word
-    d = s[:idx]
-
-    # else ... something
-    if d != "else":
+            s += vchar.char
+            if s in seek:
+                # we have a substring match
+                break
+    else:
+        # end of string w/o seeing a directive so nothing to see here
+        viter.pop_state()
         return None
 
-    # do we have a something?
-
-
-    # keep the phys_line pristine
-    tmp_line = phys_line.lstrip()
-    assert tmp_line.startswith("else"), phys_line
-
-    # is there another expression?
-    tmp_line = tmp_line[4:].lstrip()
-    if not tmp_line or tmp_line[0]=='#' :
-        # rest of line is empty or a comment
+    # we've found at least a substring match; next char must be whitespace or EOL
+    # Allow StopIteration to propagate because we should have a next char.
+    vchar = next(viter)        
+    if vchar.char not in whitespace and vchar.char not in eol:
+        # we found a substring e.g. "definefoo" which is not what we want
+        viter.pop_state()
         return None
 
-    directive_str = seek_directive(tmp_line)
-    if directive_str in conditional_directive :
-        # we found an else condition of some sort
-        logger.debug("found elseif condition=\"%s\"", directive_str)
-        filename, pos = virt_line.get_pos()
-
-        # adjust the column to match where we find the else condition
-        col = phys_line.index("else") + 4
-
-        # we know something follows the else so this loop is safe
-        while phys_line[col] in whitespace:
-            col += 1
-        
-        pos = pos[vline.VCHAR_ROW], col
-
-        breakpoint()
-        else_vline = VirtualLine([phys_line], pos, filename)
-        else_vline.validate()
-        return directive_str, else_vline
-
-    # found junk after else
-    # .e.g, 
-    #   else export iamnotlegal
-    #   else $(info I am not legal)
-    # (TODO need a better error message)
-    errmsg = "Extra stuff after else"
-    raise ParseError(vline=virt_line, pos=virt_line.starting_pos(),
-                description=errmsg)
+    # success!
+    logger.debug("seek_directive found \"%s\"", s)
+    return s
 
 #@depth_checker
 def handle_conditional_directive(directive_inst, vline_iter, line_scanner):
@@ -1379,7 +1322,9 @@ def handle_conditional_directive(directive_inst, vline_iter, line_scanner):
         # line continuations)
         # directive is the first substring surrounded by whitespace
         # or None if substring is not a directive
-        directive_str = seek_directive(str(virt_line))
+
+        viter = iter(virt_line)
+        directive_str = seek_directive(viter)
 
         if directive_str in conditional_directive : 
             # save the block of stuff we've read
@@ -1400,18 +1345,12 @@ def handle_conditional_directive(directive_inst, vline_iter, line_scanner):
 
 #            print("phys_line={0}".format(printable_string(phys_line)))
 
-            # handle "else if"
-            # TODO doesn't work yet
-#            breakpoint()
+            # handle "else ifCOND"
 
-            viter = iter(virt_line)
-            viter.lstrip().eat("else").lstrip()
-
-            directive_str = seek_directive(str(virt_line), conditional_directive)
+            # look for a following conditional directive
+            directive_str = seek_directive(viter, conditional_directive)
             if directive_str : 
                 # found an "else ifsomething"
-                viter.lstrip().eat("else").lstrip()
-
                 expression = tokenize_assign_RHS(viter)
                 directive_inst = ConditionalDirective.lut[directive_str](expression)
                 cond_block.add_conditional( directive_inst )
@@ -1525,7 +1464,7 @@ def handle_define_directive(define_inst, vline_iter, vchar_scanner):
     return define_inst
 
 #@depth_checker
-def tokenize_directive(directive_str, virt_line, vline_iter, line_scanner):
+def tokenize_directive(directive_str, viter, virt_line, vline_iter, line_scanner):
     logger.debug("tokenize_directive() \"%s\" at pos=%r",
             directive_str, virt_line.starting_pos)
 
@@ -1599,22 +1538,20 @@ def tokenize_directive(directive_str, virt_line, vline_iter, line_scanner):
                     description=errmsg)
 
     d = directive_lut[directive_str]
-    
-    # ScannerIterator across characters in the virtual line (supports pushback)
-    viter = iter(virt_line)
 
     # eat any leading whitespace, eat the directive, eat any more whitespace
     # we'll get StopIteration if we eat everything (directive with no
     # expression such as lone "export" or "vpath")
-    try : 
-        viter.lstrip().eat(directive_str).lstrip()
-    except StopIteration:
-        # No expression with this directive. For example, lone "export" which
-        # means all variables exported by default
-        expression = None
-    else:
-        # now feed to the chosen tokenizer
-        expression = d["tokenizer"](viter)
+#    try : 
+#        viter.lstrip().eat(directive_str).lstrip()
+#    except StopIteration:
+#        # No expression with this directive. For example, lone "export" which
+#        # means all variables exported by default
+#        expression = None
+#    else:
+#        # now feed to the chosen tokenizer
+#        expression = d["tokenizer"](viter)
+    expression = d["tokenizer"](viter)
 
 #    print("{0} expression=\"{1}\"".format(directive_str, printable_string(str(expression))))
 
@@ -1653,21 +1590,6 @@ def tokenize(virt_line, vline_iter, line_scanner):
 
     logger.debug("tokenize()")
 
-    # what are we looking at here?
-    # Make doesn't have a formal grammar per se so it's a little tricky in some
-    # corner cases. Let's cheat and look at the whole line (using a disposable
-    # Python string) to decide if we have a directive, assignment, rule, recipe, etc.
-#    type_ = decide_parse(str(virt_line))
-
-    # Is this a directive statement (e.g., ifdef ifeq define)?  Read the full
-    # concatenated line from virtual line looking for first whitespace
-    # surrounded string being a directive. (the vline will clean up the
-    # backslash line continuations)
-#    directive_str = seek_directive(str(virt_line))
-#    if directive_str:
-#        token = tokenize_directive(directive_str, virt_line, vline_iter, line_scanner)
-#        return token
-
     # tokenize character by character across a VirtualLine
     vchar_scanner = iter(virt_line)
     statement = tokenize_statement(vchar_scanner)
@@ -1679,9 +1601,7 @@ def tokenize(virt_line, vline_iter, line_scanner):
 
         # we found a bare Expression that needs a second pass
         if isinstance(statement,Expression):
-            expr = parse_expression(statement, virt_line, vline_iter, line_scanner)
-            assert expr is not None
-            return expr
+            return parse_expression(statement, virt_line, vline_iter, line_scanner)
 
         # do we ever get here now? 
         assert 0
