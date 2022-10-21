@@ -159,31 +159,7 @@ def comment(vchar_scanner):
             # should not get here
             assert 0, state
 
-depth = 0
-def depth_reset():
-    # reset the depth (used when testing the depth checker)
-    global depth
-    depth = 0
-
-def depth_checker(func):
-    # Avoid very deep recurssion into tokenizers.
-    # Note this uses a global so is NOT thread safe.
-    def check_depth(*args):
-        global depth
-        depth += 1
-        if depth > 10 : 
-            raise NestedTooDeep(depth)
-        ret = func(*args)
-        depth -= 1
-
-        # shouldn't happen!
-        assert depth >= 0, depth 
-
-        return ret
-
-    return check_depth
-
-def parse_expression(expr, virt_line, vline_iter, line_scanner):
+def parse_expression(expr, virt_line, vline_iter):
     # This is a second pass through an Expression.
     # An Expression could be something like:
     #   $(info blah blah)  # fn call ; most are invalid in standalone context
@@ -201,32 +177,63 @@ def parse_expression(expr, virt_line, vline_iter, line_scanner):
     # expression. If expression, look for a directive string, then connect
     # to the original Directive handling code here.
 
+    assign_expr = None
+    if isinstance(expr, AssignmentExpression):
+        # weird case showing GNU Make's lack of reserved words and the
+        # sloppiness of my grammar tokenparser.  
+        # define xyzzy :=    <-- multi-line variable masquerading as an Assignment
+        # ifdef := 123  <-- totally legal but I want to throw a warning
+        # dig into the assignment to get the LHS
+        assign_expr = expr
+        expr = expr.token_list[0]
+    
     # We're only interesting in Directives at this point. A Directive will be
     # inside string Literal. 
     #
     # Leave anything else alone. Invalid context function calls will error out
     # during execute().  For example,  $(subst ...) alone on a line will error
     # with "*** missing separator. Stop."
-    #
-    #
+
     # If the first token isn't a Literal, we're done.
     tok = expr.token_list[0]
     if not isinstance(tok, Literal):
-        return expr
+        return assign_expr if assign_expr else expr
 
     # seek_directive() needs a character iterator 
     viter = ScannerIterator(tok.string, tok.string.get_pos()[0])
     d = seek_directive(viter)
     if not d:
         # nope, not a directive. Ignore this expression and let execute figure it out
-        return expr
+        return assign_expr if assign_expr else expr
 
     # at this point, we definitely have some sort of directive.
-    dir_ = tokenize_directive(d, viter, virt_line, vline_iter, line_scanner)
+
+    if assign_expr:
+        # If we've peeked into an assignment and decided this is re-using a
+        # directive name as an assign, throw a warning about using directive
+        # name in a weird context.
+        #
+        # yet another corner case:
+        # define = foo        <-- totally legit
+        # define = <nothing>  <-- totally legit
+        # I'm growing weary of finding all these corner cases. I need to
+        # rewrite my tokenize/parser with these sort of things in mind.
+        if d == "define" and viter.remain():
+            # at this point, we have something after the "define" so probably
+            # an actual factual directive.
+            pass
+        else:
+            logger.warning("re-using a directive name \"%s\" in an assignment at %r", d, assign_expr.get_pos())
+            return assign_expr
+
+    dir_ = tokenize_directive(d, viter, virt_line, vline_iter)
+
     return dir_
 
-#@depth_checker
+
 def tokenize_statement(vchar_scanner):
+    # vchar_scanner == ScannerIterator
+    #
     # at start of scanning, we don't know if this is a rule or an assignment
     # this is a test : foo   -> (this,is,a,test,:,)
     # this is a test = foo   -> (this is a test,=,)
@@ -266,6 +273,9 @@ def tokenize_statement(vchar_scanner):
 #        print( "last_token={0} ∴ statement is {1}".format(last_symbol,statement_type).encode("utf-8"))
         logger.debug( "last_token=%s ∴ statement is %s so re-run as rule", last_symbol, statement_type)
 
+        # FIXME is there a way to avoid re-tokenizing?  Can we parse the LHS
+        # Expression we get from tokenize_statement_LHS() ?
+        #
         # jump back to starting position
         vchar_scanner.pop_state()
         # re-tokenize as a rule (backtrack)
@@ -284,8 +294,12 @@ def tokenize_statement(vchar_scanner):
     elif isinstance(last_symbol,AssignOp): 
         statement_type = "assignment"
 
-#        print( u"last_token={0} \u2234 statement is {1}".format(last_symbol,statement_type).encode("utf-8"))
-#        print( "last_token={0} ∴ statement is {1}".format(last_symbol,statement_type).encode("utf-8"))
+        # tough parse case:
+        # define xyzzy =    <-- opening of a multi-line variable. Can be
+        #                       confused with an assignment expression.
+        # define =    <-- assignment expression
+        # GNU Make y u no have reserved words?
+
         logger.debug( "last_token=%s ∴ statement is %s", last_symbol, statement_type)
 
         # The statement is an assignment. Tokenize rest of line as an assignment.
@@ -324,7 +338,6 @@ def tokenize_statement(vchar_scanner):
         # should not get here
         assert 0, last_symbol
 
-#@depth_checker
 def tokenize_statement_LHS(vchar_scanner, separators=""):
     # Tokenize the LHS of a rule or an assignment statement. A rule uses
     # whitespace as a separator. An assignment statement preserves internal
@@ -557,7 +570,6 @@ def tokenize_statement_LHS(vchar_scanner, separators=""):
     # should not get here
     assert 0, (state, starting_pos)
 
-#@depth_checker
 def tokenize_rule_prereq_or_assign(vchar_scanner):
     # We are on the RHS of a rule's : or ::
     # We may have a set of prerequisites
@@ -597,7 +609,6 @@ def tokenize_rule_prereq_or_assign(vchar_scanner):
 
     return rhs
 
-#@depth_checker
 def tokenize_rule_RHS(vchar_scanner):
 
     # RHS ::=                       -->  empty perfectly valid
@@ -814,7 +825,6 @@ def tokenize_rule_RHS(vchar_scanner):
 
     return PrerequisiteList(prereq_list)
 
-#@depth_checker
 def tokenize_assign_RHS(vchar_scanner):
     logger.debug("tokenize_assign_RHS()")
 
@@ -892,7 +902,6 @@ def tokenize_assign_RHS(vchar_scanner):
         token_list.append(Literal(token))
     return Expression(token_list)
 
-#@depth_checker
 def tokenize_variable_ref(vchar_scanner):
     # Tokenize a variable reference e.g., $(expression) or $c 
     # Handles nested expressions e.g., $( $(foo) )
@@ -990,7 +999,6 @@ def tokenize_variable_ref(vchar_scanner):
 
     raise ParseError(pos=vchar.pos, description="VarRef not closed")
 
-#@depth_checker
 def tokenize_recipe(vchar_scanner):
     # Collect characters together into a token. 
     # At token boundary, store token as a Literal. Add to token_list. Reset token.
@@ -1203,6 +1211,8 @@ def seek_directive(viter, seek=directive):
     # viter - character iterator
     assert isinstance(viter, ScannerIterator), type(viter)
 
+    logger.debug("seek_directive")
+
     if not len(viter.remain()):
         # nothing to parse so nothing to find
         return None
@@ -1217,6 +1227,7 @@ def seek_directive(viter, seek=directive):
     # ahead of us if we see a recipeprefix as first char.
     s = ""
 
+    # look at first char first
     vchar = next(viter)
     if vchar.char == recipe_prefix:
         # TODO need to mimic how GNU Make handles an ambiguous recipe char
@@ -1230,9 +1241,11 @@ def seek_directive(viter, seek=directive):
     else:
         state = state_char
         s += vchar.char
+    print("seek_directive c={0} state={1}".format(printable_char(vchar.char), state))
 
     for vchar in viter:
         # continue to ignore leading whitespace
+        print("seek_directive c={0} state={1} pos={2}".format(printable_char(vchar.char), state, vchar.get_pos()))
         if state == state_whitespace:
             if vchar.char in whitespace:
                 continue
@@ -1254,20 +1267,23 @@ def seek_directive(viter, seek=directive):
         viter.pop_state()
         return None
 
-    # we've found at least a substring match; next char must be whitespace or EOL
-    # Allow StopIteration to propagate because we should have a next char.
-    vchar = next(viter)        
-    if vchar.char not in whitespace and vchar.char not in eol:
-        # we found a substring e.g. "definefoo" which is not what we want
-        viter.pop_state()
-        return None
+    # we've found at least a substring match; next char might be whitespace or EOL
+    try:
+        vchar = next(viter)        
+    except StopIteration:
+        # bare string matching a directive which is weird
+        pass
+    else:
+        if vchar.char not in whitespace and vchar.char not in eol:
+            # we found a substring e.g. "definefoo" which is not what we want
+            viter.pop_state()
+            return None
 
     # success!
     logger.debug("seek_directive found \"%s\"", s)
     return s
 
-#@depth_checker
-def handle_conditional_directive(directive_inst, vline_iter, line_scanner):
+def handle_conditional_directive(directive_inst, vline_iter):
     # GNU make doesn't parse the stuff inside the conditional unless the
     # conditional expression evaluates to True. But Make does allow nested
     # conditionals. Read line by line, looking for nested conditional
@@ -1302,7 +1318,11 @@ def handle_conditional_directive(directive_inst, vline_iter, line_scanner):
     # Passed to LineBlock constructor.
     line_list = []
 
-    cond_block = ConditionalBlock()
+    # Pass in the tokenize() fn because will eventually need to parse the
+    # contents of the block. Sending in the fn because the circular references
+    # between pymake.py and symbol.py make calling tokenize from
+    # ConditionalBlock impossible. A genuine fancy-pants dependency injection!
+    cond_block = ConditionalBlock(tokenize)
     cond_block.add_conditional( directive_inst )
 
     def save_block(line_list):
@@ -1383,6 +1403,9 @@ def handle_conditional_directive(directive_inst, vline_iter, line_scanner):
 def tokenize_define_directive(vchar_scanner):
     # multi-line macro
 
+    # ha-ha type checking
+    assert isinstance(vchar_scanner,ScannerIterator), type(vchar_scanner)
+
     logger.debug("tokenize_define_directive()")
 
     state_start = 1
@@ -1434,7 +1457,7 @@ def tokenize_define_directive(vchar_scanner):
 def tokenize_undefine_directive(vchar_scanner):
     raise NotImplementedError("undefine")
 
-def handle_define_directive(define_inst, vline_iter, vchar_scanner):
+def handle_define_directive(define_inst, vline_iter):
 
     # array of VirtualLine
     line_list = []
@@ -1463,8 +1486,7 @@ def handle_define_directive(define_inst, vline_iter, vchar_scanner):
     define_inst.set_block(LineBlock(line_list))
     return define_inst
 
-#@depth_checker
-def tokenize_directive(directive_str, viter, virt_line, vline_iter, line_scanner):
+def tokenize_directive(directive_str, viter, virt_line, vline_iter):
     logger.debug("tokenize_directive() \"%s\" at pos=%r",
             directive_str, virt_line.starting_pos)
 
@@ -1539,18 +1561,6 @@ def tokenize_directive(directive_str, viter, virt_line, vline_iter, line_scanner
 
     d = directive_lut[directive_str]
 
-    # eat any leading whitespace, eat the directive, eat any more whitespace
-    # we'll get StopIteration if we eat everything (directive with no
-    # expression such as lone "export" or "vpath")
-#    try : 
-#        viter.lstrip().eat(directive_str).lstrip()
-#    except StopIteration:
-#        # No expression with this directive. For example, lone "export" which
-#        # means all variables exported by default
-#        expression = None
-#    else:
-#        # now feed to the chosen tokenizer
-#        expression = d["tokenizer"](viter)
     expression = d["tokenizer"](viter)
 
 #    print("{0} expression=\"{1}\"".format(directive_str, printable_string(str(expression))))
@@ -1568,14 +1578,13 @@ def tokenize_directive(directive_str, viter, virt_line, vline_iter, line_scanner
     # gather the contents of the conditional block (raw lines
     # and maybe nested conditions)
     if directive_str in conditional_directive :
-        return handle_conditional_directive(directive_instance, vline_iter, line_scanner)
+        return handle_conditional_directive(directive_instance, vline_iter)
 
     if directive_str == "define": 
-        return handle_define_directive(directive_instance, vline_iter, line_scanner)
+        return handle_define_directive(directive_instance, vline_iter)
 
     return directive_instance
 
-#@depth_checker
 def tokenize(virt_line, vline_iter, line_scanner): 
     # pull apart a single line into token/symbol(s)
     #
@@ -1601,7 +1610,7 @@ def tokenize(virt_line, vline_iter, line_scanner):
 
         # we found a bare Expression that needs a second pass
         if isinstance(statement,Expression):
-            return parse_expression(statement, virt_line, vline_iter, line_scanner)
+            return parse_expression(statement, virt_line, vline_iter)
 
         # do we ever get here now? 
         assert 0
@@ -1664,6 +1673,7 @@ def tokenize(virt_line, vline_iter, line_scanner):
     logger.debug("statement=%s", str(statement))
     return statement
 
+
 def parse_makefile_from_src(src):
     # file_lines is an array of Python strings.
     # The newlines must be preserved.
@@ -1717,23 +1727,6 @@ def parse_makefile(infilename) :
         print(err, file=sys.stderr)
         raise
 
-def round_trip(makefile):
-    dumpmakefile="""
-print("# start makefile")
-print("\\n".join( [ "{0}".format(m.makefile()) for m in makefile ] ) )
-print("# end makefile")
-"""
-
-    with open("out.py", "w") as outfile:
-        print("#!/usr/bin/env python3", file=outfile)
-        print("from pymake import *", file=outfile)
-        print("from vline import VirtualLine", file=outfile)
-        print("makefile="+str(makefile), file=outfile)
-#        print("makefile=",",\\\n".join( [ "{0}".format(block) for block in makefile ] ),file=outfile )
-#        print("print(\"{0}\".format(makefile))", file=outfile)
-        print(dumpmakefile, file=outfile)
-        
-
 def find_location(tok):
     # recursively descend into a token tree to find a token with a non-null vcharstring
     # which will show the starting filename/position of the token
@@ -1779,7 +1772,7 @@ def execute(makefile):
     logger.info("Starting execute of %s", id(makefile))
     symtable = SymbolTable()
 
-    _add_internal_db(symtable)
+#    _add_internal_db(symtable)
 
     for tok in makefile.token_list:
         try:

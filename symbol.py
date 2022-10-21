@@ -577,8 +577,11 @@ class ConditionalBlock(Directive):
     # Is an array of unparsed text (LineBlock) intermixed with more nested
     # conditionals (ConditionalBlock).
 
-    def __init__(self, conditional_blocks=None, else_blocks=None ) :
+    def __init__(self, tokenize_fn) :
         super().__init__()
+        
+        # https://en.wikipedia.org/wiki/Dependency_injection
+        self.tokenize_fn = tokenize_fn
 
         # cond_expr is an array of ConditionalDirective
         #
@@ -597,12 +600,12 @@ class ConditionalBlock(Directive):
         # The final else (for which there is no ConditionalExpression) is just
         # a ConditionalExpression following the array.
         
-        if conditional_blocks : 
-            for block_tuple in conditional_blocks : 
-                cond_expr, cond_block_list = block_tuple
-                self.add_conditional( cond_expr )
-                for b in cond_block_list : 
-                    self.add_block( b )
+#        if conditional_blocks : 
+#            for block_tuple in conditional_blocks : 
+#                cond_expr, cond_block_list = block_tuple
+#                self.add_conditional( cond_expr )
+#                for b in cond_block_list : 
+#                    self.add_block( b )
 
         # were we given an else_block?
         # (an empty [] else block is treated like an empty else condition)
@@ -610,10 +613,10 @@ class ConditionalBlock(Directive):
         #   blah blah blah
         # else <--- still want the else to print
         # endif
-        if not else_blocks is None : 
-            self.start_else()
-            for b in else_blocks: 
-                self.add_block( b )
+#        if not else_blocks is None : 
+#            self.start_else()
+#            for b in else_blocks: 
+#                self.add_block( b )
         
     def add_conditional( self, cond_expr ) :
         assert len(self.cond_exprs) == len(self.cond_blocks)
@@ -684,9 +687,16 @@ class ConditionalBlock(Directive):
         return s
 
     def eval(self, symbol_table):
-        breakpoint()
         for expr in self.cond_exprs:
             result = expr.eval(symbol_table)
+            line_block = self.cond_blocks[0][0]
+
+            vline_iter = iter(line_block.vline_list)
+            virt_line = next(vline_iter)
+            # XXX temp hack ; pass None for raw line_scanner
+            statement = self.tokenize_fn(virt_line, vline_iter, None)
+
+            breakpoint()
             if result:
                 break
 
