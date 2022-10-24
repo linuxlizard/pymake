@@ -88,6 +88,14 @@ directive = {
     "vpath",
 } | conditional_directive
 
+# used by the tokenzparser to match a directive name with its class
+conditional_directive_lut = {
+  "ifdef" : IfdefDirective,
+  "ifndef": IfndefDirective,
+  "ifeq"  : IfeqDirective,
+  "ifneq" : IfneqDirective 
+}
+
 # directives are all lowercase and the - from "-include"
 directive_chars = set(string.ascii_lowercase) | set("-")
 
@@ -166,6 +174,7 @@ def parse_expression(expr, virt_line, vline_iter):
     #   export 
     #   export something
     #   define foo   # start of multi-line variable
+    breakpoint()
 
     assert isinstance(expr,Expression), type(expr)
 
@@ -840,6 +849,8 @@ def tokenize_assign_RHS(vchar_scanner):
     for vchar in vchar_scanner :
         c = vchar.char
         logger.debug("a c={0} state={1} idx={2}".format(printable_char(c), state, vchar_scanner.idx, vchar_scanner.remain()))
+        # FIXME it's stupid to have state_start inside the loop since I'll only
+        # be in it once
         if state==state_start :
             if c in whitespace :
                 state = state_whitespace
@@ -1335,8 +1346,8 @@ def handle_conditional_directive(directive_inst, vline_iter):
     starting_pos = directive_inst.code.starting_pos
 
     for virt_line in vline_iter : 
-#        print("c state={0}".format(state))
-#        print("={0}".format(str(virt_line)), end="")
+        print("c state={0}".format(state))
+        print("={0}".format(str(virt_line)), end="")
 
         # search for nested directive in the physical line (consolidates the
         # line continuations)
@@ -1372,7 +1383,7 @@ def handle_conditional_directive(directive_inst, vline_iter):
             if directive_str : 
                 # found an "else ifsomething"
                 expression = tokenize_assign_RHS(viter)
-                directive_inst = ConditionalDirective.lut[directive_str](expression)
+                directive_inst = conditional_directive_lut[directive_str](expression)
                 cond_block.add_conditional( directive_inst )
             else : 
                 # Just the else case. Must be the last conditional we see.
@@ -1561,6 +1572,7 @@ def tokenize_directive(directive_str, viter, virt_line, vline_iter):
 
     d = directive_lut[directive_str]
 
+    breakpoint()
     expression = d["tokenizer"](viter)
 
 #    print("{0} expression=\"{1}\"".format(directive_str, printable_string(str(expression))))

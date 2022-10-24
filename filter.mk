@@ -45,7 +45,7 @@ $(info spaces x=$(filter              aa      bb   $(comma)  ,     $x    $(comma
 
 # wildcards
 SRC=hello.c there.c all.c you.c rabbits.c lol.S foo.h
-$(info C_FILES=$(filter %.c,$(SRC)))
+$(info cfiles=$(filter %.c,$(SRC)))
 $(info hc=$(filter h%.c,$(SRC)))
 
 $(info cS=$(filter %.c %.S,$(SRC)))

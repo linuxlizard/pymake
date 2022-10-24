@@ -21,7 +21,6 @@ logger = logging.getLogger("pymake.functions")
 
 from error import *
 from functions_base import Function, FunctionWithArguments
-from todo import TODOMixIn
 from flatten import flatten
 from wildcard import wildcard_replace, wildcard_match_list
 from symbol import Literal
@@ -78,6 +77,16 @@ class FilterClass(FunctionWithArguments):
     # words, removing any words that do not match. The patterns are written using
     # ‘%’, just like the patterns used in the patsubst function above."
     #
+#    def _mkpattern(self, symbol_table):
+#        pattern_step1 = [t.eval(symbol_table) for t in self.args[0]]
+#        pattern_step2 = "".join(pattern_step1).split()
+#        return pattern_step2
+#
+#    def _mktext(self, symbol_table):
+#        text_step1 = [t.eval(symbol_table) for t in self.args[1]]
+#        text_step2 = "".join(text_step1).split()
+#        return text_step2
+
     def eval(self, symbol_table):
         assert len(self.args)==2, len(self.args)
         
@@ -85,19 +94,14 @@ class FilterClass(FunctionWithArguments):
 
         # array of strings
         pattern_step1 = [t.eval(symbol_table) for t in self.args[0]]
-#        pattern_step2 = flatten([str_.split() for str_ in pattern_step1])
         pattern_step2 = "".join(pattern_step1).split()
 
         text_step1 = [t.eval(symbol_table) for t in self.args[1]]
-#        text_step2 = flatten([str_.split() for str_ in text_step1])
         text_step2 = "".join(text_step1).split()
 
-#        breakpoint()
+        return " ".join(wildcard_match_list(pattern_step2, text_step2, self.name=="filter-out"))
 
-        # FIXME first arg to wildcard_match_list() must be a list not an iterable
-        return " ".join(wildcard_match_list(pattern_step2, text_step2))
-
-class FilterOutClass(TODOMixIn, Function):
+class FilterOutClass(FilterClass):
     name = "filter-out"
 
 class FindString(FunctionWithArguments):

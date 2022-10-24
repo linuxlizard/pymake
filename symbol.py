@@ -541,6 +541,24 @@ class LineBlock(Symbol):
         s = ", ".join( [v.python() for v in self.vline_list] )
         return "LineBlock([{0}])".format(s)
 
+    def eval(self, symbol_table, tokenize_fn):
+        # FIXME passing tokenize down here is ugly and I hate it and it's ugly.
+        # Fix it somehow.
+        vline_iter = iter(self.vline_list)
+
+        for vline in vline_iter:
+            # XXX temp hack ; pass None for raw line_scanner
+            statement = tokenize_fn(vline, vline_iter, None)
+
+            # TODO handle weird stuff like stray function call in expression
+            # context (Same as what execute() in pymake.py needs to handle)
+            result = statement.eval(symbol_table)
+            logger.debug("execute result=\"%s\"", result)
+
+        # XXX what do I do about rules?
+        return ''
+
+
 class ConditionalBlock(Directive):
     name = "<ConditionalBlock>"
 
@@ -687,23 +705,31 @@ class ConditionalBlock(Directive):
         return s
 
     def eval(self, symbol_table):
-        for expr in self.cond_exprs:
-            result = expr.eval(symbol_table)
-            line_block = self.cond_blocks[0][0]
 
-            vline_iter = iter(line_block.vline_list)
-            virt_line = next(vline_iter)
-            # XXX temp hack ; pass None for raw line_scanner
-            statement = self.tokenize_fn(virt_line, vline_iter, None)
-
+        # XXX eventually we'll return a Rule if the block contains a rule?
+    
+        for idx,expr in enumerate(self.cond_exprs):
             breakpoint()
-            if result:
-                break
+            flag = expr.eval(symbol_table)
+            if not flag:
+                # try next conditional
+                continue
+
+            line_block = self.cond_blocks[idx][0]
+            # we found a truthy so we're done
+            return line_block.eval(symbol_table, self.tokenize_fn)
+
+        # At this point we have run out of expressions to evaluate.
+        # Is there one more cond_block which indicates an unconditional else?
+        if len(self.cond_blocks) > len(self.cond_exprs):
+            assert len(self.cond_blocks) == len(self.cond_exprs)+1
+            line_block = self.cond_blocks[-1][0]
+            return line_block.eval(symbol_table, self.tokenize_fn)
+
 
 class ConditionalDirective(Directive):
     name = "(should not see this)"
-    lut = {} # filled later
-    
+
 class IfdefDirective(ConditionalDirective):
     name = "ifdef"
 
@@ -739,13 +765,6 @@ class IfeqDirective(ConditionalDirective):
 
 class IfneqDirective(ConditionalDirective):
     name = "ifneq"
-
-ConditionalDirective.lut = {
-      "ifdef" : IfdefDirective,
-       "ifndef" : IfndefDirective,
-       "ifeq"  : IfeqDirective,
-       "ifneq" : IfneqDirective 
-    }
 
 class DefineDirective(Directive):
     name = "define"
