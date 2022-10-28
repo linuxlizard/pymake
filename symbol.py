@@ -6,6 +6,8 @@ import itertools
 
 _debug = True
 
+_testing = False
+
 logger = logging.getLogger("pymake.symbol")
 
 from printable import printable_char, printable_string
@@ -62,7 +64,9 @@ class Symbol(object):
             try:
                 vstring.chars, vstring[0].pos, vstring[0].filename
             except AttributeError:
-                if _debug:
+                # if seeing an AttributeError then trying to pass in a non-VCharString
+                if _testing:
+                    # if we're running test code, allow array of VChars to sneak in
                     vstring = VCharString([VChar(c,(0,0),"/dev/null") for c in vstring])
                 else:
                     logger.error(type(vstring))
@@ -446,8 +450,8 @@ class Directive(Symbol):
         else : 
             return "{0}".format(self.name)
 
-    def save(self, code):
-        self.code = code
+#    def save(self, code):
+#        self.code = code
 
 class ExportDirective(Directive):
     name = "export"
@@ -541,14 +545,13 @@ class LineBlock(Symbol):
         s = ", ".join( [v.python() for v in self.vline_list] )
         return "LineBlock([{0}])".format(s)
 
-    def eval(self, symbol_table, tokenize_fn):
-        # FIXME passing tokenize down here is ugly and I hate it and it's ugly.
-        # Fix it somehow.
+    def eval(self, symbol_table):
         vline_iter = iter(self.vline_list)
 
         for vline in vline_iter:
             # XXX temp hack ; pass None for raw line_scanner
-            statement = tokenize_fn(vline, vline_iter, None)
+            # XXX double temp hack ; use self.tokenze_fn()
+            statement = self.tokenize_fn(vline, vline_iter, None)
 
             # TODO handle weird stuff like stray function call in expression
             # context (Same as what execute() in pymake.py needs to handle)
@@ -709,22 +712,31 @@ class ConditionalBlock(Directive):
         # XXX eventually we'll return a Rule if the block contains a rule?
     
         for idx,expr in enumerate(self.cond_exprs):
-            breakpoint()
+#            breakpoint()
             flag = expr.eval(symbol_table)
             if not flag:
                 # try next conditional
                 continue
 
-            line_block = self.cond_blocks[idx][0]
+            block = self.cond_blocks[idx][0]
             # we found a truthy so we're done
-            return line_block.eval(symbol_table, self.tokenize_fn)
+
+            # FIXME passing tokenize down here is ugly and I hate it and it's ugly.
+            # Fix it somehow.
+            block.tokenize_fn = self.tokenize_fn
+
+            return block.eval(symbol_table)
 
         # At this point we have run out of expressions to evaluate.
         # Is there one more cond_block which indicates an unconditional else?
         if len(self.cond_blocks) > len(self.cond_exprs):
             assert len(self.cond_blocks) == len(self.cond_exprs)+1
-            line_block = self.cond_blocks[-1][0]
-            return line_block.eval(symbol_table, self.tokenize_fn)
+            block = self.cond_blocks[-1][0]
+
+            # FIXME monkey patching bletcherousness
+            block.tokenize_fn = self.tokenize_fn
+
+            return block.eval(symbol_table)
 
 
 class ConditionalDirective(Directive):
@@ -760,11 +772,30 @@ class IfeqDirective(ConditionalDirective):
     # following the ifeq are obeyed if the two arguments match; otherwise they are ignored."
     #  GNU Make Manual 7.1 pg 81
 
-    def eval(self, symbol_table):
-        breakpoint()
+    def __init__(self, expr1, expr2):
+        self.expr1 = expr1
+        self.expr2 = expr2
+        super().__init__()
 
-class IfneqDirective(ConditionalDirective):
+    def makefile(self):
+        return "%s (%s,%s)" % (self.name, self.expr1.makefile(), self.expr2.makefile())
+
+    def __str__(self):
+        return "%s(%s,%s)" % (self.__class__.__name__, self.expr1, self.expr2)
+
+    def eval(self, symbol_table):
+        s1 = self.expr1.eval(symbol_table)
+        s2 = self.expr2.eval(symbol_table)
+        logger.debug("ifeq compare \"%s\"==\"%s\"", s1, s2)
+        return s1 == s2
+
+class IfneqDirective(IfeqDirective):
     name = "ifneq"
+
+    def eval(self, symbol_table):
+        s1 = self.expr1.eval(symbol_table)
+        s2 = self.expr2.eval(symbol_table)
+        return s1 != s2
 
 class DefineDirective(Directive):
     name = "define"

@@ -13,7 +13,8 @@ ifdef FOO
 else#comment
 endif
 
-ifdef FOO
+FOO=1
+ifndef FOO
 this is junk (should fail to parse)
 this else is ignored because of this backslash\
 else
@@ -21,8 +22,9 @@ else
 $(info this is valid)
 endif
 
-$(info $(.FEATURES))
+#$(info $(.FEATURES))
 
+undefine FOO
 ifdef FOO
 This is illegal junk.\
 more junk
