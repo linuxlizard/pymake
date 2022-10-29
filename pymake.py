@@ -348,6 +348,17 @@ def parse_ifeq_directive(expr, directive_str, viter, virt_line, vline_iter):
 #    breakpoint()
     return cond_block
 
+
+def parse_ifdef_directive(expr, directive_str, viter, virt_line, vline_iter ):
+    # arguments same as parse_directive
+    raise NotImplementedError(directive_str)
+
+
+def parse_define_directive(expr, directive_str, viter, virt_line, vline_iter ):
+    # arguments same as parse_directive
+    raise NotImplementedError(directive_str)
+
+
 def parse_directive(expr, directive_str, viter, virt_line, vline_iter):
     # expr - Expression instance
     #       We've started to consume token_list[0] which is a Literal containing the name of the directive 
@@ -361,10 +372,23 @@ def parse_directive(expr, directive_str, viter, virt_line, vline_iter):
     logger.debug("parse_directive() \"%s\" at pos=%r",
             directive_str, virt_line.starting_pos)
 
-    if directive_str == "ifeq" or directive_str == "ifneq":
-        return parse_ifeq_directive(expr, directive_str, viter, virt_line, vline_iter)
+    lut = {
+        "ifeq" : parse_ifeq_directive,
+        "ifneq" : parse_ifeq_directive,
+        "ifdef" : parse_ifdef_directive,
+        "ifndef" : parse_ifdef_directive,
+        "define" : parse_define_directive,
+    }
 
-    raise NotImplementedError(directive_str)
+    return lut[directive_str](expr, directive_str, viter, virt_line, vline_iter)
+
+#    if directive_str == "ifeq" or directive_str == "ifneq":
+#        return parse_ifeq_directive(expr, directive_str, viter, virt_line, vline_iter)
+#
+#    if directive_str == "define":
+#        return parse_define_directive(expr, directive_str, viter, virt_line, vline_iter)
+#
+#    raise NotImplementedError(directive_str)
 
 def parse_expression(expr, virt_line, vline_iter):
     # This is a second pass through an Expression.
@@ -395,7 +419,7 @@ def parse_expression(expr, virt_line, vline_iter):
         assign_expr = expr
         expr = expr.token_list[0]
     
-    # We're only interesting in Directives at this point. A Directive will be
+    # We're only interested in Directives at this point. A Directive will be
     # inside string Literal. 
     #
     # Leave anything else alone. Invalid context function calls will error out
@@ -429,7 +453,7 @@ def parse_expression(expr, virt_line, vline_iter):
         if d == "define" and viter.remain():
             # at this point, we have something after the "define" so probably
             # an actual factual directive.
-            dir_ = parse_define_directive(assign_expr, d, viter, virt_line, vline_iter)
+            dir_ = parse_directive(assign_expr, d, viter, virt_line, vline_iter)
         else:
             logger.warning("re-using a directive name \"%s\" in an assignment at %r", d, assign_expr.get_pos())
             return assign_expr
@@ -461,6 +485,7 @@ def tokenize_statement(vchar_scanner):
     # save current position in the token stream
     vchar_scanner.push_state()
     lhs = tokenize_statement_LHS(vchar_scanner)
+    assert isinstance(lhs[0],Expression)
     
     # should get back a list of stuff in the Symbol class hierarchy
     assert len(lhs)>=0, type(lhs)
@@ -510,6 +535,8 @@ def tokenize_statement(vchar_scanner):
 
         logger.debug( "last_token=%s ∴ statement is %s", last_symbol, statement_type)
 
+        expr = lhs[0]
+
         # The statement is an assignment. Tokenize rest of line as an assignment.
         statement = list(lhs)
         statement.append(tokenize_assign_RHS(vchar_scanner))
@@ -545,6 +572,7 @@ def tokenize_statement(vchar_scanner):
 
         # should not get here
         assert 0, last_symbol
+
 
 def tokenize_statement_LHS(vchar_scanner, separators=""):
     # Tokenize the LHS of a rule or an assignment statement. A rule uses
@@ -777,6 +805,7 @@ def tokenize_statement_LHS(vchar_scanner, separators=""):
 
     # should not get here
     assert 0, (state, starting_pos)
+
 
 def tokenize_rule_prereq_or_assign(vchar_scanner):
     # We are on the RHS of a rule's : or ::
@@ -1557,6 +1586,7 @@ def handle_conditional_directive(directive_inst, vline_iter):
             line_list = save_block(line_list)
 
             # recursive function is recursive
+            breakpoint()
             sub_block = tokenize_directive(directive_str, viter, virt_line, vline_iter)
             cond_block.add_block( sub_block )
             
@@ -1697,7 +1727,7 @@ def tokenize_directive(directive_str, viter, virt_line, vline_iter):
             directive_str, virt_line.starting_pos)
 
     # don't use this anymore
-    assert 0
+    assert 0, directive_str
 
     # TODO probably need a lot of parse checking here eventually
     # (Most parse checking is in the Directive constructor)
@@ -1794,6 +1824,7 @@ def tokenize_directive(directive_str, viter, virt_line, vline_iter):
         return handle_define_directive(directive_instance, vline_iter)
 
     return directive_instance
+
 
 def tokenize(virt_line, vline_iter, line_scanner): 
     # pull apart a single line into token/symbol(s)
