@@ -25,6 +25,7 @@ import vline
 from vline import VirtualLine
 from printable import printable_char, printable_string
 from symbol import *
+import parser
 from error import *
 from version import Version
 import functions 
@@ -171,10 +172,24 @@ def parse_ifeq_directive(expr, directive_str, viter, virt_line, vline_iter):
     logger.debug("parse_ifeq_directive() \"%s\" at pos=%r",
             directive_str, virt_line.starting_pos)
 
+    expr1,expr2 = parser.parse_ifeq_directive(expr, directive_str, viter, virt_line)
+
+    if directive_str == "ifeq":
+        dir_ = IfeqDirective(expr1, expr2)
+    else:
+        dir_ = IfneqDirective(expr1, expr2)
+
+    cond_block = handle_conditional_directive(dir_, vline_iter)
+    return cond_block
+
+def old_parse_ifeq_directive(expr, directive_str, viter, virt_line, vline_iter):
+    logger.debug("parse_ifeq_directive() \"%s\" at pos=%r",
+            directive_str, virt_line.starting_pos)
+
     # ifeq/ifneq 
     # Open => ( ' "
     # Argument => Expression
-    # Comman => ,
+    # Comma => ,
     # Argument => Expression
     # Close => ) ' "
     #
@@ -382,13 +397,6 @@ def parse_directive(expr, directive_str, viter, virt_line, vline_iter):
 
     return lut[directive_str](expr, directive_str, viter, virt_line, vline_iter)
 
-#    if directive_str == "ifeq" or directive_str == "ifneq":
-#        return parse_ifeq_directive(expr, directive_str, viter, virt_line, vline_iter)
-#
-#    if directive_str == "define":
-#        return parse_define_directive(expr, directive_str, viter, virt_line, vline_iter)
-#
-#    raise NotImplementedError(directive_str)
 
 def parse_expression(expr, virt_line, vline_iter):
     # This is a second pass through an Expression.
@@ -433,8 +441,8 @@ def parse_expression(expr, virt_line, vline_iter):
 
     # seek_directive() needs a character iterator 
     viter = ScannerIterator(tok.string, tok.string.get_pos()[0])
-    d = seek_directive(viter)
-    if not d:
+    directive_str = seek_directive(viter)
+    if not directive_str:
         # nope, not a directive. Ignore this expression and let execute figure it out
         return assign_expr if assign_expr else expr
 
@@ -450,15 +458,16 @@ def parse_expression(expr, virt_line, vline_iter):
         # define = <nothing>  <-- totally legit
         # I'm growing weary of finding all these corner cases. I need to
         # rewrite my tokenize/parser with these sort of things in mind.
-        if d == "define" and viter.remain():
+        if directive_str == "define" and viter.remain():
             # at this point, we have something after the "define" so probably
             # an actual factual directive.
-            dir_ = parse_directive(assign_expr, d, viter, virt_line, vline_iter)
+            dir_ = parse_directive(assign_expr, directive_str, viter, virt_line, vline_iter)
         else:
-            logger.warning("re-using a directive name \"%s\" in an assignment at %r", d, assign_expr.get_pos())
+            # GNU Make doesn't warn like this (pats self on back).
+            logger.warning("re-using a directive name \"%s\" in an assignment at %r", directive_str, assign_expr.get_pos())
             return assign_expr
     else:
-        dir_ = parse_directive(expr, d, viter, virt_line, vline_iter)
+        dir_ = parse_directive(expr, directive_str, viter, virt_line, vline_iter)
 
     return dir_
 
@@ -1534,6 +1543,20 @@ def handle_conditional_directive(directive_inst, vline_iter):
     #               pushback)
     #
     # vline_iter is from get_vline() and reads from line_scanner underneath.
+    #
+    # Big fate note! In GNU Make, nested directives are only parsed when the
+    # surrounding directive tests True. In the following example, G-Make won't
+    # complain about the bad (internal) directive unless $a,$b evaluates True.
+    # Otherwise, the ifeq is detected as a conditional directive (else/endif
+    # rules are enforced) but not parsed
+    #
+    # ifeq ($a,$b)
+    #     ifeq ($b,$c foo bar baz  
+    #                ^^^^^--------- "invalid syntax in conditional"
+    #
+    # This creates a problem for us because we were thinking we could tokenize
+    # the entire makefile assuming correct syntax OR raise a syntax error.
+    # Unfortunately, invalid syntax is now detected at run-time. My bad. 
 
     logger.debug("handle_conditional_directive \"%s\"", directive_inst)
 
@@ -1585,9 +1608,12 @@ def handle_conditional_directive(directive_inst, vline_iter):
             # save the block of stuff we've read
             line_list = save_block(line_list)
 
+#            breakpoint()
             # recursive function is recursive
-            breakpoint()
-            sub_block = tokenize_directive(directive_str, viter, virt_line, vline_iter)
+            dir_ = conditional_directive_lut[directive_str](None, None )
+            dir_.partial_init( vline.VCharString(viter.remain()) )
+            sub_block = handle_conditional_directive(dir_, vline_iter)
+#            sub_block = tokenize_directive(directive_str, viter, virt_line, vline_iter)
             cond_block.add_block( sub_block )
             
         elif directive_str=="else" : 
@@ -1607,6 +1633,7 @@ def handle_conditional_directive(directive_inst, vline_iter):
             directive_str = seek_directive(viter, conditional_directive)
             if directive_str : 
                 # found an "else ifsomething"
+                raise NotImplementedError # replace with new vcstring constructor
                 expression = tokenize_assign_RHS(viter)
                 directive_inst = conditional_directive_lut[directive_str](expression)
                 cond_block.add_conditional( directive_inst )
@@ -1690,8 +1717,10 @@ def tokenize_define_directive(vchar_scanner):
 
     return macro_name
 
+
 def tokenize_undefine_directive(vchar_scanner):
     raise NotImplementedError("undefine")
+
 
 def handle_define_directive(define_inst, vline_iter):
 
@@ -1721,6 +1750,7 @@ def handle_define_directive(define_inst, vline_iter):
 
     define_inst.set_block(LineBlock(line_list))
     return define_inst
+
 
 def tokenize_directive(directive_str, viter, virt_line, vline_iter):
     logger.debug("tokenize_directive() \"%s\" at pos=%r",

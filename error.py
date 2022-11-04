@@ -24,14 +24,16 @@ class MakeError(Exception):
 
     def __init__(self,*args,**kwargs):
         super().__init__(*args)
-        self.vline = kwargs.get("vline",None)
-        self.pos = kwargs.get("pos",None)
-        self.filename = kwargs.get("filename",None)
-        self.description = kwargs.get("description",None)
+        self.code = kwargs.get("code",None)
+        self.pos = kwargs["pos"]
+        self.filename = self.pos[0]
+        self.description = kwargs.get("description", "(missing description)")
 
     def __str__(self):
-        return "*** filename=\"{0}\" pos={1} src=\"{2}\": {3}".format(
-                self.filename,self.pos,str(self.vline).strip(),self.description)
+        return "*** filename=\"{0}\" pos={1}: {2}".format(
+                self.filename,self.pos[1],self.description)
+#        return "*** filename=\"{0}\" pos={1} src=\"{2}\": {3}".format(
+#                self.filename,self.pos,str(self.code).strip(),self.description)
 
 class ParseError(MakeError):
     def __init__(self, *args, **kwargs):

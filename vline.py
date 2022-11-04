@@ -204,6 +204,7 @@ class VCharString(object):
         # FIXME I hate that this modifies string in-place. Smells bad.
         while len(self.chars) and self.chars[-1].char in whitespace:
             self.chars.pop()
+        # allow chaining
         return self
 
     @classmethod
@@ -484,8 +485,8 @@ class RecipeVirtualLine(VirtualLine):
 def get_vline(filename, line_iter): 
     # GENERATOR
     #
-    # line_iter is an iterator that supports pushback
-    # that iterates across an array of strings
+    # line_iter is an ScannerIterator that supports pushback.
+    # Iterates across an array of strings.
     #
     # The line_iter can also be passed around to other tokenizers (e.g., the
     # recipe tokenizer). So this function cannot assume it's the only line_iter

@@ -486,7 +486,7 @@ class VpathDirective(Directive):
 class OverrideDirective(TODOMixIn,Directive):
     name = "override"
 
-    def __init__(self, expression=None ):
+    def __init__(self, expression ):
         description="Override requires an assignment expression."
         if expression is None :
             # must have an expression (bare override not allowed)
@@ -611,34 +611,6 @@ class ConditionalBlock(Directive):
         self.cond_exprs = []
         self.cond_blocks = []
 
-        # now process args
-        # Args will be an array of tuples.
-        # Each tuple will be:
-        #   (ConditionalExpression, [LineBlock|ConditionalBlock]*)
-        # tuple[0] is the ConditionalExpression
-        # tuple[1] is an array of zero or more LineBlock/ConditionalBlocks that
-        #          represent the contents of the conditional case.
-        # The final else (for which there is no ConditionalExpression) is just
-        # a ConditionalExpression following the array.
-        
-#        if conditional_blocks : 
-#            for block_tuple in conditional_blocks : 
-#                cond_expr, cond_block_list = block_tuple
-#                self.add_conditional( cond_expr )
-#                for b in cond_block_list : 
-#                    self.add_block( b )
-
-        # were we given an else_block?
-        # (an empty [] else block is treated like an empty else condition)
-        # ifdef FOO
-        #   blah blah blah
-        # else <--- still want the else to print
-        # endif
-#        if not else_blocks is None : 
-#            self.start_else()
-#            for b in else_blocks: 
-#                self.add_block( b )
-        
     def add_conditional( self, cond_expr ) :
         assert len(self.cond_exprs) == len(self.cond_blocks)
         assert isinstance(cond_expr, ConditionalDirective), (type(cond_expr), )
@@ -693,7 +665,7 @@ class ConditionalBlock(Directive):
                    "]"
 
         # array of tuples
-        #   tuple[0] is ConditionalExpression
+        #   tuple[0] is ConditionalDirective
         #   tuple[1] is array of (LineBlock|ConditionalBlock)
         s += "["
         s += ", ".join( [ "("+str(expr)+", "+blocklist_str(blocklist)+")" for expr, blocklist in zip(self.cond_exprs, self.cond_blocks) ] )
@@ -711,36 +683,50 @@ class ConditionalBlock(Directive):
 
         # XXX eventually we'll return a Rule if the block contains a rule?
     
+        def eval_blocks(cond_block_list):
+            results = []
+            for block in cond_block_list:
+
+                # FIXME passing tokenize down here is ugly and I hate it and it's ugly.
+                # Fix it somehow.
+                block.tokenize_fn = self.tokenize_fn
+
+                results.append( block.eval(symbol_table) )
+            return results
+
         for idx,expr in enumerate(self.cond_exprs):
-#            breakpoint()
+            # FIXME more monkey patching bletcherousness
+            expr.tokenize_fn = self.tokenize_fn
+
             flag = expr.eval(symbol_table)
             if not flag:
                 # try next conditional
                 continue
 
-            block = self.cond_blocks[idx][0]
-            # we found a truthy so we're done
+            # we found a truthy so execute the block then we're done
+            results = eval_blocks(self.cond_blocks[idx])
 
-            # FIXME passing tokenize down here is ugly and I hate it and it's ugly.
-            # Fix it somehow.
-            block.tokenize_fn = self.tokenize_fn
-
-            return block.eval(symbol_table)
+            return results
 
         # At this point we have run out of expressions to evaluate.
         # Is there one more cond_block which indicates an unconditional else?
         if len(self.cond_blocks) > len(self.cond_exprs):
             assert len(self.cond_blocks) == len(self.cond_exprs)+1
-            block = self.cond_blocks[-1][0]
 
-            # FIXME monkey patching bletcherousness
-            block.tokenize_fn = self.tokenize_fn
-
-            return block.eval(symbol_table)
+            results = eval_blocks(self.cond_blocks[-1])
+            return results
 
 
 class ConditionalDirective(Directive):
     name = "(should not see this)"
+
+#    def maybe__init__(self, expr_vstr):
+#        # ha ha type checking
+#        assert isinstance(expr_vline, VCharString)
+#
+#        self.expr_vstr = expr_vstr
+#        super().__init__()
+
 
 class IfdefDirective(ConditionalDirective):
     name = "ifdef"
@@ -775,19 +761,43 @@ class IfeqDirective(ConditionalDirective):
     def __init__(self, expr1, expr2):
         self.expr1 = expr1
         self.expr2 = expr2
-        super().__init__()
+        super().__init__(self.expr1)
+        self.vcstring = None
+
+    def partial_init(self, vcstring):
+        assert isinstance(vcstring,VCharString)
+        self.vcstring = vcstring
 
     def makefile(self):
-        return "%s (%s,%s)" % (self.name, self.expr1.makefile(), self.expr2.makefile())
+        if self.expr1 is not None:
+            # we have parsed our vcstring (if any)
+            return "%s (%s,%s)" % (self.name, self.expr1.makefile(), self.expr2.makefile())
+        else:
+            return "%s %s" % (self.name, str(self.vcstring))
 
     def __str__(self):
         return "%s(%s,%s)" % (self.__class__.__name__, self.expr1, self.expr2)
 
+    def parse(self):
+        from pymake import tokenize_statement
+        from scanner import ScannerIterator
+        from parser import parse_ifeq_directive
+        pos = self.vcstring.get_pos()
+#        breakpoint()
+        expr = tokenize_statement(ScannerIterator(self.vcstring.chars, None))
+        self.expr1, self.expr2 = parse_ifeq_directive(expr, self.name, None, None)
+        self.expression = self.expr1
+
+        
     def eval(self, symbol_table):
+        if self.vcstring is not None:
+            self.parse()
+
         s1 = self.expr1.eval(symbol_table)
         s2 = self.expr2.eval(symbol_table)
         logger.debug("ifeq compare \"%s\"==\"%s\"", s1, s2)
         return s1 == s2
+
 
 class IfneqDirective(IfeqDirective):
     name = "ifneq"

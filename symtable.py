@@ -55,7 +55,13 @@ class SymbolTable(object):
 
         # an attempt to store empty string is a bug
         assert isinstance(name,str), type(name)
+        if not len(name):
+            breakpoint()
         assert len(name)
+
+        # sanity check for bad names XXX add more cases
+        # (will hit this if my tokenparser is screwing up)
+        assert ' ' not in name, name
 
 #        breakpoint()
 #        assert isinstance(value,Symbol), type(value)
