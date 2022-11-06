@@ -59,23 +59,23 @@ def test_split():
     assert p and p[0]=='\\%' and p[1] == '.c'
 
 def test_match():
-    flags = wildcard_match("hello.c", ("hello.c",))
-    assert flags and flags == ["hello.c"]
+    matches = wildcard_match("hello.c", ("hello.c",))
+    assert matches and matches == ["hello.c"]
 
-    flags = wildcard_match("hello.c", ("there.c",))
-    assert len(flags)==0
+    matches = wildcard_match("hello.c", ("there.c",))
+    assert len(matches)==0
 
-    flags = wildcard_match("%.c", ("hello.c",))
-    assert flags and flags == ["hello.c"]
+    matches = wildcard_match("%.c", ("hello.c",))
+    assert matches and matches == ["hello.c"]
 
-    flags = wildcard_match("hello.c", ("hello.c", "there.c", "all.c", "you.c", "rabbits.c"))
-    assert flags and flags == ["hello.c"]
+    matches = wildcard_match("hello.c", ("hello.c", "there.c", "all.c", "you.c", "rabbits.c"))
+    assert matches and matches == ["hello.c"]
 
-    flags = wildcard_match("%.c", ("hello.c", "there.c", "all.c", "you.c", "rabbits.c"))
-    assert flags == ["hello.c", "there.c", "all.c", "you.c", "rabbits.c"]
+    matches = wildcard_match("%.c", ("hello.c", "there.c", "all.c", "you.c", "rabbits.c"))
+    assert matches == ["hello.c", "there.c", "all.c", "you.c", "rabbits.c"]
 
-    flags = wildcard_match("hello.%", ("hello.c", "there.c", "all.c", "you.c", "rabbits.c"))
-    assert flags == ["hello.c"]
+    matches = wildcard_match("hello.%", ("hello.c", "there.c", "all.c", "you.c", "rabbits.c"))
+    assert matches == ["hello.c"]
 
 #    flag = wildcard_match("hello.c", "%.c")
 #    assert flag
@@ -125,3 +125,7 @@ def test_replace():
 #    print(new)
 #    assert new == ["bar", "bar", "bar"]
 
+if __name__ == '__main__':
+#    test_split()
+    test_match()
+    

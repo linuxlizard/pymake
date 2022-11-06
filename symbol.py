@@ -782,11 +782,11 @@ class IfeqDirective(ConditionalDirective):
         # FIXME this ugly and slow and ugly and I'd like to fix it
         from pymake import tokenize_statement
         from scanner import ScannerIterator
-        from parser import parse_ifeq_directive
+        from parser import parse_ifeq_conditionals
         pos = self.vcstring.get_pos()
 #        breakpoint()
         expr = tokenize_statement(ScannerIterator(self.vcstring.chars, None))
-        self.expr1, self.expr2 = parse_ifeq_directive(expr, self.name, None, None)
+        self.expr1, self.expr2 = parse_ifeq_conditionals(expr, self.name, None, None)
         self.expression = self.expr1
 
     def _exprs_eval(self, symbol_table):

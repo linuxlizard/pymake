@@ -28,30 +28,24 @@ def split_percent(s):
         # +1 to skip the %
         return s[:idx], s[idx+1:]
 
-#def wildcard_match(pattern, strlist):
-#    p = split_percent(pattern)
-#    if p is None:
-#        return [str_ for str_ in strlist if str_ == pattern]
-#
-#    return [ str_ for str_ in strlist if str_.startswith(p[0]) and str_.endswith(p[1]) ]
-
 def wildcard_match_list(pattern_list, target_list, negate=False):
     # first arg must be a list, not an iterable, because we use it twice
     assert isinstance(pattern_list,list), type(pattern_list)
+#    print(f"pattern_list={pattern_list} target_list={target_list} negate={negate}")
 
     # pre-calculate all the patterns
     p_list = [split_percent(p) for p in pattern_list]
 
     for t in target_list:
         for p,pattern in zip(p_list,pattern_list):
-            print(t,p,pattern)
+#            print(t,p,pattern)
             if p is None:
                 # no '%' so just a string compare
                 flag = t == pattern
             else:
                 flag = t.startswith(p[0]) and t.endswith(p[1])
 
-            print(flag,negate,flag^negate)
+#            print(flag,negate,flag^negate)
             # flag==True    => match
             # flag==False   => no-match
             # negate==False => filter
@@ -77,6 +71,9 @@ def wildcard_match_list(pattern_list, target_list, negate=False):
             if negate:
                 yield t
 
+def wildcard_match(pattern, strlist):
+    # backwards compatible layer for some older test code
+    return list(wildcard_match_list( [pattern], strlist))
 
 def wildcard_replace(search, replace, strlist):
     #
