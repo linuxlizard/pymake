@@ -779,6 +779,7 @@ class IfeqDirective(ConditionalDirective):
         return "%s(%s,%s)" % (self.__class__.__name__, self.expr1, self.expr2)
 
     def parse(self):
+        # FIXME this ugly and slow and ugly and I'd like to fix it
         from pymake import tokenize_statement
         from scanner import ScannerIterator
         from parser import parse_ifeq_directive
@@ -788,23 +789,25 @@ class IfeqDirective(ConditionalDirective):
         self.expr1, self.expr2 = parse_ifeq_directive(expr, self.name, None, None)
         self.expression = self.expr1
 
-        
-    def eval(self, symbol_table):
+    def _exprs_eval(self, symbol_table):
         if self.vcstring is not None:
             self.parse()
 
         s1 = self.expr1.eval(symbol_table)
         s2 = self.expr2.eval(symbol_table)
+        return s1, s2
+
+    def eval(self, symbol_table):
+        s1,s2 = self._exprs_eval(symbol_table)
         logger.debug("ifeq compare \"%s\"==\"%s\"", s1, s2)
         return s1 == s2
-
 
 class IfneqDirective(IfeqDirective):
     name = "ifneq"
 
     def eval(self, symbol_table):
-        s1 = self.expr1.eval(symbol_table)
-        s2 = self.expr2.eval(symbol_table)
+        s1,s2 = self._exprs_eval(symbol_table)
+        logger.debug("ifneq compare \"%s\"==\"%s\"", s1, s2)
         return s1 != s2
 
 class DefineDirective(Directive):
