@@ -2,12 +2,12 @@
 
 import sys
 
-__all__ = [ "MakeError",
-            "ParseError",
-            "NestedTooDeep",
+__all__ = [ "ParseError",
+#            "NestedTooDeep",
             "Unimplemented",
-            "VersionError",
-            "EvalError",
+#            "VersionError",
+#            "EvalError",
+            "warning_message",
             "error_message",
           ]
 
@@ -18,7 +18,7 @@ assert_on_parse_error = False
 class MakeError(Exception):
     # base class of all pymake exceptions
     filename = None   # filename containing the error
-    pos = (-1, -1)  # row/col of positin, zero based
+    pos = (-1, -1)  # row/col of position, zero based
     code = None  # code line that caused the error (a VirtualLine)
     description = "(No description!)" # useful description of the error
 
@@ -44,21 +44,24 @@ class ParseError(MakeError):
             # (especially when the parse error is unexpected or wrong)
             assert 0
 
-class NestedTooDeep(MakeError):
-    pass
+#class NestedTooDeep(MakeError):
+#    pass
 
 class Unimplemented(MakeError):
     """Feature not yet implemented"""
     pass
 
-class VersionError(MakeError):
-    """Feature not in this version"""
-    pass
+#class VersionError(MakeError):
+#    """Feature not in this version"""
+#    pass
 
-class EvalError(MakeError):
-    """execution error e.g., bad function call"""
-    pass
+#class EvalError(MakeError):
+#    """execution error e.g., bad function call"""
+#    pass
 
-def error_message(s):
-    print("%s"%s, file=sys.stderr)
+def warning_message(pos, msg):
+    print("%s %r: %s" % (pos[0], pos[1], msg))
+
+def error_message(pos, msg):
+    print("%s %r: %s" % (pos[0], pos[1], msg), file=sys.stderr)
 

@@ -5,7 +5,6 @@ import logging
 import collections
 
 from symbol import Symbol
-from flatten import flatten
 
 logger = logging.getLogger("pymake.symtable")
 

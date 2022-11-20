@@ -229,6 +229,14 @@ def tokenize_statement_LHS(vchar_scanner, separators=""):
 
     token_list = []
 
+    def pushtoken(t):
+        # if we have something to make a literal from,
+        if len(t):
+            # create the literal, save to the token_list
+            token_list.append(Literal(token))
+        # then start new token
+        return vline.VCharString()
+
     # Before can disambiguate assignment vs rule, must parse forward enough to
     # find the operator. Otherwise, the LHS between assignment and rule are
     # identical.
@@ -288,11 +296,8 @@ def tokenize_statement_LHS(vchar_scanner, separators=""):
             # whitespace in LHS of rule is ignored
             elif c in separators :
                 # end of word
-                if len(token):
-                    token_list.append(Literal(token))
-
-                # start new token
-                token = vline.VCharString()
+                # and start new token
+                token = pushtoken(token)
 
                 # jump back to start searching for next symbol
                 state = state_start
@@ -302,8 +307,8 @@ def tokenize_statement_LHS(vchar_scanner, separators=""):
 
             elif c=='#':
                 # capture anything we might have seen 
-                if len(token) : 
-                    token_list.append(Literal(token))
+                # and start new token
+                token = pushtoken(token)
                 # eat the comment 
                 vchar_scanner.pushback()
                 comment(vchar_scanner)
@@ -312,10 +317,8 @@ def tokenize_statement_LHS(vchar_scanner, separators=""):
                 # end of LHS (don't know if rule or assignment yet)
                 # strip trailing whitespace
                 token_cleaned = token.rstrip()
-                if len(token_cleaned):
-                    token_list.append( Literal(token_cleaned) )
                 # start new token
-                token = vline.VCharString()
+                token = pushtoken(token_cleaned)
                 token += vchar
                 state = state_colon
 
@@ -334,15 +337,13 @@ def tokenize_statement_LHS(vchar_scanner, separators=""):
                 # definitely an assignment 
                 # strip trailing whitespace
                 t = token.rstrip()
-                if len(t):
-                    token_list.append(Literal(t))
+                token = pushtoken(token)
                 return Expression(token_list), AssignOp(vline.VCharString([vchar]))
 
             elif c in eol : 
+                # capture any leftover when the line ended
+                token = pushtoken(token)
                 # end of line; bail out
-                if len(token) : 
-                    # capture any leftover when the line ended
-                    token_list.append(Literal(token))
                 break
                 
             else :
@@ -356,10 +357,8 @@ def tokenize_statement_LHS(vchar_scanner, separators=""):
                 token += vchar 
             else:
                 # save token so far (if any); note no rstrip()!
-                if len(token):
-                    token_list.append(Literal(token))
-                # start new token
-                token = vline.VCharString()
+                # also starts new token
+                token = pushtoken(token)
 
                 # jump to variable_ref tokenizer
                 # restore "$" + "(" in the scanner
@@ -413,6 +412,9 @@ def tokenize_statement_LHS(vchar_scanner, separators=""):
         else:
             # should not get here
             assert 0, state
+
+    # ran out of string; save anything we might have seen
+    token = pushtoken(token)
 
     # hit end of scanner; what was our final state?
     if state==state_colon:

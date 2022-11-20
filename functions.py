@@ -15,7 +15,6 @@ from functions_fs import *
 from functions_cond import *
 from functions_str import *
 from todo import TODOMixIn
-from flatten import flatten
 
 import shell
 
@@ -255,7 +254,6 @@ class Shell(Function):
 
         # TODO condense these steps
         step1 = [t.eval(symbol_table) for t in self.token_list]
-#        step2 = flatten(step1)
         step3 = "".join(step1)
         exe_result = shell.execute(step3, symbol_table)
         if exe_result.exitcode == 0:

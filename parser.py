@@ -145,7 +145,7 @@ def handle_define_directive(define_inst, vline_iter):
     define_inst.set_block(LineBlock(line_list))
     return define_inst
 
-def parse_ifeq_conditionals(ifeq_expr, directive_str, viter, virt_line):
+def parse_ifeq_conditionals(ifeq_expr, directive_str, viter):
     logger.debug("parse_ifeq_directive() \"%s\" at pos=??",
             directive_str)
 
@@ -166,17 +166,12 @@ def parse_ifeq_conditionals(ifeq_expr, directive_str, viter, virt_line):
     # ***************************
 
     state_start = 0
-#    state_open  = 1
-    state_quote_expr = 2
-    state_paren_expr1 = 3
-#    state_comma = 4
-    state_paren_expr2_start = 5
-    state_paren_expr2 = 6
-#    state_quote_expr2 = 7
-    state_closed = 8
+    state_quote_expr = 1
+    state_paren_expr1 = 2
+    state_paren_expr2_start = 3
+    state_paren_expr2 = 4
+    state_closed = 5
 
-#    open_chars = ( "(", "'", '"' )
-#    close_chars = ( ")", "'", '"' )
     quotes = ( "'", '"' )
     open_paren = '('
     close_paren = ')'
@@ -205,7 +200,6 @@ def parse_ifeq_conditionals(ifeq_expr, directive_str, viter, virt_line):
         if not ((oc == '(' and cc == ')')\
             or (oc == '"' and cc == '"') \
             or (oc == "'" and cc == "'")):
-            # TODO nice error message
             raise ParseError(pos=open_vchar.get_pos(), 
                     description="invalid syntax in conditional; unbalanced open/close chars in %s" % directive_str)
 
@@ -229,10 +223,10 @@ def parse_ifeq_conditionals(ifeq_expr, directive_str, viter, virt_line):
     # None, we're already parsing a vline ("ifeq ..."). Otherwise, we know we
     # have an ifeq but now need to parse it (a nested conditional).
     if viter is None:
-#        print("idx=%d token_list=%r" % (ifeq_expr_token_idx, ifeq_expr.token_list))
+        print("idx=%d token_list=%r" % (ifeq_expr_token_idx, ifeq_expr.token_list))
         tok = ifeq_expr.token_list[ifeq_expr_token_idx]
         # first token must be a literal open char
-#        print("tok=%r string=%r" % (tok, tok.string))
+        print("tok=%r string=%r" % (tok, tok.string))
         if isinstance(tok,Literal):
             viter = ScannerIterator(tok.string, tok.string.get_pos()[0])
         else:
@@ -240,7 +234,7 @@ def parse_ifeq_conditionals(ifeq_expr, directive_str, viter, virt_line):
                     pos = ifeq_expr.get_pos(),
                     description = "invalid syntax in conditional; %s missing opening ( or ' or \"" % directive_str
                 )
-        
+
     while True:
         try:
             vchar = next(viter)
@@ -251,7 +245,7 @@ def parse_ifeq_conditionals(ifeq_expr, directive_str, viter, virt_line):
         # parse. We need to find the next Literal in the ifeq_expr so we can
         # parse for the internal expressions.
         if vchar is None:
-#            print("vchar is None state=%d" % state)
+            print("vchar is None state=%d" % state)
             # we have run out literal chars so let's look for another one
 
             if vchar_list:
@@ -259,7 +253,8 @@ def parse_ifeq_conditionals(ifeq_expr, directive_str, viter, virt_line):
                 if curr_expr is None:
                     # we're not in a state where we should be saving characters
                     # so we've been saving garbage
-                    raise DirectiveParseError()
+                    # TODO error message
+                    raise ParseError()
 
 #                print("save to curr_expr")
                 curr_expr.append(Literal(vline.VCharString(vchar_list)))
@@ -271,7 +266,7 @@ def parse_ifeq_conditionals(ifeq_expr, directive_str, viter, virt_line):
                     # we're done parsing
                     break
                 tok = ifeq_expr.token_list[ifeq_expr_token_idx]
-#                print("tok=", tok.makefile())
+                print("tok=", tok.makefile())
                 if isinstance(tok,Literal):
                     viter = ScannerIterator(tok.string, tok.string.get_pos()[0])
                     vchar = next(viter)
@@ -284,13 +279,13 @@ def parse_ifeq_conditionals(ifeq_expr, directive_str, viter, virt_line):
                 # we're done parsing
                 break
 
-#        print("parse %s c=\"%s\" at pos=%r state=%d" % (directive_str, vchar.char, vchar.get_pos(), state))
+        print("parse %s c=\"%s\" at pos=%r state=%d" % (directive_str, vchar.char, vchar.get_pos(), state))
 
         if state == state_start:
             assert curr_expr is None
             # seeking Open, ignore whitespace
             if vchar.char in quotes:
-#                print("found open quote")
+                print("found open quote")
                 open_vchar = vchar
                 state = state_quote_expr
                 qexpr_counter = qexpr_counter + 1
@@ -299,6 +294,8 @@ def parse_ifeq_conditionals(ifeq_expr, directive_str, viter, virt_line):
                 elif qexpr_counter == 2:
                     curr_expr = expr2
                 else:
+                    # should not get here
+                    assert 0
                     # too many expressions in our ifeq
                     # ifeq "expr1" "expr2" "expr3" <-- bad bad!
                     raise ParseError()
@@ -364,27 +361,49 @@ def parse_ifeq_conditionals(ifeq_expr, directive_str, viter, virt_line):
         elif state == state_quote_expr:
             if vchar.char in quotes:
                 # found a close quote
+                print("found close quote")
                 verify_close(open_vchar, vchar)
                 if vchar_list:
                     curr_expr.append(Literal(vline.VCharString(vchar_list)))
                     vchar_list = []
                 curr_expr = None
                 # go back to start of state machine
-                state = state_start
+                if qexpr_counter == 2:
+                    state = state_closed
+                else:
+                    state = state_start
             else:
                 vchar_list.append(vchar)
                 
                 
         elif state == state_closed:
-            # anything but whitespace is an error
+            # anything but whitespace is a stern warning
             if vchar.char not in whitespace:
-                raise ParseError(
-                        pos = virt_line.get_pos(),
-                        description="extra text after 'ifeq' directive")
+                # GNU Make prints a warning then ignores the rest of the line.
+                warning_message(
+                        pos = vchar.get_pos(),
+                        msg="extraneous text after '%s' directive" % directive_str)
+                # leave the state machine, ignoring rest of line
+                break
 
         else:
             # wtf???
             assert 0, state
+
+        prev_vchar = vchar
+    # end of while True around the state machine
+
+    if state != state_closed:
+        if state == state_paren_expr2_start:
+            raise ParseError( pos=prev_vchar.get_pos(),
+                        description="invalid syntax in conditional; missing closing )")
+        elif state == state_quote_expr:
+            raise ParseError( pos=prev_vchar.get_pos(),
+                        description="invalid syntax in conditional; missing closing quote")
+        else:
+            # TODO can we find good error messages for other closing conditions?
+            raise ParseError( pos=prev_vchar.get_pos(),
+                        description="invalid syntax in conditional")
 
 #    print("expr1=",expr1)
 #    print("expr2=",expr2)
@@ -395,7 +414,7 @@ def parse_ifeq_directive(expr, directive_str, viter, virt_line, vline_iter):
     logger.debug("parse_ifeq_directive() \"%s\" at pos=%r",
             directive_str, virt_line.starting_pos)
 
-    expr1,expr2 = parse_ifeq_conditionals(expr, directive_str, viter, virt_line)
+    expr1,expr2 = parse_ifeq_conditionals(expr, directive_str, viter)
 
     if directive_str == "ifeq":
         dir_ = IfeqDirective(expr1, expr2)

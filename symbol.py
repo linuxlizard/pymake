@@ -15,8 +15,8 @@ from vline import VirtualLine, VChar, VCharString
 from version import Version
 from error import *
 import shell
-from flatten import flatten
 from todo import TODOMixIn
+from scanner import ScannerIterator
 
 _debug = True
 
@@ -780,10 +780,10 @@ class IfeqDirective(ConditionalDirective):
 
     def parse(self):
         # FIXME this ugly and slow and ugly and I'd like to fix it
-        from pymake import tokenize_statement
-        from scanner import ScannerIterator
+        # (circular imports are circular)
+        from tokenizer import tokenize_statement
         from parser import parse_ifeq_conditionals
-        pos = self.vcstring.get_pos()
+#        pos = self.vcstring.get_pos()
 #        breakpoint()
         expr = tokenize_statement(ScannerIterator(self.vcstring.chars, None))
         self.expr1, self.expr2 = parse_ifeq_conditionals(expr, self.name, None, None)
