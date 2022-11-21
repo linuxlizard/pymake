@@ -431,10 +431,8 @@ class Directive(Symbol):
     # A Directive instance contains an Expression instance ("has a").
     # A Directive instance is _not_ an Expression instance ("not is-a").
 
-    def __init__(self, expression=None):
-        if expression : 
-            assert isinstance(expression, Expression) 
-
+    def __init__(self, expression):
+        # expression may be None
         super().__init__()
         self.expression = expression
 
@@ -450,8 +448,9 @@ class Directive(Symbol):
         else : 
             return "{0}".format(self.name)
 
-#    def save(self, code):
-#        self.code = code
+    def get_pos(self):
+        # if self.expression is None allow the error to propagate
+        return self.expression.get_pos()
 
 class ExportDirective(Directive):
     name = "export"
@@ -562,7 +561,7 @@ class LineBlock(Symbol):
         return ''
 
 
-class ConditionalBlock(Directive):
+class ConditionalBlock(Symbol):
     name = "<ConditionalBlock>"
 
     # A ConditionalBlock represents a conditional and all its contents
@@ -720,12 +719,10 @@ class ConditionalBlock(Directive):
 class ConditionalDirective(Directive):
     name = "(should not see this)"
 
-#    def maybe__init__(self, expr_vstr):
-#        # ha ha type checking
-#        assert isinstance(expr_vline, VCharString)
-#
-#        self.expr_vstr = expr_vstr
-#        super().__init__()
+    def get_pos(self):
+        if self.expression is not None:
+            return self.expression.get_pos()
+        return self.vcstring.get_pos()
 
 
 class IfdefDirective(ConditionalDirective):
@@ -759,12 +756,14 @@ class IfeqDirective(ConditionalDirective):
     #  GNU Make Manual 7.1 pg 81
 
     def __init__(self, expr1, expr2):
+        # expr1, expr2 may be None
         self.expr1 = expr1
         self.expr2 = expr2
         super().__init__(self.expr1)
         self.vcstring = None
 
     def partial_init(self, vcstring):
+        # used when we have a nested conditional where the expression can't be parsed yet.
         assert isinstance(vcstring,VCharString)
         self.vcstring = vcstring
 
@@ -779,14 +778,15 @@ class IfeqDirective(ConditionalDirective):
         return "%s(%s,%s)" % (self.__class__.__name__, self.expr1, self.expr2)
 
     def parse(self):
+        # We are now parsing a previously read directive nested inside another
+        # directive. 
+        #
         # FIXME this ugly and slow and ugly and I'd like to fix it
         # (circular imports are circular)
         from tokenizer import tokenize_statement
         from parser import parse_ifeq_conditionals
-#        pos = self.vcstring.get_pos()
-#        breakpoint()
         expr = tokenize_statement(ScannerIterator(self.vcstring.chars, None))
-        self.expr1, self.expr2 = parse_ifeq_conditionals(expr, self.name, None, None)
+        self.expr1, self.expr2 = parse_ifeq_conditionals(expr, self.name, None)
         self.expression = self.expr1
 
     def _exprs_eval(self, symbol_table):

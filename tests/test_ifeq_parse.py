@@ -1,12 +1,14 @@
 import logging
+import tempfile
 
 logger = logging.getLogger("pymake")
 logging.basicConfig(level=logging.DEBUG)
 
+import pymake
 from symbol import *
-from vline import VirtualLine
-from tokenizer import tokenize_statement
-from parser import parse_ifeq_conditionals
+#from vline import VirtualLine, VCharString
+#from tokenizer import tokenize_statement
+#from parser import parse_ifeq_conditionals
 from error import ParseError
 
 # Note on the weird strings e.g. s= " '$a' '$b' " without the ifeq/ifneq:
@@ -17,34 +19,39 @@ from error import ParseError
 # doesn't matter when parsing the conditionals.
 
 def _should_succeed(s):
-    vline = VirtualLine([s], (0,4), "/dev/null")
-    stmt = tokenize_statement(iter(vline))
-    parse_ifeq_conditionals(stmt, "ifeq", None)
+    with tempfile.NamedTemporaryFile() as infile:
+        infile.write(s.encode("utf8"))
+        infile.flush()
+        pymake.parse_makefile(infile.name)
 
 def _should_fail(s):
-    vline = VirtualLine([s], (0,4), "/dev/null")
-    stmt = tokenize_statement(iter(vline))
-    try:
-        parse_ifeq_conditionals(stmt, "ifeq", None)
-    except ParseError:
-        pass
-    else:
-        assert 0, "should have failed"
+    with tempfile.NamedTemporaryFile() as infile:
+        infile.write(s.encode("utf8"))
+        infile.flush()
+        try:
+            pymake.parse_makefile(infile.name)
+        except ParseError:
+            pass
+        else:
+            assert 0, "\"%s\" should have failed" % s
 
-def test1():
-    s = " '$a' '$b'"
+def test_quotes():
+    s = "ifeq '$a' '$b'\nendif\n"
+    _should_succeed(s)
+
+    s = 'ifeq "$a" "$b"\nendif\n'
     _should_succeed(s)
 
 def test_parens():
-    s = "($a,$b)"
+    s = "ifeq ($a,$b)\nendif\n"
     _should_succeed(s)
 
 def test_extra_close_paren():
-    s = "($a,$b))"
+    s = "ifeq ($a,$b))\nendif\n"
     _should_succeed(s)
 
 def test_extra_chars_after_close_paren():
-    s = "($a,$b)qqq"
+    s = "ifeq ($a,$b)qqq\nendif\n"
     _should_succeed(s)
 
 def test_extra_chars_after_close_quote():
@@ -53,22 +60,38 @@ def test_extra_chars_after_close_quote():
 
 def test_mismatch_open_close():
     # mismatching open/close quote
-    s = " '$a\" '$b'"
+    s = "ifeq '$a\" '$b'\nendif\n"
     _should_fail(s)
 
 def test_missing_close_paren():
-    s = " ($a,$b"
+    s = "ifeq ($a,$b \nendif\n"
     _should_fail(s)
 
 def test_missing_close_quote():
-    s = " '$a' '$b"
+    s = "ifeq '$a' '$b"
     _should_fail(s)
 
 def test_missing_open_paren():
-    s = "$a,$b)"
-    _should_succeed(s)
+    s = "ifeq $a,$b)\nendif\n"
+#    s = "ifeq '$a',$b\nendif\n"
+    _should_fail(s)
+
+def test_invalid_char():
+    s = "ifeq 10,10\nendif\n"
+    _should_fail(s)
+
+def test_nested_missing_endif():
+    s = """
+ifeq (10,10)
+    ifeq (a,b)
+        
+endif
+"""
+    _should_fail(s)
 
 if __name__ == '__main__':
-    test_missing_open_paren()
+#    test_missing_open_paren()
+#    test_mismatch_open_close()
+    test_nested_missing_endif()
 #    test1()
 
