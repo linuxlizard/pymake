@@ -26,7 +26,7 @@ def test_all():
         "strip.mk",
         "findstring.mk", 
         "filter.mk", 
-#        "filter-out.mk",   # TODO
+        "filter-out.mk",
         "sort.mk",
         "word.mk",
         "wordlist.mk",
