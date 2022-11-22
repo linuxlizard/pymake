@@ -89,6 +89,26 @@ endif
 """
     _should_fail(s)
 
+def test_nested():
+    s = """
+ifeq (10,10)
+    ifeq (a,b)
+    endif        
+endif
+"""
+    _should_succeed(s)
+
+def test_nested_invalid_inside():
+    s = """
+ifeq (10,10)
+    ifeq (a,a)
+        $(error should not see this)
+    endif
+endif
+"""
+    _should_succeed(s)
+    
+
 if __name__ == '__main__':
 #    test_missing_open_paren()
 #    test_mismatch_open_close()

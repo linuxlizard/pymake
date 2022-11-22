@@ -418,6 +418,23 @@ def parse_ifeq_conditionals(ifeq_expr, directive_str, viter):
     return (Expression(expr1), Expression(expr2))
 
 
+def parse_ifdef_conditional(ifdef_expr, directive_str, viter):
+    logger.debug("parse_ifdef_conditionals \"%s\"", directive_str)
+
+    # Pull apart the ifdef_expr (an Expression) seeking the series of tokens
+    # making the name. Check for any invalid characters in the literals (e.g.,
+    # space). Note a second pass for validity is checked during execute.
+
+    state_start = 0
+    state_expr = 1
+
+    state = state_start
+
+    breakpoint()
+
+    return Expression(expr1)
+
+
 def parse_ifeq_directive(expr, directive_str, viter, virt_line, vline_iter):
     logger.debug("parse_ifeq_directive() \"%s\" at pos=%r",
             directive_str, virt_line.starting_pos)
@@ -434,8 +451,18 @@ def parse_ifeq_directive(expr, directive_str, viter, virt_line, vline_iter):
 
 
 def parse_ifdef_directive(expr, directive_str, viter, virt_line, vline_iter ):
-    # arguments same as parse_directive
-    raise NotImplementedError(directive_str)
+    logger.debug("parse_ifdef_directive() \"%s\" at pos=%r",
+            directive_str, virt_line.starting_pos)
+
+    expr1 = parse_ifdef_conditional(expr, directive_str, viter)
+
+    if directive_str == "ifdef":
+        dir_ = IfdefDirective(expr1)
+    else:
+        dir_ = IfndefDirective(expr1)
+
+    cond_block = handle_conditional_directive(dir_, vline_iter)
+    return cond_block
 
 
 def parse_define_directive(expr, directive_str, viter, virt_line, vline_iter ):
@@ -450,6 +477,7 @@ def seek_directive(viter, seek=directive):
 
     if not len(viter.remain()):
         # nothing to parse so nothing to find
+        logger.debug("seek_directive False")
         return None
 
     # we're looking ahead to see if we have a directive inside our set 'seek'
@@ -489,8 +517,9 @@ def seek_directive(viter, seek=directive):
         if state == state_char:
             if vchar.char not in directive_chars:
                 # we've found something that's not part of a directive word so
-                # pppfffttt we're done
+                # we're done
                 viter.pop_state()
+                logger.debug("seek_directive nope")
                 return None
 
             s += vchar.char
@@ -500,6 +529,7 @@ def seek_directive(viter, seek=directive):
     else:
         # end of string w/o seeing a directive so nothing to see here
         viter.pop_state()
+        logger.debug("seek_directive Nope")
         return None
 
     # we've found at least a substring match; next char might be whitespace or EOL
@@ -512,6 +542,7 @@ def seek_directive(viter, seek=directive):
         if vchar.char not in whitespace and vchar.char not in eol:
             # we found a substring e.g. "definefoo" which is not what we want
             viter.pop_state()
+            logger.debug("seek_directive not")
             return None
 
     # success!

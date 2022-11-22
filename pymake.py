@@ -234,6 +234,8 @@ def execute(makefile):
         except MakeError:
             # let ParseError propagate
             raise
+        except SystemExit:
+            raise
         except:
             # My code crashed. For shame!
             logger.error("INTERNAL ERROR eval exception during token makefile=%s", tok.makefile())

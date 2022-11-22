@@ -59,7 +59,8 @@ def test_all():
         # "origin.mk",
         # "flavor.mk",
         # "shell.mk",
-        #
+
+        "ifeq.mk",
     )
 
     for infilename in infilename_list:

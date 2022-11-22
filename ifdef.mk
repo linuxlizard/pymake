@@ -2,6 +2,34 @@ ifdef FOO
 a=b
 endif
 
+# valid name
+FOO)=1
+ifdef FOO)
+    $(info FOO paren)    
+endif
+
+# error: invalid syntax in conditional
+#ifdef FOO BAR
+#    $(info FOO BAR)
+#endif
+
+# creating a space, from the GNU Make manual
+blank:= #
+space  := ${blank} ${blank}
+
+FOO_SPACE_BAR=$(shell echo foo bar)
+$(info FOO_SPACE_BAR=$(FOO_SPACE_BAR))
+
+# error invalid syntax in conditional
+#ifdef $(FOO_SPACE_BAR)
+#    $(info FOO_SPACE_BAR)
+#endif
+
+fooqbar=1
+ifdef $(subst $(space),q,$(FOO_SPACE_BAR))
+    $(info FOO_q_BAR)
+endif
+
 ifdef FOO
     ifdef BAR
         ifdef BAZ

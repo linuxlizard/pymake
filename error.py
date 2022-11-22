@@ -3,6 +3,7 @@
 import sys
 
 __all__ = [ "ParseError",
+            "MakeError",
 #            "NestedTooDeep",
             "Unimplemented",
 #            "VersionError",
