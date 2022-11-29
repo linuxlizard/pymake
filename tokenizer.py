@@ -438,6 +438,7 @@ def tokenize_statement_LHS(vchar_scanner, separators=""):
         # which could be just a list of variables e.g., export CC LD RM 
         # Return a raw expression that will have to be tokenize/parsed
         # downstream.
+
         return Expression(token_list), 
 
     # should not get here
@@ -791,11 +792,15 @@ def tokenize_variable_ref(vchar_scanner):
 
     # open char .e.g. ( or {
     # (so we can match open/close chars)
-    open_char = None
+    open_vchar = None
+    # stack of open/close chars so we can report very accurate error positions
+    open_vchar_stack = []
 
     state = state_start
     token = vline.VCharString()
     token_list = []
+
+    close_char = None
 
     # TODO optimization opportunity.  Move state==state_start outside the loop
     # since we're only hitting it once
@@ -811,7 +816,9 @@ def tokenize_variable_ref(vchar_scanner):
         elif state==state_dollar:
             # looking for '(' or '$' or some char
             if c=='(' or c=='{':
-                open_char = c
+                open_vchar = vchar
+                open_vchar_stack.append(vchar)
+                close_char = ')' if c=='(' else '}'
                 state = state_in_var_ref
             elif c=='$':
                 # literal "$$"
@@ -830,23 +837,40 @@ def tokenize_variable_ref(vchar_scanner):
                 return VarRef([])
 
         elif state==state_in_var_ref:
-            if c==')' or c=='}':
+            assert close_char is not None
+            if c==close_char:
                 # end of var ref
-                # TODO make sure to match the open/close chars
                 # () {} good
                 # (} {) bad 
 
-                # save what we've read so far
-                if len(token):
-                    token_list.append( Literal(token) )
+#                print("v found close_char={} at pos={} len(stack)={}".format(
+#                    vchar.char, vchar.get_pos(), len(open_vchar_stack)))
 
-                # do we have a function call?
                 try:
-                    return functions.make_function(token_list)
-                except KeyError:
-                    # nope, not a function call
-                    return VarRef(token_list)
-                # done tokenizing the var ref
+                    previous_vchar = open_vchar_stack.pop()
+                except IndexError:
+                    # Unbalanced expression.
+                    # TODO nice error message
+                    raise ParseError()
+
+                # if the stack is empty, we have a balanced expression so we
+                # _should_ be done.
+
+                if len(open_vchar_stack) == 0:
+                    # save what we've read so far
+                    if len(token):
+                        token_list.append( Literal(token) )
+
+                    # do we have a function call?
+                    try:
+                        return functions.make_function(token_list)
+                    except KeyError:
+                        # nope, not a function call
+                        return VarRef(token_list)
+                    # done tokenizing the var ref
+                else:
+                    # another part of the literal string we're building
+                    token += vchar
 
             elif c=='$':
                 # nested expression!  :-O
@@ -866,6 +890,20 @@ def tokenize_variable_ref(vchar_scanner):
                     vchar_scanner.pushback()
                     # recurse into this scanner again
                     token_list.append( tokenize_variable_ref(vchar_scanner) )
+
+            elif c == open_vchar.char:
+                # we have an embedded open char.
+                # e.g., $(info ())
+                # so we have carefully track the open/close matching just as
+                # GNU Make does.
+                # Note we don't have to track the opposite open/close char; ie,
+                # if open is paren then we can safely ignore all open/close
+                # curly.
+                print( "v found open vchar={} at pos={}".format(
+                    vchar.char, vchar.get_pos()))
+                open_vchar_stack.append(vchar)
+                token += vchar
+
             else:
                 token += vchar
 
@@ -873,7 +911,7 @@ def tokenize_variable_ref(vchar_scanner):
                 # should not get here
             assert 0, state
 
-    raise ParseError(pos=vchar.pos, description="VarRef not closed")
+    raise ParseError(pos=vchar.get_pos(), description="VarRef not closed")
 
 def tokenize_recipe(vchar_scanner):
     # Collect characters together into a token. 
