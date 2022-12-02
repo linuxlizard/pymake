@@ -23,14 +23,12 @@ import hexdump
 from scanner import ScannerIterator
 import vline
 from vline import VirtualLine
-from printable import printable_char, printable_string
 from symbol import *
 from constants import *
 from error import *
 from tokenizer import tokenize_statement
 import parser
 from version import Version
-import functions 
 import source
 from symtable import SymbolTable
 import makedb
@@ -225,28 +223,58 @@ def execute(makefile):
     logger.info("Starting execute of %s", id(makefile))
     symtable = SymbolTable()
 
+    # XXX temp disabled while debugging
 #    _add_internal_db(symtable)
 
+    rules_graph = {}
+
     for tok in makefile.token_list:
-        try:
-            s = tok.eval(symtable)
-            logger.debug("execute result s=\"%s\"", s)
-        except MakeError:
-            # let ParseError propagate
-            raise
-        except SystemExit:
-            raise
-        except:
-            # My code crashed. For shame!
-            logger.error("INTERNAL ERROR eval exception during token makefile=%s", tok.makefile())
-            logger.error("INTERNAL ERROR eval exception during token string=%s", tok.string)
-#            logger.error("eval exception during token token_list=%s", tok.token_list)
-#            for t in tok.token_list:
-#                logger.error("token=%s string=%s", t, t.string)
-            filename,pos = find_location(tok)
-#            logger.exception("INTERNAL ERROR")
-            logger.error("eval failed tok file=%s pos=%s", filename, pos)
-            raise
+#        print("tok=",tok)
+        if isinstance(tok,RuleExpression):
+            rule = tok
+            for t in rule.targets.token_list:
+                target_str = t.eval(symtable)
+                if target_str in rules_graph:
+                    warning_message(t.get_pos(), "overriding rule \"%s\" at %r" % (target_str, rules_graph[target_str].get_pos()))
+                rules_graph[target_str] = rule
+        else:
+            try:
+    #            breakpoint()
+                s = tok.eval(symtable)
+                logger.info("execute result s=\"%s\"", s)
+                if s.strip():
+                    # TODO need to parse/reinterpret the result of the expression.
+                    # Functions such as $(eval) and $(call) can generate new
+                    # makefile rules, statements, etc.
+                    # GNU Make itself seems to interpret raw text as a rule and
+                    # will print a "missing separator" error
+                    logger.error("unexpected non-empty eval result=\"%s\" at pos=%r" % (s, tok.get_pos()))
+                    sys.exit(1)
+            except MakeError:
+                # let ParseError propagate
+                raise
+            except SystemExit:
+                raise
+            except:
+                # My code crashed. For shame!
+                logger.error("INTERNAL ERROR eval exception during token makefile=%s", tok.makefile())
+                logger.error("INTERNAL ERROR eval exception during token string=%s", tok.string)
+    #            logger.error("eval exception during token token_list=%s", tok.token_list)
+    #            for t in tok.token_list:
+    #                logger.error("token=%s string=%s", t, t.string)
+                filename,pos = find_location(tok)
+    #            logger.exception("INTERNAL ERROR")
+                logger.error("eval failed tok file=%s pos=%s", filename, pos)
+                raise
+
+    print(rules_graph)
+
+    target = "all"
+    while 1:
+        rule = rules_graph[target]
+        prereq = rule.prereqs
+        breakpoint()
+
 
 def usage():
     # TODO

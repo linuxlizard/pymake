@@ -320,11 +320,14 @@ class RuleExpression(Expression):
         if isinstance(token_list[2], PrerequisiteList) : 
             pass
         elif isinstance(token_list[2], AssignmentExpression) :
+            # target specific variable assignment
+            # see: 6.11 Target-specific Variable Values  GNU Make V.4.3 Jan2020
+            raise NotImplementedError()
             pass 
         else:
             assert 0, (type(token_list[2]),)
 
-        # If one not provied, start with a default empty recipe list
+        # If one not provided, start with a default empty recipe list
         # (so this object will always have a RecipeList instance)
         if len(token_list)==3 : 
             self.recipe_list = RecipeList([]) 
@@ -333,6 +336,10 @@ class RuleExpression(Expression):
             assert isinstance(token_list[3], RecipeList), (type(token_list[3]),)
 
         super().__init__(token_list)
+
+        self.targets = self.token_list[0]
+        self.prereqs = self.token_list[2]
+        self.recipes = self.token_list[3]
 
     def makefile(self):
         # rule-targets rule-op prereq-list <CR>
@@ -381,7 +388,7 @@ class RuleExpression(Expression):
     def eval(self, symbol_table):
         # TODO
         logger.error("%s eval not implemented yet", type(self))
-#        breakpoint()
+        breakpoint()
         return ""
 
 class PrerequisiteList(Expression):
@@ -555,7 +562,7 @@ class LineBlock(Symbol):
             # TODO handle weird stuff like stray function call in expression
             # context (Same as what execute() in pymake.py needs to handle)
             result = statement.eval(symbol_table)
-            logger.debug("execute result=\"%s\"", result)
+            logger.info("block execute result=\"%s\"", result)
 
         # XXX what do I do about rules?
         return ''
@@ -682,8 +689,15 @@ class ConditionalBlock(Symbol):
 
         # XXX eventually we'll return a Rule if the block contains a rule?
     
+        # Before I handle LineBlocks, I need to figure out how to handle rules.
+        # I need to understand how I'm going to do Rules before I start
+        # handling blocks of unparsed text inside conditional blocks.
+        #
+        raise NotImplementedError
+
         def eval_blocks(cond_block_list):
             results = []
+            breakpoint()
             for block in cond_block_list:
 
                 # FIXME passing tokenize down here is ugly and I hate it and it's ugly.
@@ -704,7 +718,6 @@ class ConditionalBlock(Symbol):
 
             # we found a truthy so execute the block then we're done
             results = eval_blocks(self.cond_blocks[idx])
-
             return results
 
         # At this point we have run out of expressions to evaluate.
@@ -715,6 +728,7 @@ class ConditionalBlock(Symbol):
             results = eval_blocks(self.cond_blocks[-1])
             return results
 
+        return ""
 
 class ConditionalDirective(Directive):
     name = "(should not see this)"
