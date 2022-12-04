@@ -10,6 +10,7 @@
 import sys
 import logging
 import argparse
+import os
 #import string
 
 logger = logging.getLogger("pymake")
@@ -19,19 +20,20 @@ logger = logging.getLogger("pymake")
 if sys.version_info.major < 3:
     raise Exception("Requires Python 3.x")
 
-import hexdump
 from scanner import ScannerIterator
 import vline
-from vline import VirtualLine
 from symbol import *
 from constants import *
 from error import *
 from tokenizer import tokenize_statement
 import parser
-from version import Version
 import source
 from symtable import SymbolTable
 import makedb
+import rules
+
+def get_basename( filename ) : 
+    return os.path.splitext( os.path.split( filename )[1] )[0]
 
 # TODO rename this fn
 def tokenize(virt_line, vline_iter, line_scanner): 
@@ -214,7 +216,7 @@ def _add_internal_db(symtable):
     # now have a list of strings containing Make syntax.
     for oneline in defaults:
         # TODO mark these variables 'default'
-        vline = VirtualLine([oneline], (0,0), "/dev/null")
+        vline = vline.VirtualLine([oneline], (0,0), "/dev/null")
         stmt = tokenize_statement(iter(vline))
         stmt.eval(symtable)
 
@@ -226,17 +228,20 @@ def execute(makefile):
     # XXX temp disabled while debugging
 #    _add_internal_db(symtable)
 
-    rules_graph = {}
+    rulesdb = rules.RuleDB()
 
     for tok in makefile.token_list:
 #        print("tok=",tok)
         if isinstance(tok,RuleExpression):
-            rule = tok
-            for t in rule.targets.token_list:
-                target_str = t.eval(symtable)
-                if target_str in rules_graph:
-                    warning_message(t.get_pos(), "overriding rule \"%s\" at %r" % (target_str, rules_graph[target_str].get_pos()))
-                rules_graph[target_str] = rule
+            rule_expr = tok
+
+            # Must be super careful to eval() the target and prerequisites only
+            # once! There may be side effects so must not re-eval() 
+            rule_dict = rule_expr.eval(symtable)
+
+            for target_str, prereq_list in rule_dict.items():
+                rule = rules.Rule(target_str, prereq_list, rule_expr.recipe_list)
+                rulesdb.add(rule)
         else:
             try:
     #            breakpoint()
@@ -267,15 +272,13 @@ def execute(makefile):
                 logger.error("eval failed tok file=%s pos=%s", filename, pos)
                 raise
 
-    print(rules_graph)
+    # XXX temporary tinkering with the rules db
+    filename = get_basename(makefile.get_pos()[0])
+    rulesdb.graph(filename)
 
     target = "all"
-    while 1:
-        rule = rules_graph[target]
-        prereq = rule.prereqs
-        breakpoint()
-
-
+    rule = rulesdb.get(target)
+    
 def usage():
     # TODO
     print("usage: TODO")

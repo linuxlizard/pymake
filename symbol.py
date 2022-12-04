@@ -334,12 +334,12 @@ class RuleExpression(Expression):
             token_list.append( self.recipe_list )
         elif len(token_list)==4 : 
             assert isinstance(token_list[3], RecipeList), (type(token_list[3]),)
+            self.recipe_list = self.token_list[3]
 
         super().__init__(token_list)
 
         self.targets = self.token_list[0]
         self.prereqs = self.token_list[2]
-        self.recipes = self.token_list[3]
 
     def makefile(self):
         # rule-targets rule-op prereq-list <CR>
@@ -386,10 +386,26 @@ class RuleExpression(Expression):
 #        logger.debug("add_recipe_list() %s", self.makefile())
 
     def eval(self, symbol_table):
-        # TODO
-        logger.error("%s eval not implemented yet", type(self))
-        breakpoint()
-        return ""
+        # Return a dict:
+        #   key: target (string)
+        #   value: array of prerequisites (strings)
+        #
+        # BIG FAT NOTE: This eval() is different than the other Symbol stack
+        # eval() methods which all return string.
+        # 
+        rule_dict = {}
+
+        for t in self.targets.token_list:
+            target_str = t.eval(symbol_table)
+            if target_str in rule_dict:
+                warning_message(t.get_pos(), "duplicate target in rule")
+            rule_dict[target_str] = []
+
+            for p in self.prereqs.token_list:
+                prereq_str = p.eval(symbol_table)
+                rule_dict[target_str].append(prereq_str)
+
+        return rule_dict
 
 class PrerequisiteList(Expression):
      # davep 03-Dec-2014 ; FIXME prereq list must be an array of expressions,
@@ -871,4 +887,6 @@ class Makefile(object) :
     def __iter__(self):
         return iter(self.token_list)
 
+    def get_pos(self):
+        return self.token_list[0].get_pos()
 
