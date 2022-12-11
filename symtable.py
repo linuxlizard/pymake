@@ -84,6 +84,17 @@ class SymbolTable(object):
 
         self.symbols[name] = entry
 
+    def maybe_add(self, name, value, pos=None):
+        # If name already exists in the table, don't overwrite.
+        # Used with ?= assignments.
+        try:
+            self.symbols[name]
+            return
+        except KeyError:
+            pass
+
+        return self.add(name, value, pos)
+
     def _maybe_eval(self, entry):
         value = entry['value']
 

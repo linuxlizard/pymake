@@ -272,9 +272,13 @@ class AssignmentExpression(Expression):
             # execute RHS as shell
 #            s = self.token_list[2].eval(symbol_table)
             rhs = shell.execute_tokens(list(self.token_list[2]), symbol_table )
+        elif op == "?=":
+            # deferred expand
+            # store the expression in the symbol table w/o eval
+            rhs = self.token_list[2]
         else:
             # TODO
-            raise Unimplemented("op=%s"%op)
+            raise NotImplementedError("op=%s"%op)
 
         logger.debug("assignment rhs=%s", rhs)
 
@@ -283,7 +287,10 @@ class AssignmentExpression(Expression):
 #        assert isinstance(lhs[0],str), type(lhs[0])
 
         key = "".join(lhs)
-        symbol_table.add(key, rhs, self.token_list[0].get_pos())
+        if op == "?=":
+            symbol_table.maybe_add(key, rhs, self.token_list[0].get_pos())
+        else:
+            symbol_table.add(key, rhs, self.token_list[0].get_pos())
         return ""
 
     def sanity(self):
@@ -395,6 +402,8 @@ class RuleExpression(Expression):
         # 
         rule_dict = {}
 
+        # Must be super careful to eval() the target and prerequisites only
+        # once! There may be side effects so must not re-eval() 
         for t in self.targets.token_list:
             target_str = t.eval(symbol_table)
             if target_str in rule_dict:

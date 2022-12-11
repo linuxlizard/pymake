@@ -9,9 +9,9 @@
 
 import sys
 import logging
-import argparse
 import os
-#import string
+import shell
+import getopt
 
 logger = logging.getLogger("pymake")
 #logging.basicConfig(level=logging.DEBUG)
@@ -216,31 +216,46 @@ def _add_internal_db(symtable):
     # now have a list of strings containing Make syntax.
     for oneline in defaults:
         # TODO mark these variables 'default'
-        vline = vline.VirtualLine([oneline], (0,0), "/dev/null")
-        stmt = tokenize_statement(iter(vline))
+        v = vline.VirtualLine([oneline], (0,0), "/dev/null")
+        stmt = tokenize_statement(iter(v))
         stmt.eval(symtable)
 
-def execute(makefile):
+def execute(makefile, argslist=None):
     # tinkering with how to evaluate
     logger.info("Starting execute of %s", id(makefile))
     symtable = SymbolTable()
 
     # XXX temp disabled while debugging
-#    _add_internal_db(symtable)
+    _add_internal_db(symtable)
 
     rulesdb = rules.RuleDB()
+
+    target_list = []
+
+    # GNU Make allows passing assignment statements on the command line.
+    # e.g., make -f hello.mk 'CC=$(subst g,x,gcc)'
+    # so the arglist must be parsed and assignment statements saved. Anything
+    # not an Assignment is likely a target.
+    for arg in argslist:
+        v = vline.VirtualLine([arg], (0,0), "/dev/null")
+        stmt = tokenize_statement(iter(v))
+        if isinstance(stmt,AssignmentExpression):
+            stmt.eval(symtable)
+        else:
+            target_list.append(arg)
 
     for tok in makefile.token_list:
 #        print("tok=",tok)
         if isinstance(tok,RuleExpression):
             rule_expr = tok
 
-            # Must be super careful to eval() the target and prerequisites only
-            # once! There may be side effects so must not re-eval() 
+            # Note a RuleExpression.eval() is very different from all other
+            # eval() methods (so far).  A RuleExpression.eval() returns a dict;
+            # everything else returns a string.
             rule_dict = rule_expr.eval(symtable)
 
             for target_str, prereq_list in rule_dict.items():
-                rule = rules.Rule(target_str, prereq_list, rule_expr.recipe_list)
+                rule = rules.Rule(target_str, prereq_list, rule_expr.recipe_list, rule_expr.get_pos())
                 rulesdb.add(rule)
         else:
             try:
@@ -260,7 +275,7 @@ def execute(makefile):
                 raise
             except SystemExit:
                 raise
-            except:
+            except Exception as err:
                 # My code crashed. For shame!
                 logger.error("INTERNAL ERROR eval exception during token makefile=%s", tok.makefile())
                 logger.error("INTERNAL ERROR eval exception during token string=%s", tok.string)
@@ -274,40 +289,110 @@ def execute(makefile):
 
     # XXX temporary tinkering with the rules db
     filename = get_basename(makefile.get_pos()[0])
-    rulesdb.graph(filename)
+    graphfilename = rulesdb.graph(filename)
+    print("wrote %s for graphviz" % graphfilename)
 
-    target = "all"
-    rule = rulesdb.get(target)
+    if not target_list:
+        target_list = [ rulesdb.get_default_target() ]
+
+    exit_code = 0
+    for target in target_list:
+        rule = rulesdb.get(target)
+        print("rule=",rule)
+        print("prereqs=",rule.prereq_list)
+
+        # walk a dependency tree
+        for rule in rulesdb.walk_tree(target):
+    #        print(rule)
+    #        print(rule.recipe_list.makefile())
+            for recipe in rule.recipe_list:
+    #            print(recipe)
+                symtable.push("@")
+                symtable.push("^")
+                symtable.add("@", rule.target)
+                symtable.add("^", " ".join(rule.prereq_list))
+                s = recipe.eval(symtable)
+    #            print("TODO shell execute \"%s\"" % s)
+                if s[0] == '@':
+                    # silent command
+                    s = s[1:]
+                else:
+                    print(s)
+                ret = shell.execute(s)
+                symtable.pop("@")
+                symtable.pop("^")
+                exit_code = ret['exit_code']
+                if exit_code != 0:
+                    print("make:", ret["stderr"], file=sys.stderr, end="")
+                    print("make: *** [%r] Error %d" % (rule.get_pos(), exit_code))
+                    print("make: *** [%r]: %s Error %d" % (recipe.get_pos(), rule.target, exit_code))
+                    break
+            if exit_code != 0:
+                break
+        if exit_code != 0:
+            break
+    return exit_code
     
 def usage():
     # TODO
     print("usage: TODO")
 
+class Args:
+    def __init__(self):
+        self.debug = 0
+        self.filename = None
+        self.output = None
+        self.s_expr = False
+        self.argslist = []
+
 def parse_args():
     print_version ="""PY Make %d.%d\n
 Copyright (C) 2006-2022 David Poole davep@mbuf.com, testcluster@gmail.com""" % (0,0)
 
-    parser = argparse.ArgumentParser(description="Makefile Debugger")
-    parser.add_argument('-o', '--output', help="write regenerated makefile to file") 
-    parser.add_argument('-d', '--debug', action='count', help="set log level to DEBUG (default is INFO)") 
-    parser.add_argument('-S', dest='s_expr', action='store_true', help="output the S-expression to stdout") 
-
-    # var assignment(s)
-    #    e.g. make CC=gcc 
-    # or a target(s)
-    #    e.g. make clean all
-    parser.add_argument("args", metavar='args', nargs='*')
-    # result (if any) will be in args.args
-    
-    # arguments 100% compatible with GNU Make
-    parser.add_argument('-f', '--file', '--makefile', dest='filename', help='read FILE as a makefile', default="Makefile" )
-    parser.add_argument('-v', '--version', action='version', version=print_version, help="Print the version number of make and exit.")
-
-    args = parser.parse_args()
-
-    # TODO additional checks
-
+    args = Args()
+    optlist, arglist = getopt.gnu_getopt(sys.argv[1:], "hvo:dSf:", ["output=", "version", "debug", "file=", "makefile="])
+    for opt in optlist:
+        if opt[0] in ("-f", "--file", "--makefile"):
+            args.filename = opt[1]                    
+        elif opt[0] in ('-o', "--output"):
+            args.output = opt[1]
+        elif opt[0] == '-S':
+            args.s_expr = True
+        elif opt[0] == '-d':
+            args.debug += 1            
+        elif opt[0] in ("-v", "--version"):
+            print(print_version)
+            sys.exit(0)
+        elif opt[0] in ("-h", "--help"):
+            usage()
+            sys.exit(0)
+            
+    # TODO parse env-var style args, e.g.
+    # make CFLAGS=-g -f tst.mk CC=gcc
+    args.argslist = arglist
     return args
+
+#    parser = argparse.ArgumentParser(description="Makefile Debugger")
+#    parser.add_argument('-o', '--output', help="write regenerated makefile to file") 
+#    parser.add_argument('-d', '--debug', action='count', help="set log level to DEBUG (default is INFO)") 
+#    parser.add_argument('-S', dest='s_expr', action='store_true', help="output the S-expression to stdout") 
+#
+#    # var assignment(s)
+#    #    e.g. make CC=gcc 
+#    # or a target(s)
+#    #    e.g. make clean all
+#    parser.add_argument("args", metavar='args', nargs='*')
+#    # result (if any) will be in args.args
+#    
+#    # arguments 100% compatible with GNU Make
+#    parser.add_argument('-f', '--file', '--makefile', dest='filename', help='read FILE as a makefile', default="Makefile" )
+#    parser.add_argument('-v', '--version', action='version', version=print_version, help="Print the version number of make and exit.")
+#
+#    args = parser.parse_args()
+#
+#    # TODO additional checks
+#
+#    return args
 
 if __name__=='__main__':
     args = parse_args()
@@ -341,5 +426,6 @@ if __name__=='__main__':
             print(makefile.makefile(), file=outfile)
         print("# end makefile")
 
-    execute(makefile)
+    exit_code = execute(makefile, args.argslist)
+    sys.exit(exit_code)
 

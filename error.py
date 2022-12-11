@@ -5,7 +5,7 @@ import sys
 __all__ = [ "ParseError",
             "MakeError",
 #            "NestedTooDeep",
-            "Unimplemented",
+#            "Unimplemented",
 #            "VersionError",
 #            "EvalError",
             "warning_message",
@@ -26,7 +26,7 @@ class MakeError(Exception):
     def __init__(self,*args,**kwargs):
         super().__init__(*args)
         self.code = kwargs.get("code",None)
-        self.pos = kwargs["pos"]
+        self.pos = kwargs.get("pos", ("missing",(-1,-1)))
         self.filename = self.pos[0]
         self.description = kwargs.get("description", "(missing description)")
 

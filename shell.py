@@ -81,10 +81,10 @@ def execute(cmd_str):
     logger.debug("shell exit status=%r", p.returncode)
     return_status["exit_code"] = p.returncode
 
-    # GNU Make returns one whitespace separated string, no CR/LF
-    # "all other newlines are replaced by spaces." gnu_make.pdf
-    return_status["stdout"] = p.stdout.strip().replace("\n", " ")
-    return_status["stderr"] = p.stderr.strip().replace("\n", " ")
+    return_status["stdout"] = p.stdout
+    return_status["stderr"] = p.stderr
+#    return_status["stdout"] = p.stdout.strip().replace("\n", " ")
+#    return_status["stderr"] = p.stderr.strip().replace("\n", " ")
 
     return return_status
 
@@ -94,6 +94,11 @@ def execute_tokens(token_list, symbol_table):
     step2 = "".join(step1)
 
     exe_result = execute(step2)
+
+    # GNU Make returns one whitespace separated string, no CR/LF
+    # "all other newlines are replaced by spaces." gnu_make.pdf
+    exe_result["stdout"] = exe_result["stdout"].strip().replace("\n", " ")
+    exe_result["stderr"] = exe_result["stdout"].strip().replace("\n", " ")
 
     # save shell status
     symbol_table.add(shellstatus, str(exe_result["exit_code"]))
