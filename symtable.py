@@ -24,6 +24,87 @@ _entry_template = {
 FLAG_NONE = 0
 FLAG_READ_ONLY = 1
 
+def parse_patsubst_shorthand(vcstr):
+    # This function handles the case of an abbrevitated patsubst.
+    # OBJ=$(SRC:.c=.o)  # need to parse out to ("SRC", ".c", ".o)
+    #
+    # Returns a list of vchar strings.
+    # 
+    # return one string  => not a function but a raw string
+    # return two strings => [0] function
+    #                       [1] args
+    # return three string => [0] varref
+    #                        [1] from string
+    #                        [2] to string
+    #
+
+    getchars = enumerate(vcstr)
+
+    idx, vchar = next(getchars)
+    if vchar.char in whitespace:
+        # GNU Make doesn't treat anything with leading whitespace as a function
+        # call, e.g., $( info blah blah ) is treated as a weird var ref
+        return (vcstr,)
+
+    state_string = 1
+    state_arg1 = 2
+    state_arg2 = 3
+
+    state = state_string
+
+    logger.debug("f c=%s idx=%d state=%d", vchar.char, idx, state)
+
+    # when we're parsing out an abbreviated patsubst, we'll keep track of
+    # start,stop indices here.
+    idx_stack = []
+
+    for idx, vchar in getchars:
+        c = vchar.char
+
+        logger.debug("f c=%s idx=%d state=%d", c, idx, state)
+
+        if state == state_string:
+            if c in whitespace:
+                # done!
+                return ( VCharString(vcstr[0:idx]), VCharString(vcstr[idx+1:]) )
+            elif c == ':':
+                # now it gets interesting
+                state = state_arg1
+                # start,end of varname
+                idx_stack.append(0)
+                idx_stack.append(idx)
+                # start of arg1
+                idx_stack.append(idx+1)
+
+        elif state == state_arg1:
+            if c == '=':
+                # we are at the end of arg1
+                state = state_arg2
+                # end of arg1
+                idx_stack.append(idx)
+                # start of arg2
+                idx_stack.append(idx+1)
+
+        elif state == state_arg2:
+            # everything up to the end of the string is arg2
+            pass
+
+    if state == state_string:
+        # we've fun out of string before seeing anything interesting so this is just a varref
+        return (vcstr,)
+
+    assert state == state_arg2, state
+
+    # want to pop elements off oldest first
+    idx_stack.reverse()
+
+    varname = VCharString(vcstr[idx_stack.pop():idx_stack.pop()])
+    arg1 = VCharString(vcstr[idx_stack.pop():idx_stack.pop()])
+    arg2 = VCharString(vcstr[idx_stack.pop():])
+
+    return (varname, arg1, arg2)
+
+
 class SymbolTable(object):
     def __init__(self):
         # key: variable name
@@ -109,6 +190,38 @@ class SymbolTable(object):
 
         return value
 
+    def _parse_abbrev_patsubst(self, key):
+        # This function handles the case of an abbrevitated patsubst.
+        # OBJ=$(SRC:.c=.o)  # need to parse out to ("SRC", ".c", ".o)
+        #
+        # key should be a Python string
+
+        # fast test; allow ValueError to propagate
+        colon_pos = key.index(':')
+        equal_pos = key.index('=')
+        if colon_pos > equal_pos:
+            raise ValueError
+
+        varname = key[0:colon_pos]
+        pat1 = key[colon_pos+1:equal_pos]
+        pat2 = key[equal_pos+1:]
+
+        return (varname,pat1,pat2)
+
+    def _eval_abbrev_patsubst(self, key):
+        # allow exception(s) to propagate
+        varname, pat1, pat2 = self._parse_abbrev_patsubst(key)
+
+        pat1_len = len(pat1)
+        def maybe_replace(s,pat1,pat2):
+            if s.endswith(pat1):
+                return s[:-pat1_len] + pat2
+            return s
+        value = self.fetch(varname)
+#        breakpoint()
+        new_value = " ".join([maybe_replace(s,pat1,pat2) for s in value.split()])
+        return new_value
+
     def fetch(self, key):
         # now try a var lookup 
         # Will always return an empty string on any sort of failure. 
@@ -117,6 +230,13 @@ class SymbolTable(object):
 
         assert isinstance(key,str), type(key)
         assert len(key)  # empty key bad
+
+        try:
+            # check for a "magic" variable name (an abbreviated patsubst)
+            # e.g., $(SRC:.c=.o)
+            return self._eval_abbrev_patsubst(key)
+        except ValueError:
+            pass
 
         # built-in variable ?
         try:
