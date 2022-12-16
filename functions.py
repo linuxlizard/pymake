@@ -7,6 +7,8 @@ import logging
 
 logger = logging.getLogger("pymake.functions")
 
+#logger.setLevel(level=logging.DEBUG)
+
 from symbol import VarRef, Literal
 from vline import VCharString, whitespace
 from error import *
@@ -252,19 +254,6 @@ class Shell(Function):
     def eval(self, symbol_table):
         return shell.execute_tokens(self.token_list, symbol_table)
 
-        # TODO condense these steps
-        step1 = [t.eval(symbol_table) for t in self.token_list]
-        step3 = "".join(step1)
-        exe_result = shell.execute(step3, symbol_table)
-        if exe_result.exitcode == 0:
-            return exe_result.stdout
-
-#        breakpoint()
-        # "convert each newline ... to a single space
-        # TODO multiple blank lines become a single space?
-        # everything returns a string
-        return step4.replace("\n", " ")
-
 class ValueClass(Function):
     name = "value"
     num_args = 1
@@ -274,44 +263,6 @@ class ValueClass(Function):
         var = "".join([a.eval(symbol_table) for a in self.token_list])
 
         return symbol_table.value(var)
-
-def split_function_call(s):
-    # break something like "info hello world" that needs a secondary parse
-    # into a proper looking function call
-    #
-    # "info hello, world" -> "info", "hello, world"
-    # "info" -> "info"
-    # "info  hello, world" -> "info", " hello, world"
-    # "info\thello, world" -> "info", "hello, world"
-
-    logger.debug("split s=\"%s\" len=%d", s, len(s))
-    state_init = 0
-    state_searching = 1
-
-    state = state_init
-
-    # Find first whitespace, split the string into string before and after
-    # whitespace, throwing away the whitespace itself.
-    for idx, vchar in enumerate(s):
-        c = vchar.char
-        logger.debug("c=%s state=%d idx=%d", c, state, idx)
-        # most common state first
-        if state==state_searching:
-            # we have seen at least one non-white so now seeking a next
-            # whitespace
-            if c in whitespace:
-                # don't return empty string, return None if there is nothing
-                logger.debug("s=\"%s\" idx=%d", s, idx)
-                return VCharString(s[:idx]), VCharString(s[idx+1:]) if idx+1<len(s) else None
-        elif state==state_init:
-            if c in whitespace:
-                # no functions start with whitespace
-                return s, None
-            else:
-                state = state_searching
-
-    # no whitespace anywhere
-    return s, None
 
 _classes = {
     # please keep in alphabetical order
@@ -353,6 +304,25 @@ _classes = {
     "words" : Words,
 }
 
+def maybe_function_call(vcstr):
+
+    getchars = enumerate(vcstr)
+    idx, vchar = next(getchars)
+    if vchar.char in whitespace:
+        # GNU Make doesn't treat anything with leading whitespace as a function
+        # call, e.g., $( info blah blah ) is treated as a weird var ref
+        return (vcstr,)
+
+    for idx, vchar in getchars:
+        c = vchar.char
+        logger.debug("m c=%s idx=%d", c, idx)
+        if c in whitespace:
+            # done!
+            return ( VCharString(vcstr[0:idx]), VCharString(vcstr[idx+1:]) )
+
+    # we've fun out of string before seeing anything interesting so this is just a varref
+    return (vcstr,)
+
 def make_function(arglist):
     logger.debug("make_function arglist=%s", arglist)
 
@@ -360,8 +330,8 @@ def make_function(arglist):
     if not arglist:
         raise KeyError
 
-#    for a  in arglist:
-#        print(a)
+    # .string will be a VCharString
+    # do NOT modify arglist; is a ref into the makefile's AST
 
     # do NOT .eval() here!!! will cause side effects. only want to look up the string
     vcstr = arglist[0].string
@@ -371,13 +341,14 @@ def make_function(arglist):
     if vcstr is None:
         raise KeyError
 
-    # .string will be a VCharString
-    # do NOT modify arglist; is a ref into the AST
+    results = maybe_function_call(vcstr)
+    if len(results) == 1:
+        # simple string, not a function
+        raise KeyError
 
-    fname, rest = split_function_call(vcstr)
-
+    # we have a vanilla function call
+    fname, rest = results
     logger.debug("make_function fname=\"%s\" rest=\"%s\"", fname, rest)
-
     # convert from array to python string for lookup
     fname = str(fname)
 
@@ -390,3 +361,4 @@ def make_function(arglist):
         return fcls([Literal(rest)] + arglist[1:])
 
     return fcls(arglist[1:])
+
