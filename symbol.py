@@ -296,9 +296,9 @@ class AssignmentExpression(Expression):
     def sanity(self):
         # AssignmentExpression :=  Expression AssignOp Expression
         assert len(self.token_list)==3, len(self.token_list)
-        assert isinstance(self.token_list[0], Expression)
-        assert isinstance(self.token_list[1], AssignOp)
-        assert isinstance(self.token_list[2], Expression), (type(self.token_list[2]),)
+        assert isinstance(self.token_list[0], Expression), type(self.token_list[0])
+        assert isinstance(self.token_list[1], AssignOp), type(self.token_list[1])
+        assert isinstance(self.token_list[2], Expression), type(self.token_list[2])
 
 class RuleExpression(Expression):
     # Rules are tokenized in multiple steps. First the target + prerequisites
@@ -487,18 +487,42 @@ class Directive(Symbol):
 class ExportDirective(Directive):
     name = "export"
 
-    def __init__(self, expression=None):
+    def __init__(self, keyword, expression=None):
         # TODO 
         # make 3.81 "export define" not allowed ("missing separator")
         # make 3.82 works
         # make 4.0  works
-        if not(Version.major==3 and Version.minor==81) : 
-            raise TODO()
+#        if not(Version.major==3 and Version.minor==81) : 
+#            raise TODO()
+
+        # ha ha type checking.  keyword needs to be a VCharString which tells
+        # us the file+position of the "export"
+        assert isinstance(keyword, VCharString), type(keyword)
+        self.keyword = keyword
 
         super().__init__(expression)
 
+    def eval(self, symbol_table):
+        if not self.expression:
+            # export everything
+            symbol_table.export()
+            return ""
+
+        if isinstance(self.expression,AssignmentExpression):
+            symbol_table.export_start()
+            s = self.expression.eval(symbol_table)
+            symbol_table.export_stop()
+        else:
+            s = self.expression.eval(symbol_table)
+            symbol_table.export(s)
+
+        return ""
+
 class UnExportDirective(ExportDirective):
     name = "unexport"
+
+    def eval(self, symbol_table):
+        raise NotImplementedError()
 
 class IncludeDirective(Directive):
     name = "include"

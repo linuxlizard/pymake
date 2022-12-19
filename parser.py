@@ -3,6 +3,7 @@ import logging
 from constants import *
 from error import *
 from symbol import *
+from printable import printable_char
 from scanner import ScannerIterator
 from tokenizer import tokenize_recipe
 import vline
@@ -10,6 +11,8 @@ import vline
 _debug = True
 
 logger = logging.getLogger("pymake.parser")
+
+#logger.setLevel(level=logging.DEBUG)
 
 # used by the tokenzparser to match a directive name with its class
 conditional_directive_lut = {
@@ -430,6 +433,8 @@ def parse_ifdef_conditional(ifdef_expr, directive_str, viter):
 
     state = state_start
 
+    # TODO
+    raise NotImplementedError()
     breakpoint()
 
     return Expression(expr1)
@@ -488,7 +493,7 @@ def seek_directive(viter, seek=directive):
     # Consume leading whitespace; throw a fit if first char is the recipeprefix.
     # We never call this fn for a recipe so we know there's a confusing parse
     # ahead of us if we see a recipeprefix as first char.
-    s = ""
+    vcstr = vline.VCharString()
 
     # look at first char first
     vchar = next(viter)
@@ -498,57 +503,46 @@ def seek_directive(viter, seek=directive):
 
     state_whitespace = 1  # ignore leading whitespace
     state_char = 2
+    state_trailing_whitespace = 3
 
     if vchar.char in whitespace:
         state = state_whitespace
     else:
         state = state_char
-        s += vchar.char
-#    print("seek_directive c={0} state={1}".format(printable_char(vchar.char), state))
+        vcstr += vchar
+
+    print("seek_directive c={0} state={1}".format(printable_char(vchar.char), state))
 
     for vchar in viter:
         # continue to ignore leading whitespace
-#        print("seek_directive c={0} state={1} pos={2}".format(printable_char(vchar.char), state, vchar.get_pos()))
+        print("seek_directive c={0} state={1} pos={2}".format(printable_char(vchar.char), state, vchar.get_pos()))
         if state == state_whitespace:
+            if not vchar.char in whitespace:
+                state = state_char
+                vcstr += vchar
+
+        elif state == state_char:
             if vchar.char in whitespace:
-                continue
-            state = state_char
+                state = state_trailing_whitespace
+            else:
+                vcstr += vchar
 
-        if state == state_char:
-            if vchar.char not in directive_chars:
-                # we've found something that's not part of a directive word so
-                # we're done
-                viter.pop_state()
-                logger.debug("seek_directive nope")
-                return None
-
-            s += vchar.char
-            if s in seek:
-                # we have a substring match
+        elif state == state_trailing_whitespace:
+            if vchar.char not in whitespace:
+                # push back the char we just looked at
+                viter.pushback()
                 break
-    else:
-        # end of string w/o seeing a directive so nothing to see here
-        viter.pop_state()
-        logger.debug("seek_directive Nope")
-        return None
 
-    # we've found at least a substring match; next char might be whitespace or EOL
-    try:
-        vchar = next(viter)        
-    except StopIteration:
-        # bare string matching a directive which is weird
-        pass
-    else:
-        if vchar.char not in whitespace and vchar.char not in eol:
-            # we found a substring e.g. "definefoo" which is not what we want
-            viter.pop_state()
-            logger.debug("seek_directive not")
-            return None
+    # did we find a directive amidst all this whitespace?
+    if (s:=str(vcstr)) in directive:
+        # we found a directive
+        logger.debug("seek_directive found \"%s\"", s)
+        return vcstr
 
-    # success!
-    logger.debug("seek_directive found \"%s\"", s)
-    return s
-
+    # nope, not a directive
+    viter.pop_state()
+    logger.debug("seek_directive none")
+    return None
 
 def handle_conditional_directive(directive_inst, vline_iter):
     # GNU make doesn't parse the stuff inside the conditional unless the
@@ -681,12 +675,52 @@ def handle_conditional_directive(directive_inst, vline_iter):
     
     return cond_block
 
+def parse_export_directive(expr, directive_vstr, *ignore):
+    # don't need, don't want, let's not break.
+#    del vline_iter
+#    del virt_line
+#    del viter
+
+    klass = ExportDirective if str(directive_vstr) == "export" else UnExportDirective
+
+    # "If you want all variables to be exported by default, you can use export by itself"
+    # We have nothing left to parse so a bare export/unexport
+    if not expr.token_list:
+        return klass(directive_vstr)
+
+    # Need to pull apart the Expression's first token to split the directive
+    # name from the expression.
+    # Want self.expression.token_list[0] to be Literal("export")|Literal("unexport")
+    #
+    # Incoming expr might be an AssignmentExpression
+    # e.g., export CC:=gcc
+    #
+    # viter is the iterator into the first token of expr.token_list[] and will
+    # be positioned just past the directive.
+    #
+    # Given: export CC:=gcc   will become an AssignmentExpression
+    # expr.token_list[] will look like:
+    # [Literal("export CC"), AssigOp(":="), Literal("gcc")]
+    #                  ^--- viter will be here
+    # 
+    # Want to make into a new token_list:
+    # [Literal("export"), AssignmentExpression(etc)]
+    #
+    # Given: export CC LD CFLAGS   just an Expression
+    # expr.token_list[] looks like 
+    # [Literal("export CC LD CFLAGS"),]
+    #                  ^-- viter is here
+    #
+    # Need to carefully preserve the vchars so file/position will be always known.
+
+    return klass(directive_vstr, expr)
+
 def error_extraneous(expr, directive_str, viter, virt_line, vline_iter):
     starting_pos = expr.get_pos()
     errmsg = "extraneous '%s'" % directive_str
     raise ParseError(pos=starting_pos, description=errmsg)
 
-def parse_directive(expr, directive_str, viter, virt_line, vline_iter):
+def parse_directive(expr, directive_vstr, viter, virt_line, vline_iter):
     # expr - Expression instance
     #       We've started to consume token_list[0] which is a Literal containing the name of the directive 
     #       (ifdef, ifeq, etc). The directive_str and viter come from token_list[0]
@@ -697,7 +731,7 @@ def parse_directive(expr, directive_str, viter, virt_line, vline_iter):
     #              LineBlock et al for contents of the ifdef/ifeq directives
     #
     logger.debug("parse_directive() \"%s\" at pos=%r",
-            directive_str, virt_line.starting_pos)
+            directive_vstr, virt_line.starting_pos)
 
     lut = {
         "ifeq" : parse_ifeq_directive,
@@ -705,10 +739,12 @@ def parse_directive(expr, directive_str, viter, virt_line, vline_iter):
         "ifdef" : parse_ifdef_directive,
         "ifndef" : parse_ifdef_directive,
         "define" : parse_define_directive,
+        "export" : parse_export_directive,
+        "unexport" : parse_export_directive,
         "endif" : error_extraneous,
     }
 
-    return lut[directive_str](expr, directive_str, viter, virt_line, vline_iter)
+    return lut[str(directive_vstr)](expr, directive_vstr, viter, virt_line, vline_iter)
 
 def parse_expression(expr, virt_line, vline_iter):
     # This is a second pass through an Expression.
@@ -718,13 +754,14 @@ def parse_expression(expr, virt_line, vline_iter):
     #   export something
     #   define foo   # start of multi-line variable
 
+#    breakpoint()
     assert isinstance(expr,Expression), type(expr)
 
     # If we do find a directive, we'll wind up re-parsing the entire line as a
     # directive. Unnecessary and ugly but I first tried to handle directives
     # before assignment and rules which didn't work (too much confusion in
     # handling the case of directive names as as rule or assignments). So I'm
-    # parsing the line first, determining if it's a rule or staement or
+    # parsing the line first, determining if it's a rule or statement or
     # expression. If expression, look for a directive string, then connect
     # to the original Directive handling code here.
 
@@ -734,7 +771,8 @@ def parse_expression(expr, virt_line, vline_iter):
         # sloppiness of my grammar tokenparser.  
         # define xyzzy :=    <-- multi-line variable masquerading as an Assignment
         # ifdef := 123  <-- totally legal but I want to throw a warning
-        # dig into the assignment to get the LHS
+        # export CC=gcc  <-- looks like an assignment
+        # Need to dig into the assignment to get the LHS.
         assign_expr = expr
         expr = expr.token_list[0]
     
@@ -752,12 +790,15 @@ def parse_expression(expr, virt_line, vline_iter):
 
     # seek_directive() needs a character iterator 
     viter = ScannerIterator(tok.string, tok.string.get_pos()[0])
-    directive_str = seek_directive(viter)
-    if not directive_str:
+    directive_vstr = seek_directive(viter)
+    if not directive_vstr:
         # nope, not a directive. Ignore this expression and let execute figure it out
         return assign_expr if assign_expr else expr
 
     # at this point, we definitely have some sort of directive.
+#    breakpoint()
+
+    dir_str = str(directive_vstr)
 
     if assign_expr:
         # If we've peeked into an assignment and decided this is re-using a
@@ -767,18 +808,31 @@ def parse_expression(expr, virt_line, vline_iter):
         # yet another corner case:
         # define = foo        <-- totally legit
         # define = <nothing>  <-- totally legit
+        # export CC=gcc <-- totally legit
         # I'm growing weary of finding all these corner cases. I need to
         # rewrite my tokenize/parser with these sort of things in mind.
-        if directive_str == "define" and viter.remain():
-            # at this point, we have something after the "define" so probably
+
+        if dir_str in ("define", "export", "unexport") and viter.remain():
+            # at this point, we have something after the directive so probably
             # an actual factual directive.
-            dir_ = parse_directive(assign_expr, directive_str, viter, virt_line, vline_iter)
+            if viter.remain():
+                assign_expr.token_list[0] = Expression([Literal(vline.VCharString(viter.remain()))])
+            else:
+                assign_expr.token_list = assign_expr.token_list[1:]
+            dir_ = parse_directive(assign_expr, directive_vstr, viter, virt_line, vline_iter)
         else:
             # GNU Make doesn't warn like this (pats self on back).
-            logger.warning("re-using a directive name \"%s\" in an assignment at %r", directive_str, assign_expr.get_pos())
+            logger.warning("re-using a directive name \"%s\" in an assignment at %r", dir_str, assign_expr.get_pos())
             return assign_expr
     else:
-        dir_ = parse_directive(expr, directive_str, viter, virt_line, vline_iter)
+        # extract the directive from the expression
+        if viter.remain():
+            expr.token_list[0] = Literal(vline.VCharString(viter.remain()))
+        else:
+            expr.token_list = expr.token_list[1:]
 
+        dir_ = parse_directive(expr, directive_vstr, viter, virt_line, vline_iter)
+
+    print("parse directive=%s" % dir_.makefile())
     return dir_
 

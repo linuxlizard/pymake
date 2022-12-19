@@ -47,5 +47,11 @@ export\
 a:=b
 $(info a=$(a))
 
+export CC:=gcc
+export CFLAGS+=-Wall
+
+# creates an env var named "CC" with value "gcc CFLAGS=-Wall"
+export CC=gcc CFLAGS=-Wall
+
 @:;@:
 

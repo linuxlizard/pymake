@@ -11,18 +11,38 @@ logger = logging.getLogger("pymake.symtable")
 #_fail_on_undefined = True
 _fail_on_undefined = False
 
+# classes for vars saved in SymbolTable
+class Entry:
+    def __init__(self, name, value=None, pos=None):
+        self.name = name
+        self.value = value
 
-# template for vars saved in SymbolTable
-_entry_template = {
-    "name" : None,
-    "value" : None,
-    "origin" : None,  # see origin() ; used with env var override and $(foreach)
-    "pos" : None,  # filename/position where last set
-    "flags" : 0
-}
+        self.origin = None
+        self.pos = None
 
-FLAG_NONE = 0
-FLAG_READ_ONLY = 1
+        self.read_only = False
+        self.export = False
+
+    def sanity(self):
+        # TODO
+        pass
+
+class FileEntry(Entry):
+    def __init__(self, name, value, pos):
+        super().__init__(name, value, pos)
+        self.origin = "file"
+
+class DefaultEntry(Entry):
+    def __init__(self, name):
+        super().__init__(name)
+        self.origin = "default"
+        self.read_only = True
+
+class EnvEntry(Entry):
+    def __init__(self, name, value):
+        super().__init__(name,value)
+        self.origin = "environment"
+
 
 def parse_patsubst_shorthand(vcstr):
     # This function handles the case of an abbrevitated patsubst.
@@ -116,19 +136,35 @@ class SymbolTable(object):
         # symbol table just to save/restore a single var)
         self.stack = {}
 
+        self.export_default_value = False
+
         self._init_builtins()
+        self._init_envvars()
 
     def _init_builtins(self):
-        entry = dict(_entry_template)
-        entry['name'] = '.VARIABLES'
-        entry['origin'] = 'default'
-        entry['flags'] = FLAG_READ_ONLY
-        self.symbols[entry['name']] = entry
+        # TODO add more internal vars
+        self._add_entry(DefaultEntry('.VARIABLES'))
 
+        # key: var name
+        # value: symbol table method to return values
         self.built_ins = {
             ".VARIABLES" : self.variables,
         }
         
+    def _init_envvars(self):
+        # "Every environment variable that make sees when it starts up is
+        # transformed into a make variable with the same name and value."
+        # 6.10 Variables from the Environment
+        # Page 72. GNU Make Version 4.3 January 2020.
+
+        # read all env vars, add to symbol table
+        for k,v in os.environ.items():
+            self._add_entry(EnvEntry(k,v))
+
+    def _add_entry(self, entry):
+        # sanity check the entry fields
+        entry.sanity()
+        self.symbols[entry.name] = entry
 
     def add(self, name, value, pos=None):
         logger.debug("%s store \"%s\"=\"%s\"", self, name, value)
@@ -143,27 +179,21 @@ class SymbolTable(object):
         # (will hit this if my tokenparser is screwing up)
         assert ' ' not in name, name
 
-#        breakpoint()
-#        assert isinstance(value,Symbol), type(value)
-
-        # make a new symtable from the template
         try:
             entry = self.symbols[name]
         except KeyError:
-            entry = dict(_entry_template)
-            entry['name'] = name
-            # TODO this can change when I implement 'override'
-            entry['origin'] = 'file'
+            entry = None
+
+        # if we didn't find it, make it
+        if entry is None:
+            entry = FileEntry(name, value, pos)
+            entry.export = self.export_default_value
 
         # XXX not sure read-only is a good idea yet
-        if entry['flags'] & FLAG_READ_ONLY:
-            raise PermissionDenied
+        if entry.read_only:
+            raise PermissionDenied(name)
 
-        if pos:
-            entry['pos'] = pos
-        entry['value'] = value
-
-        self.symbols[name] = entry
+        self._add_entry(entry)
 
     def maybe_add(self, name, value, pos=None):
         # If name already exists in the table, don't overwrite.
@@ -177,18 +207,17 @@ class SymbolTable(object):
         return self.add(name, value, pos)
 
     def _maybe_eval(self, entry):
-        value = entry['value']
 
         # handle the case where an expression is stored in the symbol table vs
         # a value 
         # e.g.,  a=10  (evaluated whenever $a is used)
         # vs   a:=10  (evaluated immediately and "10" stored in symtable)
         #
-        if isinstance(value,Symbol):
-            step1 = [t.eval(self) for t in value]
+        if isinstance(entry.value,Symbol):
+            step1 = [t.eval(self) for t in entry.value]
             return "".join(step1)
 
-        return value
+        return entry.value
 
     def _parse_abbrev_patsubst(self, key):
         # This function handles the case of an abbrevitated patsubst.
@@ -218,7 +247,6 @@ class SymbolTable(object):
                 return s[:-pat1_len] + pat2
             return s
         value = self.fetch(varname)
-#        breakpoint()
         new_value = " ".join([maybe_replace(s,pat1,pat2) for s in value.split()])
         return new_value
 
@@ -253,13 +281,7 @@ class SymbolTable(object):
 
         # TODO read gnu make manual on how env vars are referenced
         logger.debug("sym=%s not in symbol table", key)
-
-        # try environment
-        value = os.getenv(key)
-        if value is None:
-            return ""
-        logger.debug("sym=%s found in environ", key)
-        return value
+        return ""
 
 
     def push(self, name):
@@ -273,15 +295,8 @@ class SymbolTable(object):
             # self.symbols[name] entry which also points to our stack entry)
             del self.symbols[name]
         else:
-            # no var with this name.
-            # could still be an env var.
-            value = os.getenv(name)
-            if value is None:
-                # nothing to save
-                return
-            entry = dict(_entry_template)
-            entry['origin'] = 'environment'
-            entry['name'] = name
+            # nothing to save
+            return
             
         # create the dequeue if doesn't exist
         if not name in self.stack:
@@ -318,12 +333,8 @@ class SymbolTable(object):
         # TODO future memory optimization would be to delete the dequeue from
         # self.stack when empty
 
-        # if it's not an env var, restore previous value 
-        if entry['origin'] == 'environment':
-            del self.symbols[name]
-        else:
-            # restore previous value
-            self.symbols[name] = entry
+        # restore previous value
+        self.symbols[name] = entry
 
     def flavor(self, name):
         # Support for the $(flavor) function
@@ -336,17 +347,17 @@ class SymbolTable(object):
         # side effects
         try :
             value = self.symbols[name]
-            return "recursive" if isinstance(value,Symbol) else "simple"
         except KeyError:
-            pass
-
-        # check for env vars
-        value = os.getenv(name)
-        if value is None:
             return "undefined"
 
+        if isinstance(value,Symbol):
+            return "recursive"
+
         # TODO dig into gnu make code, learn why env vars return "recursive"
-        return "recursive"
+        if value.origin == 'environment':
+            return "recursive"
+
+        return "simple"
 
     def origin(self, name):
         # support for the $(origin) function
@@ -365,16 +376,10 @@ class SymbolTable(object):
 
         try :
             entry = self.symbols[name]
-            assert entry["origin"] is not None, name
-            return entry["origin"]
+            assert entry.origin is not None, name
+            return entry.origin
         except KeyError:
-            pass
-
-        value = os.getenv(name)
-        if value is None:
             return "undefined"
-
-        return "environment"
 
     def value(self, name):
         # support for the $(value) function
@@ -384,7 +389,7 @@ class SymbolTable(object):
 
         try :
             entry = self.symbols[name]
-            value = entry['value']
+            value = entry.value
             if isinstance(value,Symbol):
                 return value.makefile()
             return value
@@ -399,6 +404,46 @@ class SymbolTable(object):
         # is this varname in our symbol table (or other mechanisms)
 
         return name in self.built_ins or\
-            name in self.symbols or\
-            os.getenv(name) is not None
+            name in self.symbols
         
+    def export(self, name=None):
+        if name is None:
+            # export everything
+            self._export_all()
+            return
+
+        try:
+            value = self.symbols[name]
+            value.export = True
+        except KeyError:
+            # no such entry
+            return
+
+    def unexport(self, name=None):
+        if name is None:
+            # export everything
+            self._unexport_all()
+            return
+
+        try:
+            value = self.symbols[name]
+            value.export = False
+        except KeyError:
+            # no such entry
+            return
+
+    def _export_all(self):
+        raise NotImplementedError()
+
+    def _unexport_all(self):
+        raise NotImplementedError()
+
+    def get_exports(self):
+        return { k:self._maybe_eval(v) for k,v in self.symbols.items() if v.export }
+
+    def export_start(self):
+        self.export_default_value = True
+
+    def export_stop(self):
+        self.export_default_value = False
+

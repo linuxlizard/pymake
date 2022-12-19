@@ -298,27 +298,27 @@ def execute(makefile, argslist=None):
     exit_code = 0
     for target in target_list:
         rule = rulesdb.get(target)
-        print("rule=",rule)
-        print("prereqs=",rule.prereq_list)
+#        print("rule=",rule)
+#        print("prereqs=",rule.prereq_list)
 
         # walk a dependency tree
         for rule in rulesdb.walk_tree(target):
-    #        print(rule)
-    #        print(rule.recipe_list.makefile())
+#            print(rule)
+#            print(rule.recipe_list.makefile())
             for recipe in rule.recipe_list:
-    #            print(recipe)
+#                print(recipe)
                 symtable.push("@")
                 symtable.push("^")
                 symtable.add("@", rule.target)
                 symtable.add("^", " ".join(rule.prereq_list))
                 s = recipe.eval(symtable)
-    #            print("TODO shell execute \"%s\"" % s)
+#                print("shell execute \"%s\"" % s)
                 if s[0] == '@':
                     # silent command
                     s = s[1:]
                 else:
                     print(s)
-                ret = shell.execute(s)
+                ret = shell.execute(s, symtable)
                 symtable.pop("@")
                 symtable.pop("^")
                 exit_code = ret['exit_code']
@@ -327,6 +327,8 @@ def execute(makefile, argslist=None):
                     print("make: *** [%r] Error %d" % (rule.get_pos(), exit_code))
                     print("make: *** [%r]: %s Error %d" % (recipe.get_pos(), rule.target, exit_code))
                     break
+                print(ret['stdout'],end="")
+
             if exit_code != 0:
                 break
         if exit_code != 0:

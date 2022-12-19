@@ -2,7 +2,7 @@
 # execute shell commands for the != and $(shell) functions
 #
 import logging
-import os
+#import os
 import os.path
 import errno
 import subprocess
@@ -26,9 +26,8 @@ shellstatus = ".SHELLSTATUS"
 #    return False
         
 
-def execute(cmd_str):
+def execute(cmd_str, symbol_table):
     """execute a string with the shell, returning a bunch of useful info"""
-
 
     logger.debug("execute %s", cmd_str)
 
@@ -40,10 +39,14 @@ def execute(cmd_str):
     }
 
     # TODO launch this shell (or verify python subprocess uses env $SHELL)
-    shell = os.getenv("SHELL") or default_shell
+    shell = symbol_table.fetch("SHELL")
+    if not shell:
+        shell = default_shell
     # TODO .SHELLFLAGS
     # TODO .ONESHELL
 
+    env = symbol_table.get_exports()
+    breakpoint()
 
     # GNU Make searches for the executable before spawning (vfork/exec or
     # posix_spawn) the shell. Will report 'No such file or directory'
@@ -76,6 +79,7 @@ def execute(cmd_str):
             stderr=subprocess.PIPE,
             universal_newlines=True,
             check=False, # we'll check returncode
+            env=env
         )
 
     logger.debug("shell exit status=%r", p.returncode)
