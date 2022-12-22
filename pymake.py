@@ -181,30 +181,35 @@ def parse_makefile(infilename) :
         raise
 
 def find_location(tok):
-    # recursively descend into a token tree to find a token with a non-null vcharstring
-    # which will show the starting filename/position of the token
-    logger.debug("find_location tok=%s", tok)
+    return tok.get_pos()
 
-    if isinstance(tok, ConditionalBlock):
-        # conditionals don't have a token_list so we have to drill into the
-        # instance to find something that does
-        return find_location(tok.cond_exprs[0].expression)
-
-    # If the tok has a token_list, it's an Expression
-    # otherwise, is a Symbol.
-    #
-    # Expressions contain list of Symbols (although an Expression is also
-    # itself a Symbol). Expression does not have a string (VCharString)
-    # associated with it but contains the Symbols that do.
-    try:
-        for t in tok.token_list:
-            return find_location(t)
-    except AttributeError:
-        # we found a Symbol
-        c = tok.string[0]
-        return c.filename, c.pos
-#        for c in tok.string:
-#            logger.debug("f %s %s %s", c, c.pos, c.filename)
+#    # recursively descend into a token tree to find a token with a non-null vcharstring
+#    # which will show the starting filename/position of the token
+#    logger.debug("find_location tok=%s", tok)
+#
+#    if isinstance(tok, ConditionalBlock):
+#        # conditionals don't have a token_list so we have to drill into the
+#        # instance to find something that does
+#        return find_location(tok.cond_exprs[0].expression)
+#
+#    if isinstance(tok, Directive):
+#        return find_location(tok.expression)
+#
+#    # If the tok has a token_list, it's an Expression
+#    # otherwise, is a Symbol.
+#    #
+#    # Expressions contain list of Symbols (although an Expression is also
+#    # itself a Symbol). Expression does not have a string (VCharString)
+#    # associated with it but contains the Symbols that do.
+#    try:
+#        for t in tok.token_list:
+#            return find_location(t)
+#    except AttributeError:
+#        # we found a Symbol
+#        c = tok.string[0]
+#        return c.filename, c.pos
+##        for c in tok.string:
+##            logger.debug("f %s %s %s", c, c.pos, c.filename)
 
 def _add_internal_db(symtable):
     # grab gnu make's internal db, add to our own
@@ -226,7 +231,7 @@ def execute(makefile, argslist=None):
     symtable = SymbolTable()
 
     # XXX temp disabled while debugging
-    _add_internal_db(symtable)
+#    _add_internal_db(symtable)
 
     rulesdb = rules.RuleDB()
 
@@ -240,7 +245,9 @@ def execute(makefile, argslist=None):
         v = vline.VirtualLine([arg], (0,0), "/dev/null")
         stmt = tokenize_statement(iter(v))
         if isinstance(stmt,AssignmentExpression):
+            symtable.command_line_start()
             stmt.eval(symtable)
+            symtable.command_line_stop()
         else:
             target_list.append(arg)
 
@@ -287,10 +294,10 @@ def execute(makefile, argslist=None):
                 logger.error("eval failed tok file=%s pos=%s", filename, pos)
                 raise
 
-    # XXX temporary tinkering with the rules db
-    filename = get_basename(makefile.get_pos()[0])
-    graphfilename = rulesdb.graph(filename)
-    print("wrote %s for graphviz" % graphfilename)
+    # TODO add cmdline arg to write the graphiz db
+#    filename = get_basename(makefile.get_pos()[0])
+#    graphfilename = rulesdb.graph(filename)
+#    print("wrote %s for graphviz" % graphfilename)
 
     if not target_list:
         target_list = [ rulesdb.get_default_target() ]
@@ -309,8 +316,8 @@ def execute(makefile, argslist=None):
 #                print(recipe)
                 symtable.push("@")
                 symtable.push("^")
-                symtable.add("@", rule.target)
-                symtable.add("^", " ".join(rule.prereq_list))
+                symtable.add_automatic("@", rule.target, recipe.get_pos())
+                symtable.add_automatic("^", " ".join(rule.prereq_list), rule.get_pos())
                 s = recipe.eval(symtable)
 #                print("shell execute \"%s\"" % s)
                 if s[0] == '@':

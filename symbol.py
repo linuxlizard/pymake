@@ -482,7 +482,8 @@ class Directive(Symbol):
 
     def get_pos(self):
         # if self.expression is None allow the error to propagate
-        return self.expression.get_pos()
+#        return self.expression.get_pos()
+        return self.keyword.get_pos()
 
 class ExportDirective(Directive):
     name = "export"
@@ -514,7 +515,8 @@ class ExportDirective(Directive):
             symbol_table.export_stop()
         else:
             s = self.expression.eval(symbol_table)
-            symbol_table.export(s)
+            for name in s.split():
+                symbol_table.export(name)
 
         return ""
 

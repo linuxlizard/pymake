@@ -4,6 +4,7 @@ import os
 import logging
 import collections
 
+import constants
 from symbol import Symbol
 
 logger = logging.getLogger("pymake.symtable")
@@ -13,14 +14,18 @@ _fail_on_undefined = False
 
 # classes for vars saved in SymbolTable
 class Entry:
+    origin = "(invalid origin)"
+    never_export = False
+
     def __init__(self, name, value=None, pos=None):
         self.name = name
         self.value = value
 
-        self.origin = None
         self.pos = None
 
+        # I'm not sure this is a good idea yet.
         self.read_only = False
+
         self.export = False
 
     def sanity(self):
@@ -28,20 +33,53 @@ class Entry:
         pass
 
 class FileEntry(Entry):
+    origin = "file"
+
     def __init__(self, name, value, pos):
+        assert pos is not None
         super().__init__(name, value, pos)
-        self.origin = "file"
 
+# "if variable has a default definition, as is usual with CC and so on. See Section 10.3
+# [Variables Used by Implicit Rules], page 119. Note that if you have redefined a
+# default variable, the origin function will return the origin of the later definition."
+# -- GNU Make manual  Version 4.3 Jan 2020
 class DefaultEntry(Entry):
-    def __init__(self, name):
-        super().__init__(name)
-        self.origin = "default"
-        self.read_only = True
+    origin = "default"
+    never_export = True
 
-class EnvEntry(Entry):
+# Environment Variables trump File variables but are trumped by Command Line args
+# "By default, only variables that came from the environment or the
+# command line are passed to recursive invocations."
+# -- GNU Make manual  Version 4.3 Jan 2020
+class EnvVarEntry(Entry):
+    origin = "environment"
+
     def __init__(self, name, value):
         super().__init__(name,value)
-        self.origin = "environment"
+        self.export = True
+
+# Command line args are high priority than variables in the makefile except if
+# the variable is marked with 'override'
+#
+# Command Line trumps Environment
+#
+# "By default, only variables that came from the environment or the
+# command line are passed to recursive invocations."
+# -- GNU Make manual  Version 4.3 Jan 2020
+class CommandLineEntry(Entry):
+    origin = "command line"
+
+    def __init__(self, name, value):
+        super().__init__(name,value)
+        self.export = True
+
+class AutomaticEntry(Entry):
+    origin = "automatic"
+    never_export = True
+
+    def __init__(self, name, value, pos):
+        assert name in constants.automatic_variables, name
+        super().__init__(name, value, pos)
 
 
 def parse_patsubst_shorthand(vcstr):
@@ -141,9 +179,15 @@ class SymbolTable(object):
         self._init_builtins()
         self._init_envvars()
 
+        # This is an ugly hack to allow us to treat command line argument
+        # expressions transparently as just another AssignmentExpression.
+        # When evaluating command line statements, we'll set this flag which
+        # will mark the incoming variables as from the command line.
+        self.command_line_flag = False
+
     def _init_builtins(self):
         # TODO add more internal vars
-        self._add_entry(DefaultEntry('.VARIABLES'))
+#        self._add_entry(DefaultEntry('.VARIABLES'))
 
         # key: var name
         # value: symbol table method to return values
@@ -159,10 +203,11 @@ class SymbolTable(object):
 
         # read all env vars, add to symbol table
         for k,v in os.environ.items():
-            self._add_entry(EnvEntry(k,v))
+            self._add_entry(EnvVarEntry(k,v))
 
     def _add_entry(self, entry):
         # sanity check the entry fields
+        assert not entry.name in self.built_ins, entry.name
         entry.sanity()
         self.symbols[entry.name] = entry
 
@@ -186,8 +231,11 @@ class SymbolTable(object):
 
         # if we didn't find it, make it
         if entry is None:
-            entry = FileEntry(name, value, pos)
-            entry.export = self.export_default_value
+            if self.command_line_flag:
+                entry = CommandLineEntry(name, value)
+            else:
+                entry = FileEntry(name, value, pos)
+                entry.export = self.export_default_value
 
         # XXX not sure read-only is a good idea yet
         if entry.read_only:
@@ -195,7 +243,11 @@ class SymbolTable(object):
 
         self._add_entry(entry)
 
-    def maybe_add(self, name, value, pos=None):
+    def add_automatic(self, name, value, pos):
+        entry = AutomaticEntry(name, value, pos)
+        self._add_entry(entry)
+
+    def maybe_add(self, name, value, pos):
         # If name already exists in the table, don't overwrite.
         # Used with ?= assignments.
         try:
@@ -433,17 +485,43 @@ class SymbolTable(object):
             return
 
     def _export_all(self):
-        raise NotImplementedError()
+        for k,v in self.symbols.items():
+            if not v.never_export:
+                v.export = True
+        # new vars from this point on will be marked as export
+        self.export_start()
 
     def _unexport_all(self):
-        raise NotImplementedError()
+        for k,v in self.symbols.items():
+            if not v.never_export:
+                v.export = False
+        # new vars from this point on will be marked as export
+        self.export_stop()
 
     def get_exports(self):
         return { k:self._maybe_eval(v) for k,v in self.symbols.items() if v.export }
 
     def export_start(self):
+        # The export start/stop allows us to separate the "export" and
+        # assignment expressions. We set the "start" before eval()'ing an
+        # export with an assignment expression so any assigments in the
+        # expression will be automatically marked as 'export'
+        #
+        # Also used with eval'ing command line arguments which are exported by
+        # default.
+        # 
+        # "By default, only variables that came from the environment or the
+        # command line are passed to recursive invocations."
+        #  -- GNU Make manual  Version 4.3 Jan 2020
         self.export_default_value = True
 
     def export_stop(self):
         self.export_default_value = False
+
+    def command_line_start(self):
+        # yuk ugly hack
+        self.command_line_flag = True
+
+    def command_line_stop(self):
+        self.command_line_flag = False
 

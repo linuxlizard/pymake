@@ -46,7 +46,7 @@ def execute(cmd_str, symbol_table):
     # TODO .ONESHELL
 
     env = symbol_table.get_exports()
-    breakpoint()
+#    breakpoint()
 
     # GNU Make searches for the executable before spawning (vfork/exec or
     # posix_spawn) the shell. Will report 'No such file or directory'
@@ -58,7 +58,8 @@ def execute(cmd_str, symbol_table):
     # for speed in that they will avoid loading the shell unless absolutely
     # necessary.
     #
-    # I'm not concerned about speed. So I'm going to always run $(shell) and rules with the actual shell.
+    # I'm not concerned about speed. So I'm going to always run $(shell) and
+    # rules with the actual shell.
     #
 
 #    if not os.path.exists(cmd_list[0]) and not in_path(cmd_list[0]):
@@ -78,8 +79,9 @@ def execute(cmd_str, symbol_table):
             stdout=subprocess.PIPE, 
             stderr=subprocess.PIPE,
             universal_newlines=True,
-            check=False, # we'll check returncode
-            env=env
+            check=False # we'll check returncode ourselves
+            
+            ,env=env
         )
 
     logger.debug("shell exit status=%r", p.returncode)
@@ -87,8 +89,6 @@ def execute(cmd_str, symbol_table):
 
     return_status["stdout"] = p.stdout
     return_status["stderr"] = p.stderr
-#    return_status["stdout"] = p.stdout.strip().replace("\n", " ")
-#    return_status["stderr"] = p.stderr.strip().replace("\n", " ")
 
     return return_status
 
@@ -97,7 +97,7 @@ def execute_tokens(token_list, symbol_table):
     step1 = [t.eval(symbol_table) for t in token_list]
     step2 = "".join(step1)
 
-    exe_result = execute(step2)
+    exe_result = execute(step2, symbol_table)
 
     # GNU Make returns one whitespace separated string, no CR/LF
     # "all other newlines are replaced by spaces." gnu_make.pdf
@@ -117,9 +117,9 @@ def execute_tokens(token_list, symbol_table):
     # (e.g., "No such file or directory")
     if exe_result["errmsg"]:
         error_message(exe_result["errmsg"])
-        return ""
+    else:
+        # otherwise report stderr
+        error_message(exe_result["stderr"])
 
-    # report stderr
-    error_message(exe_result["stderr"])
     return ""
 

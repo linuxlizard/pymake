@@ -56,7 +56,7 @@ directive = {
 } | conditional_directive
 
 # directives are all lowercase and the - from "-include"
-directive_chars = set(string.ascii_lowercase) | set("-")
+#directive_chars = set(string.ascii_lowercase) | set("-")
 
 automatic_variables = {
     "@",
