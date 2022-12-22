@@ -61,6 +61,7 @@ def test_all():
         # "shell.mk",
 
         "ifeq.mk",
+#        "ifdef.mk",
     )
 
     for infilename in infilename_list:

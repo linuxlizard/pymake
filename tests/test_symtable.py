@@ -7,7 +7,7 @@ import symtable
 
 # Verify we've found my symtable module.
 # FIXME rename my symtable.py to avoid colliding with Python's built-in
-symtable.FLAG_NONE
+symtable.Entry
 
 def test_add_fetch():
     # TODO
