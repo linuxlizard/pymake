@@ -50,5 +50,3 @@ $(info cS=$(filter-out %.c %.S,$(SRC)))
 
 @:;@:
 
-@:;@:
-

@@ -9,6 +9,8 @@ from symbol import Symbol
 
 logger = logging.getLogger("pymake.symtable")
 
+logger.setLevel(level=logging.DEBUG)
+
 #_fail_on_undefined = True
 _fail_on_undefined = False
 
@@ -18,15 +20,31 @@ class Entry:
     never_export = False
 
     def __init__(self, name, value=None, pos=None):
+        logger.debug("create var name=%s origin=%s", name, self.origin)
         self.name = name
-        self.value = value
-
-        self.pos = None
+        self._value = value
+        self.pos = pos
 
         # I'm not sure this is a good idea yet.
         self.read_only = False
 
-        self.export = False
+        self._export = False
+
+    @property
+    def export(self):
+        return self._export
+
+    def set_export(self, value):
+        self._export = value
+
+    @property
+    def value(self):
+        return self._value
+
+    def set_value(self, value, pos):
+        # TODO add a stack where the values get changed
+        self.pos = pos
+        self._value = value
 
     def sanity(self):
         # TODO
@@ -36,8 +54,13 @@ class FileEntry(Entry):
     origin = "file"
 
     def __init__(self, name, value, pos):
-        assert pos is not None
+        if pos is None:
+            # happens with test code
+            pos = ((0,0),"/dev/null")
         super().__init__(name, value, pos)
+
+    def sanity(self):
+        assert self.pos is not None
 
 # "if variable has a default definition, as is usual with CC and so on. See Section 10.3
 # [Variables Used by Implicit Rules], page 119. Note that if you have redefined a
@@ -56,7 +79,7 @@ class EnvVarEntry(Entry):
 
     def __init__(self, name, value):
         super().__init__(name,value)
-        self.export = True
+        self.set_export( True )
 
 # Command line args are high priority than variables in the makefile except if
 # the variable is marked with 'override'
@@ -71,7 +94,10 @@ class CommandLineEntry(Entry):
 
     def __init__(self, name, value):
         super().__init__(name,value)
-        self.export = True
+        self.set_export(True)
+
+    def set_value(self, value, pos):
+        pass
 
 class AutomaticEntry(Entry):
     origin = "automatic"
@@ -80,87 +106,6 @@ class AutomaticEntry(Entry):
     def __init__(self, name, value, pos):
         assert name in constants.automatic_variables, name
         super().__init__(name, value, pos)
-
-
-def parse_patsubst_shorthand(vcstr):
-    # This function handles the case of an abbrevitated patsubst.
-    # OBJ=$(SRC:.c=.o)  # need to parse out to ("SRC", ".c", ".o)
-    #
-    # Returns a list of vchar strings.
-    # 
-    # return one string  => not a function but a raw string
-    # return two strings => [0] function
-    #                       [1] args
-    # return three string => [0] varref
-    #                        [1] from string
-    #                        [2] to string
-    #
-
-    getchars = enumerate(vcstr)
-
-    idx, vchar = next(getchars)
-    if vchar.char in whitespace:
-        # GNU Make doesn't treat anything with leading whitespace as a function
-        # call, e.g., $( info blah blah ) is treated as a weird var ref
-        return (vcstr,)
-
-    state_string = 1
-    state_arg1 = 2
-    state_arg2 = 3
-
-    state = state_string
-
-    logger.debug("f c=%s idx=%d state=%d", vchar.char, idx, state)
-
-    # when we're parsing out an abbreviated patsubst, we'll keep track of
-    # start,stop indices here.
-    idx_stack = []
-
-    for idx, vchar in getchars:
-        c = vchar.char
-
-        logger.debug("f c=%s idx=%d state=%d", c, idx, state)
-
-        if state == state_string:
-            if c in whitespace:
-                # done!
-                return ( VCharString(vcstr[0:idx]), VCharString(vcstr[idx+1:]) )
-            elif c == ':':
-                # now it gets interesting
-                state = state_arg1
-                # start,end of varname
-                idx_stack.append(0)
-                idx_stack.append(idx)
-                # start of arg1
-                idx_stack.append(idx+1)
-
-        elif state == state_arg1:
-            if c == '=':
-                # we are at the end of arg1
-                state = state_arg2
-                # end of arg1
-                idx_stack.append(idx)
-                # start of arg2
-                idx_stack.append(idx+1)
-
-        elif state == state_arg2:
-            # everything up to the end of the string is arg2
-            pass
-
-    if state == state_string:
-        # we've fun out of string before seeing anything interesting so this is just a varref
-        return (vcstr,)
-
-    assert state == state_arg2, state
-
-    # want to pop elements off oldest first
-    idx_stack.reverse()
-
-    varname = VCharString(vcstr[idx_stack.pop():idx_stack.pop()])
-    arg1 = VCharString(vcstr[idx_stack.pop():idx_stack.pop()])
-    arg2 = VCharString(vcstr[idx_stack.pop():])
-
-    return (varname, arg1, arg2)
 
 
 class SymbolTable(object):
@@ -212,7 +157,7 @@ class SymbolTable(object):
         self.symbols[entry.name] = entry
 
     def add(self, name, value, pos=None):
-        logger.debug("%s store \"%s\"=\"%s\"", self, name, value)
+        logger.debug("store \"%s\"=\"%s\"", name, value)
 
         # an attempt to store empty string is a bug
         assert isinstance(name,str), type(name)
@@ -232,10 +177,17 @@ class SymbolTable(object):
         # if we didn't find it, make it
         if entry is None:
             if self.command_line_flag:
+                # this flag is a weird hack to support command line vars
+                # implicitly
                 entry = CommandLineEntry(name, value)
+                # command line vars are always exported
+                # TODO unless unexport ?
             else:
                 entry = FileEntry(name, value, pos)
-                entry.export = self.export_default_value
+                entry.set_export(self.export_default_value)
+        else:
+            logger.debug("overwrite value name=%s at pos=%r", entry.name, pos)
+            entry.set_value(value, pos)
 
         # XXX not sure read-only is a good idea yet
         if entry.read_only:
@@ -247,7 +199,7 @@ class SymbolTable(object):
         entry = AutomaticEntry(name, value, pos)
         self._add_entry(entry)
 
-    def maybe_add(self, name, value, pos):
+    def maybe_add(self, name, value, pos=None):
         # If name already exists in the table, don't overwrite.
         # Used with ?= assignments.
         try:
@@ -331,7 +283,6 @@ class SymbolTable(object):
             if _fail_on_undefined:
                 raise
 
-        # TODO read gnu make manual on how env vars are referenced
         logger.debug("sym=%s not in symbol table", key)
         return ""
 
@@ -355,7 +306,7 @@ class SymbolTable(object):
             self.stack[name] = collections.deque()
 
         # push right, pop right (stack)
-        logger.debug("push entry=%s", entry['name'])
+        logger.debug("push entry=%s", entry.name)
         self.stack[name].append(entry)
 
     def pop(self, name):
@@ -466,7 +417,7 @@ class SymbolTable(object):
 
         try:
             value = self.symbols[name]
-            value.export = True
+            value.set_export(True)
         except KeyError:
             # no such entry
             return
@@ -479,7 +430,7 @@ class SymbolTable(object):
 
         try:
             value = self.symbols[name]
-            value.export = False
+            value.set_export(False)
         except KeyError:
             # no such entry
             return
@@ -487,14 +438,14 @@ class SymbolTable(object):
     def _export_all(self):
         for k,v in self.symbols.items():
             if not v.never_export:
-                v.export = True
+                v.set_export( True )
         # new vars from this point on will be marked as export
         self.export_start()
 
     def _unexport_all(self):
         for k,v in self.symbols.items():
             if not v.never_export:
-                v.export = False
+                v.set_export(False)
         # new vars from this point on will be marked as export
         self.export_stop()
 

@@ -59,8 +59,9 @@ def test_all():
         # "origin.mk",
         # "flavor.mk",
         # "shell.mk",
+        "filepatsubst.mk",
 
-        "ifeq.mk",
+#        "ifeq.mk",
 #        "ifdef.mk",
     )
 

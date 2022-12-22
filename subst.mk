@@ -11,26 +11,24 @@ $(info $(subst ee,EE,$(feet) on the $(street)))
 
 # make seems to ignore whitespace between "subst" and first arg
 path:=$(subst           :, dave ,$(PATH))
-$(info $(path))
-
-#$(error stop)
+$(info p1 $(path))
 
 path:=$(subst :, ,$(PATH))
-$(info $(path))
+$(info p2 $(path))
 
 q=q
 path:=$(subst		:, $q ,$(PATH))
-$(info $(path))
+$(info p3 $(path))
 
 space= 
 path:=$(subst :,$(space),$(PATH))
-$(info $(path))
+$(info p4 $(path))
 
 
 path:=$(PATH)
 split_path=$(subst :, ,$(path))
 path=foo:bar:baz:
-$(info $(split_path))
+$(info p5 $(split_path))
 
 # need a literal comma must use a intermediate var
 comma=,

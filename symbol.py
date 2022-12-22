@@ -286,11 +286,14 @@ class AssignmentExpression(Expression):
 #        assert isinstance(lhs,list), type(lhs)
 #        assert isinstance(lhs[0],str), type(lhs[0])
 
+        pos = self.token_list[0].get_pos()
+        assert pos is not None
+
         key = "".join(lhs)
         if op == "?=":
-            symbol_table.maybe_add(key, rhs, self.token_list[0].get_pos())
+            symbol_table.maybe_add(key, rhs, pos)
         else:
-            symbol_table.add(key, rhs, self.token_list[0].get_pos())
+            symbol_table.add(key, rhs, pos)
         return ""
 
     def sanity(self):

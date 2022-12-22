@@ -107,8 +107,9 @@ export
 all:
 	printenv CC CFLAGS
 """
+    # environment vars do not override internal vars
     os.environ["CC"] = "xcc"
-    expect = ("printenv CC CFLAGS", "xcc", "-Wall")
+    expect = ("printenv CC CFLAGS", "gcc", "-Wall")
     run_test(makefile, expect)
     del os.environ["CC"]
 
@@ -165,8 +166,21 @@ all:
     output = should_succeed(makefile, extra_args=("BAR=baz",))
     verify(output,expect)
 
+def test_command_line_override():
+    # command line var value overrides file var
+    makefile = """
+CFLAGS=-Wall
+export CFLAGS
+all:
+	printenv CFLAGS
+"""
+    expect = ("printenv CFLAGS", "-Wextra")
+    output = should_succeed(makefile, extra_args=("CFLAGS=-Wextra",))
+    verify(output,expect)
+
 if __name__ == '__main__':
+    test1()
 #    test_multiple_assign()
 #    test_export_everything()
 #    test_export_environment_vars()
-    test_command_line_export()
+#    test_command_line_export()

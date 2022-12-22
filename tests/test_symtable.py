@@ -95,10 +95,11 @@ def test_pop_unknown():
         assert 0
 
 def test_env_var():
-    # environment variables should not be stored in the symbol_table itself
+    # environment variables should act like regular vars
     symbol_table = symtable.SymbolTable()
 
-    path = symbol_table.fetch("PATH")
+    save_path = symbol_table.fetch("PATH")
+    assert save_path
 
     symbol_table.push("PATH")
     symbol_table.add("PATH", "a:b:c:")
@@ -107,7 +108,8 @@ def test_env_var():
 
     symbol_table.pop("PATH")
 
-    assert "PATH" not in symbol_table.symbols
+    path = symbol_table.fetch("PATH")
+    assert path==save_path
 
 def test_is_defined():
     # verify we check all the ways a symbol can be defined

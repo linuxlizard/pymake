@@ -105,7 +105,9 @@ def execute_tokens(token_list, symbol_table):
     exe_result["stderr"] = exe_result["stdout"].strip().replace("\n", " ")
 
     # save shell status
-    symbol_table.add(shellstatus, str(exe_result["exit_code"]))
+    pos = token_list[0].get_pos()
+    assert pos
+    symbol_table.add(shellstatus, str(exe_result["exit_code"]), pos)
 
     if exe_result["exit_code"] == 0:
         # success!
