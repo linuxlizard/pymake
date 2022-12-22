@@ -1,7 +1,6 @@
 # functions for conditionals
 
 from functions_base import Function, FunctionWithArguments
-from todo import TODOMixIn
 
 __all__ = [ "AndClass", "IfClass", "OrClass" ]
 
