@@ -47,6 +47,10 @@ class RuleDB:
         assert isinstance(rule,Rule), type(rule)
         assert rule.target
 
+        if rule.target == ".PHONY":
+            # TODO
+            return
+
         if self.default is None:
             self.default = rule.target
     
