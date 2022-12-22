@@ -511,11 +511,11 @@ def seek_directive(viter, seek=directive):
         state = state_char
         vcstr += vchar
 
-    print("seek_directive c={0} state={1}".format(printable_char(vchar.char), state))
+#    print("seek_directive c={0} state={1}".format(printable_char(vchar.char), state))
 
     for vchar in viter:
         # continue to ignore leading whitespace
-        print("seek_directive c={0} state={1} pos={2}".format(printable_char(vchar.char), state, vchar.get_pos()))
+#        print("seek_directive c={0} state={1} pos={2}".format(printable_char(vchar.char), state, vchar.get_pos()))
         if state == state_whitespace:
             if not vchar.char in whitespace:
                 state = state_char
@@ -833,6 +833,6 @@ def parse_expression(expr, virt_line, vline_iter):
 
         dir_ = parse_directive(expr, directive_vstr, viter, virt_line, vline_iter)
 
-    print("parse directive=%s" % dir_.makefile())
+#    print("parse directive=%s" % dir_.makefile())
     return dir_
 
