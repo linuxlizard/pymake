@@ -108,8 +108,9 @@ continuation \ of the \ line
 assignment : 
 	@echo $(I am an assignment statement)
 
-# this works. \ in LHS of assignment is ok
-# fails in 3.82 and 4.0
+# This works in older versions of Make. 
+# The \ in LHS of assignment is ok.
+# But fails in 3.82 and 4.0.
 ifeq ($(MAKE_VERSION),3.81)
 I_am_a_\
 split_assignment = legal in 3.81 
@@ -119,12 +120,13 @@ split-assignment :
 	@echo $(I am a split assignment)
 
 # splitting RHS of rule (the prerequisites) parses ok
-# Error "no rule to make target 'backslash-'
+# The backslashed lines become 3 separate prereqs (the \ creates a space separated list of strings)
+# "backslash-\space-\eol" becomes  "backslash-" "space-" "eol"  (three prereqs)
 split-prereqs-with-backslashes : backslash-\
 space-\
 eol \
 ;\
-@echo $@
+@echo backslash-space-eol=>>$^<<
 
 # GNU make successfully parses this with no complaints. Can't seem to hit it.
 # for "this-is-a-rule-with-backslashes"
@@ -196,12 +198,12 @@ rule-not-highlighted-by-vim : ; @echo $@
 
 # backslash in rules/prereqs?
 \qqq : \abc
-	@echo $@
+	@echo \qqq=$@ \abc=$^
 
 \n : \r
 	@echo $@
 
-\t : \g ; @echo \\\
+\t : \g ; @echo backslash-t does what \\\
 \\\
 \\
 

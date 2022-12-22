@@ -13,5 +13,6 @@ openparen=(
 
 # convert $(firstword) tests to $(lastword) tests
 $(file > out.mk, $(subst $(dollar)$(openparen)firstword,$(dollar)$(openparen)lastword,$(test)))
+$(info wrote out.mk from firstword.mk)
 
 @:;@:

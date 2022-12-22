@@ -36,5 +36,15 @@ a=$( info leading space)
 $(info a=>$a<)
 #$(if $( info leading space),$(error foo),$(info ok))
 
+$(info blank line-v)
+$(info )
+$(info ^-blank line)
+
+# fn names in separate namespace than variables so there is significant
+# possibilities for confusion.
+info=foo
+$(info $(info) bar baz)
+$(info $(info ) bar baz)
+
 @:;@:
 

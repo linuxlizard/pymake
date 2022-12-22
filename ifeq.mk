@@ -13,6 +13,7 @@ $(error gnu make doesn't see this)
 endif
 
 ifeq ($(a,b),$(a,b))
+$(info ifeq true)
 $(info $$(a,b),$$(a,b))
 endif
 
@@ -94,6 +95,14 @@ paren=(
 ifeq ($(paren),$(paren))
 $(info (paren,paren))
 endif
+
+# parse error (missing space after ifeq) that GNU Make reports as "missing separator"
+#ifeq(1,1)
+#endif
+
+# "invalid syntax in conditional"
+#ifeq ((1,1))
+#endif
 
 @:;@:
 
