@@ -266,10 +266,10 @@ def execute(makefile, argslist=None):
                 rulesdb.add(rule)
         else:
             try:
-    #            breakpoint()
+#                breakpoint()
                 s = tok.eval(symtable)
                 logger.info("execute result s=\"%s\"", s)
-                if s.strip():
+                if isinstance(s,str) and s.strip():
                     # TODO need to parse/reinterpret the result of the expression.
                     # Functions such as $(eval) and $(call) can generate new
                     # makefile rules, statements, etc.
@@ -277,6 +277,7 @@ def execute(makefile, argslist=None):
                     # will print a "missing separator" error
                     logger.error("unexpected non-empty eval result=\"%s\" at pos=%r" % (s, tok.get_pos()))
                     sys.exit(1)
+                # TODO eval of ConditionalBlocks can return array of "stuff"
             except MakeError:
                 # let ParseError propagate
                 raise
@@ -284,14 +285,14 @@ def execute(makefile, argslist=None):
                 raise
             except Exception as err:
                 # My code crashed. For shame!
-                logger.error("INTERNAL ERROR eval exception during token makefile=%s", tok.makefile())
-                logger.error("INTERNAL ERROR eval exception during token string=%s", tok.string)
+                logger.error("INTERNAL ERROR eval exception during token makefile=\"\"\"\n%s\n\"\"\"", tok.makefile())
+                logger.error("INTERNAL ERROR eval exception during token string=%s", str(tok))
     #            logger.error("eval exception during token token_list=%s", tok.token_list)
     #            for t in tok.token_list:
     #                logger.error("token=%s string=%s", t, t.string)
-                filename,pos = find_location(tok)
+                filename,pos = tok.get_pos()
     #            logger.exception("INTERNAL ERROR")
-                logger.error("eval failed tok file=%s pos=%s", filename, pos)
+                logger.error("eval failed tok=%s file=%s pos=%s", tok.name, filename, pos)
                 raise
 
     # TODO add cmdline arg to write the graphiz db

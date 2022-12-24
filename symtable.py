@@ -4,12 +4,13 @@ import os
 import logging
 import collections
 
+import version
 import constants
 from symbol import Symbol
 
 logger = logging.getLogger("pymake.symtable")
 
-logger.setLevel(level=logging.DEBUG)
+#logger.setLevel(level=logging.DEBUG)
 
 #_fail_on_undefined = True
 _fail_on_undefined = False
@@ -131,15 +132,16 @@ class SymbolTable(object):
         self.command_line_flag = False
 
     def _init_builtins(self):
-        # TODO add more internal vars
-#        self._add_entry(DefaultEntry('.VARIABLES'))
-
         # key: var name
         # value: symbol table method to return values
         self.built_ins = {
             ".VARIABLES" : self.variables,
         }
         
+        # TODO add more internal vars
+#        self._add_entry(DefaultEntry('.VARIABLES'))
+        self._add_entry(DefaultEntry('MAKE_VERSION', version.Version.vstring()))
+
     def _init_envvars(self):
         # "Every environment variable that make sees when it starts up is
         # transformed into a make variable with the same name and value."
@@ -373,7 +375,7 @@ class SymbolTable(object):
         # environment
         # environment override TODO
         # file 
-        # command line  TODO
+        # command line
         # override -- override directive TODO
         # automatic -- defined in a rule e.g., $@ TODO
 
@@ -434,6 +436,18 @@ class SymbolTable(object):
         except KeyError:
             # no such entry
             return
+
+    def undefine(self, name):
+        # support the undefine directive
+        try:
+            entry = self.fetch(name)
+        except KeyError:
+            # does not exist. no harm, no foul.
+            return
+
+        # TODO any variables that GNU Make considers an error to undefine?
+
+        del self.symbols[name]
 
     def _export_all(self):
         for k,v in self.symbols.items():

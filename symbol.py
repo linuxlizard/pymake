@@ -113,7 +113,7 @@ class Symbol(object):
         raise NotImplementedError(self.name)
 
     def get_pos(self):
-        return self.string[0].filename, self.string[0].pos
+        return self.string.get_pos()
 
 class Literal(Symbol):
     # A literal found in the token stream. Store as a string.
@@ -149,6 +149,7 @@ class Expression(Symbol):
     def __init__(self, token_list ):
         # expect a list/array/tuple (test by calling len())
         assert len(token_list)>=0, (type(token_list), token_list)
+        logger.debug("new Expression with %d tokens", len(token_list))
         self.token_list = token_list
         Symbol.validate(token_list)
         super().__init__()
@@ -466,9 +467,14 @@ class Directive(Symbol):
     # A Directive instance contains an Expression instance ("has a").
     # A Directive instance is _not_ an Expression instance ("not is-a").
 
-    def __init__(self, expression):
+    def __init__(self, keyword, expression):
+        # ha ha type checking.  keyword needs to be a VCharString which tells
+        # us the file+position of the "export"
+        assert isinstance(keyword, VCharString), type(keyword)
+
+        super().__init__(keyword)
+
         # expression may be None
-        super().__init__()
         self.expression = expression
 
     def __str__(self):
@@ -483,10 +489,6 @@ class Directive(Symbol):
         else : 
             return "{0}".format(self.name)
 
-    def get_pos(self):
-        # if self.expression is None allow the error to propagate
-#        return self.expression.get_pos()
-        return self.keyword.get_pos()
 
 class ExportDirective(Directive):
     name = "export"
@@ -499,12 +501,7 @@ class ExportDirective(Directive):
 #        if not(Version.major==3 and Version.minor==81) : 
 #            raise TODO()
 
-        # ha ha type checking.  keyword needs to be a VCharString which tells
-        # us the file+position of the "export"
-        assert isinstance(keyword, VCharString), type(keyword)
-        self.keyword = keyword
-
-        super().__init__(expression)
+        super().__init__(keyword, expression)
 
     def eval(self, symbol_table):
         if not self.expression:
@@ -592,6 +589,10 @@ class LineBlock(Symbol):
         self.vline_list = vline_list
         super().__init__()
 
+    def get_pos(self):
+        vline = self.vline_list[0]
+        return vline.get_pos()
+
     def makefile(self):
         if _debug:
             [vline.validate() for vline in self.vline_list]
@@ -671,6 +672,9 @@ class ConditionalBlock(Symbol):
         self.cond_exprs = []
         self.cond_blocks = []
 
+    def get_pos(self):
+        return self.cond_blocks[0][0].get_pos()
+
     def add_conditional( self, cond_expr ) :
         assert len(self.cond_exprs) == len(self.cond_blocks)
         assert isinstance(cond_expr, ConditionalDirective), (type(cond_expr), )
@@ -740,25 +744,24 @@ class ConditionalBlock(Symbol):
         return s
 
     def eval(self, symbol_table):
+        logger.debug("eval %s", self.name)
 
         # XXX eventually we'll return a Rule if the block contains a rule?
     
         # Before I handle LineBlocks, I need to figure out how to handle rules.
         # I need to understand how I'm going to do Rules before I start
         # handling blocks of unparsed text inside conditional blocks.
-        #
-        raise NotImplementedError
 
         def eval_blocks(cond_block_list):
             results = []
-            breakpoint()
+
             for block in cond_block_list:
 
                 # FIXME passing tokenize down here is ugly and I hate it and it's ugly.
                 # Fix it somehow.
                 block.tokenize_fn = self.tokenize_fn
-
                 results.append( block.eval(symbol_table) )
+#            breakpoint()
             return results
 
         for idx,expr in enumerate(self.cond_exprs):
@@ -787,6 +790,23 @@ class ConditionalBlock(Symbol):
 class ConditionalDirective(Directive):
     name = "(should not see this)"
 
+    def __init__(self, keyword, expression):
+        super().__init__(keyword, expression)
+
+        # see partial_init()
+        self.vcstring = None
+
+    def partial_init(self, vcstring):
+        # used when we have a nested conditional where the expression can't be parsed yet.
+        # for example:
+        # ifdef FOO
+        #   ifdef BAR
+        #         ^^^-- don't parse this conditional until we're eval'ing the outer FOO block
+        # Need to preserve the raw vcharstring so we can parse it later.
+        assert isinstance(vcstring,VCharString)
+        logger.debug("%s partial_init of \"%s\" at %r", self.string, vcstring, vcstring.get_pos())
+        self.vcstring = vcstring
+
     def get_pos(self):
         if self.expression is not None:
             return self.expression.get_pos()
@@ -797,18 +817,34 @@ class IfdefDirective(ConditionalDirective):
     name = "ifdef"
 
     def eval(self, symbol_table):
-        name = self.expression.eval(symbol_table)
-
         # don't use .fetch() because we don't want to eval the expression in
         # the symbol table. We just want proof of exist.
+        name = self._eval(symbol_table)
         return symbol_table.is_defined(name)
 
+    def _parse(self):
+        # FIXME this ugly and slow and ugly and I'd like to fix it
+        # (circular imports are circular)
+        from tokenizer import tokenize_statement
+        self.expression = tokenize_statement(ScannerIterator(self.vcstring.chars, None))
+        
+    def _eval(self, symbol_table):
+        logger.debug("eval %s", self.name)
+        if self.expression is None:
+            # if this fails, partial_init() should have been called
+            assert self.vcstring is not None
+            self._parse()
 
-class IfndefDirective(ConditionalDirective):
+#        breakpoint()
+        name = self.expression.eval(symbol_table)
+        return name
+
+class IfndefDirective(IfdefDirective):
     name = "ifndef"
 
     def eval(self, symbol_table):
-        name = self.expression.eval(symbol_table)
+        logger.debug("eval %s at %r", self.name, self.get_pos())
+        name = self._eval(symbol_table)
 
         # don't use .fetch() because we don't want to eval the expression in
         # the symbol table. We just want proof of exist.
@@ -823,17 +859,11 @@ class IfeqDirective(ConditionalDirective):
     # following the ifeq are obeyed if the two arguments match; otherwise they are ignored."
     #  GNU Make Manual 7.1 pg 81
 
-    def __init__(self, expr1, expr2):
+    def __init__(self, keyword, expr1, expr2):
         # expr1, expr2 may be None
         self.expr1 = expr1
         self.expr2 = expr2
-        super().__init__(self.expr1)
-        self.vcstring = None
-
-    def partial_init(self, vcstring):
-        # used when we have a nested conditional where the expression can't be parsed yet.
-        assert isinstance(vcstring,VCharString)
-        self.vcstring = vcstring
+        super().__init__(keyword, self.expr1)
 
     def makefile(self):
         if self.expr1 is not None:
@@ -845,7 +875,7 @@ class IfeqDirective(ConditionalDirective):
     def __str__(self):
         return "%s(%s,%s)" % (self.__class__.__name__, self.expr1, self.expr2)
 
-    def parse(self):
+    def _parse(self):
         # We are now parsing a previously read directive nested inside another
         # directive. 
         #
@@ -855,11 +885,13 @@ class IfeqDirective(ConditionalDirective):
         from parser import parse_ifeq_conditionals
         expr = tokenize_statement(ScannerIterator(self.vcstring.chars, None))
         self.expr1, self.expr2 = parse_ifeq_conditionals(expr, self.name, None)
-        self.expression = self.expr1
 
     def _exprs_eval(self, symbol_table):
-        if self.vcstring is not None:
-            self.parse()
+        if self.expr1 is None:
+            # if this fails, partial_init() should have been called
+            assert self.vcstring is not None
+
+            self._parse()
 
         s1 = self.expr1.eval(symbol_table)
         s2 = self.expr2.eval(symbol_table)
@@ -882,6 +914,8 @@ class DefineDirective(Directive):
     name = "define"
 
     def __init__(self, macro_name, line_block=None):
+        raise NotImplementedError("define")
+
         super().__init__()
         self.string = macro_name
 #        assert isinstance(macro_name, str), type(macro_name)
@@ -905,6 +939,15 @@ class DefineDirective(Directive):
 
 class UnDefineDirective(Directive):
     name = "undefine"
+
+    def eval(self, symbol_table):
+        s = self.expression.eval(symbol_table)
+
+        # TODO check for valid varname
+
+        symbol_table.undefine(s)
+
+        return ""
 
 class Makefile(object) : 
     # A collection of statements, directives, rules.

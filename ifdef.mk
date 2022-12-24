@@ -8,6 +8,23 @@ ifdef FOO)
     $(info FOO paren)    
 endif
 
+ifdef PATH
+    $(info PATH=$(PATH))
+else ifdef TERM
+    $(info TERM=$(TERM)
+else ifdef DISPLAY
+    $(info DISPLAY=$(DISPLAY))
+endif
+
+ifndef PATH
+    $(info PATH=$(PATH))
+else ifndef qqTERM
+    # should land here
+    $(info no qqTERM)
+else ifndef qqDISPLAY
+    $(info no qqDISPLAY
+endif
+
 # error: invalid syntax in conditional
 #ifdef FOO BAR
 #    $(info FOO BAR)
@@ -16,6 +33,11 @@ endif
 # creating a space, from the GNU Make manual
 blank:= #
 space  := ${blank} ${blank}
+
+# error invalid syntax in conditional
+#ifdef FOO$(space)BAR
+#    $(info $(FOO$(space)BAR))
+#endif
 
 FOO_SPACE_BAR=$(shell echo foo bar)
 $(info FOO_SPACE_BAR=$(FOO_SPACE_BAR))
@@ -30,7 +52,10 @@ ifdef $(subst $(space),q,$(FOO_SPACE_BAR))
     $(info FOO_q_BAR)
 endif
 
+#FOO BAR:=42
+
 ifdef FOO
+    $(info foo)
     ifdef BAR
         ifdef BAZ
         endif
@@ -148,7 +173,7 @@ endif
 foo?=3
 ifeq ($(foo),1)
     $(info foo is one)
-else ifeq ($(foo),2)
+else ifeq ($(foo),2)qqq
     $(info foo is two)
 else ifeq ($(foo),3)
     $(info foo is three)

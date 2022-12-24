@@ -60,6 +60,7 @@ def test_all():
         # "flavor.mk",
         # "shell.mk",
         "filepatsubst.mk",
+        "undefine.mk",
 
 #        "ifeq.mk",
 #        "ifdef.mk",
