@@ -1,5 +1,7 @@
+import sys
 import tempfile
 import subprocess
+import shutil
 
 _debug = False
 
@@ -32,11 +34,35 @@ def _write_and_run(makefile, runner_fn, extra_args=None, extra_env=None):
     with tempfile.NamedTemporaryFile() as outfile:
         outfile.write(makefile.encode("utf8"))
         outfile.flush()
-        test_output = runner_fn(outfile.name, extra_args, extra_env)
+        try:
+            test_output = runner_fn(outfile.name, extra_args, extra_env)
+        except subprocess.CalledProcessError as err:
+            # save the failed file someplace accessible once we leave
+            # (obviously this is not thread safe)
+            shutil.copyfile(outfile.name, "/tmp/fail.mk")
+            print("*** test failure copied to /tmp/fail.mk ***", file=sys.stderr)
+            raise
     return test_output.decode("utf8")
 
-def makefile_string(makefile, extra_args=None, extra_env=None):
+def gnumake_string(makefile, extra_args=None, extra_env=None):
     return _write_and_run(makefile, run_makefile, extra_args, extra_env)
 
 def pymake_string(makefile, extra_args=None, extra_env=None):
     return _write_and_run(makefile, run_pymake, extra_args, extra_env)
+
+def pymake_should_fail(makefile, extra_args=None, extra_env=None):
+    try:
+        pymake_string(makefile, extra_args, extra_env)
+    except subprocess.CalledProcessError as err:
+        pass
+    else:
+        assert 0, "should have failed"
+
+def gnumake_should_fail(makefile, extra_args=None, extra_env=None):
+    try:
+        gnumake_string(makefile, extra_args, extra_env)
+    except subprocess.CalledProcessError as err:
+        pass
+    else:
+        assert 0, "should have failed"
+

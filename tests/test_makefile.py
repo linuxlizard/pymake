@@ -62,8 +62,9 @@ def test_all():
         "filepatsubst.mk",
         "undefine.mk",
 
-#        "ifeq.mk",
-#        "ifdef.mk",
+        "ifeq.mk",
+        "ifdef.mk",
+        "ifeq-nested.mk",
     )
 
     for infilename in infilename_list:

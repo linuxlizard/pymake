@@ -229,10 +229,10 @@ def parse_ifeq_conditionals(ifeq_expr, directive_str, viter):
     # toplevel statement)
 
     if viter is None:
-        print("idx=%d token_list=%r" % (ifeq_expr_token_idx, ifeq_expr.token_list))
+#        print("idx=%d token_list=%r" % (ifeq_expr_token_idx, ifeq_expr.token_list))
         tok = ifeq_expr.token_list[ifeq_expr_token_idx]
         # first token must be a literal open char
-        print("tok=%r string=%r" % (tok, tok.string))
+#        print("tok=%r string=%r" % (tok, tok.string))
         if isinstance(tok,Literal):
             viter = ScannerIterator(tok.string, tok.string.get_pos()[0])
         else:
@@ -253,7 +253,7 @@ def parse_ifeq_conditionals(ifeq_expr, directive_str, viter):
         # parse. We need to find the next Literal in the ifeq_expr so we can
         # parse for the internal expressions.
         if vchar is None:
-            print("vchar is None state=%d" % state)
+#            print("vchar is None state=%d" % state)
             # we have run out literal chars so let's look for another one
 
             if vchar_list:
@@ -264,7 +264,7 @@ def parse_ifeq_conditionals(ifeq_expr, directive_str, viter):
                     # TODO error message
                     raise ParseError()
 
-                print("save to curr_expr")
+#                print("save to curr_expr")
                 curr_expr.append(Literal(vline.VCharString(vchar_list)))
                 vchar_list = []
 
@@ -276,7 +276,7 @@ def parse_ifeq_conditionals(ifeq_expr, directive_str, viter):
                     # we're done parsing
                     break
                 tok = ifeq_expr.token_list[ifeq_expr_token_idx]
-                print("tok=", tok.makefile())
+#                print("tok=", tok.makefile())
                 if isinstance(tok,Literal):
                     viter = ScannerIterator(tok.string, tok.string.get_pos()[0])
                     vchar = next(viter)
@@ -292,13 +292,13 @@ def parse_ifeq_conditionals(ifeq_expr, directive_str, viter):
                 # we're done parsing
                 break
 
-        print("parse %s c=\"%s\" at pos=%r state=%d" % (directive_str, vchar.char, vchar.get_pos(), state))
+#        print("parse %s c=\"%s\" at pos=%r state=%d" % (directive_str, vchar.char, vchar.get_pos(), state))
 
         if state == state_start:
             assert curr_expr is None
             # seeking Open, ignore whitespace
             if vchar.char in quotes:
-                print("found open quote")
+#                print("found open quote")
                 open_vchar = vchar
                 state = state_quote_expr
                 qexpr_counter = qexpr_counter + 1
@@ -314,7 +314,7 @@ def parse_ifeq_conditionals(ifeq_expr, directive_str, viter):
                     raise ParseError()
 
             elif vchar.char == open_paren:
-                print("found open paren")
+#                print("found open paren")
                 open_vchar = vchar
                 state = state_paren_expr1
                 curr_expr = expr1
@@ -374,7 +374,7 @@ def parse_ifeq_conditionals(ifeq_expr, directive_str, viter):
         elif state == state_quote_expr:
             if vchar.char in quotes:
                 # found a close quote
-                print("found close quote")
+#                print("found close quote")
                 verify_close(open_vchar, vchar)
                 if vchar_list:
                     curr_expr.append(Literal(vline.VCharString(vchar_list)))
@@ -418,8 +418,8 @@ def parse_ifeq_conditionals(ifeq_expr, directive_str, viter):
             raise ParseError( pos=prev_vchar.get_pos(),
                         description="invalid syntax in conditional")
 
-    print("expr1=",expr1)
-    print("expr2=",expr2)
+#    print("expr1=",expr1)
+#    print("expr2=",expr2)
     return (Expression(expr1), Expression(expr2))
 
 
@@ -708,7 +708,7 @@ def parse_export_directive(expr, directive_vstr, *ignore):
 #    del virt_line
 #    del viter
 
-    dir_str = str(directive_vcst)
+    dir_str = str(directive_vstr)
     if dir_str == "export":
         klass = ExportDirective
     elif dir_str == "unexport":

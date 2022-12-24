@@ -17,8 +17,8 @@ endif
 $(info MAKE_VERSION=$(MAKE_VERSION))
 @:;@:
 """
-    out1 = run.makefile_string(makefile).strip()
-    assert out1=="MAKE_VERSION=4.3"
+    out1 = run.gnumake_string(makefile).strip()
+    assert out1.startswith("MAKE_VERSION=")
 
 def test_variables():
     makefile = """
@@ -30,7 +30,7 @@ $(info $(.VARIABLES))
 $(info $(origin .VARIABLES))
 @:;@:
 """
-    out1 = run.makefile_string(makefile)
+    out1 = run.gnumake_string(makefile)
     fields = out1.split("\n")
     assert fields[1] == "default"
 

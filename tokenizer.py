@@ -899,8 +899,8 @@ def tokenize_variable_ref(vchar_scanner):
                 # Note we don't have to track the opposite open/close char; ie,
                 # if open is paren then we can safely ignore all open/close
                 # curly.
-                print( "v found open vchar={} at pos={}".format(
-                    vchar.char, vchar.get_pos()))
+#                print( "v found open vchar={} at pos={}".format(
+#                    vchar.char, vchar.get_pos()))
                 open_vchar_stack.append(vchar)
                 token += vchar
 

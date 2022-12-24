@@ -13,12 +13,12 @@ _debug = True
 #  printenv will have non-zero exit code if the variable doesn't exist. 
 #  The subprocess.run_test() will raise error on non-zero exit.
 #
-def should_succeed(makefile, extra_args=None, extra_env=None):
-    with tempfile.NamedTemporaryFile() as outfile:
-        outfile.write(makefile.encode("utf8"))
-        outfile.flush()
-        test_output = run.run_pymake(outfile.name, extra_args, extra_env)
-    return test_output.decode("utf8")
+#def should_succeed(makefile, extra_args=None, extra_env=None):
+#    with tempfile.NamedTemporaryFile() as outfile:
+#        outfile.write(makefile.encode("utf8"))
+#        outfile.flush()
+#        test_output = run.run_pymake(outfile.name, extra_args, extra_env)
+#    return test_output.decode("utf8")
 
 def verify(output_str, expect):
     all_lines = output_str.split("\n")
@@ -27,8 +27,8 @@ def verify(output_str, expect):
             print("\"%s\" == \"%s\"" % (line, expect_line))
         assert line==expect_line, (line,expect_line)
 
-def run_test(makefile, expect):
-    output = should_succeed(makefile)
+def run_test(makefile, expect, extra_args=None, extra_env=None):
+    output = run.pymake_string(makefile, extra_args, extra_env)
     verify(output,expect)
 
 def test1():
@@ -147,8 +147,7 @@ all:
 	printenv FOO BAR
 """
     expect = ("printenv FOO BAR", "bar", "baz")
-    output = should_succeed(makefile, extra_env={"BAR":"baz"})
-    verify(output,expect)
+    run_test(makefile, expect, extra_env={"BAR":"baz"})
 
 def test_command_line_export():
     # "By default, only variables that came from the environment or the
@@ -163,8 +162,7 @@ all:
 	printenv FOO BAR
 """
     expect = ("printenv FOO BAR", "bar", "baz")
-    output = should_succeed(makefile, extra_args=("BAR=baz",))
-    verify(output,expect)
+    run_test(makefile, expect, extra_args=("BAR=baz",))
 
 def test_command_line_override():
     # command line var value overrides file var
@@ -175,8 +173,7 @@ all:
 	printenv CFLAGS
 """
     expect = ("printenv CFLAGS", "-Wextra")
-    output = should_succeed(makefile, extra_args=("CFLAGS=-Wextra",))
-    verify(output,expect)
+    run_test(makefile, expect, extra_args=("CFLAGS=-Wextra",))
 
 if __name__ == '__main__':
     test1()
