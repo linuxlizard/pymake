@@ -9,6 +9,6 @@ FOO BAR:=42
 @:;@:
 """
     # error empty variable name
-    run.pymake_should_fail(makefile)
+#    run.pymake_should_fail(makefile)
     run.gnumake_should_fail(makefile)
 

@@ -384,6 +384,12 @@ class SymbolTable(object):
             assert entry.origin is not None, name
             return entry.origin
         except KeyError:
+            pass
+
+        try:
+            callback_fn = self.built_ins[name]
+            return "default"
+        except KeyError:
             return "undefined"
 
     def value(self, name):

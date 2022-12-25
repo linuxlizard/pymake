@@ -9,27 +9,14 @@ import run
 
 _debug = True
 
-#
 #  printenv will have non-zero exit code if the variable doesn't exist. 
 #  The subprocess.run_test() will raise error on non-zero exit.
-#
-#def should_succeed(makefile, extra_args=None, extra_env=None):
-#    with tempfile.NamedTemporaryFile() as outfile:
-#        outfile.write(makefile.encode("utf8"))
-#        outfile.flush()
-#        test_output = run.run_pymake(outfile.name, extra_args, extra_env)
-#    return test_output.decode("utf8")
-
-def verify(output_str, expect):
-    all_lines = output_str.split("\n")
-    for line,expect_line in zip(all_lines,expect):
-        if _debug:
-            print("\"%s\" == \"%s\"" % (line, expect_line))
-        assert line==expect_line, (line,expect_line)
 
 def run_test(makefile, expect, extra_args=None, extra_env=None):
     output = run.pymake_string(makefile, extra_args, extra_env)
-    verify(output,expect)
+    run.verify(output,expect)
+    output = run.gnumake_string(makefile, extra_args, extra_env)
+    run.verify(output,expect)
 
 def test1():
     makefile = """

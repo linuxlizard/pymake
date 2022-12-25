@@ -15,7 +15,6 @@ from vline import VirtualLine, VChar, VCharString
 from version import Version
 from error import *
 import shell
-from todo import TODOMixIn
 from scanner import ScannerIterator
 
 _debug = True
@@ -540,7 +539,7 @@ class SIncludeDirective(MinusIncludeDirective):
 class VpathDirective(Directive):
     name = "vpath"
 
-class OverrideDirective(TODOMixIn,Directive):
+class OverrideDirective(Directive):
     name = "override"
 
     def __init__(self, expression ):

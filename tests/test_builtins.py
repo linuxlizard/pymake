@@ -19,6 +19,8 @@ $(info MAKE_VERSION=$(MAKE_VERSION))
 """
     out1 = run.gnumake_string(makefile).strip()
     assert out1.startswith("MAKE_VERSION=")
+    out1 = run.pymake_string(makefile).strip()
+    assert out1.startswith("MAKE_VERSION=")
 
 def test_variables():
     makefile = """
@@ -31,6 +33,10 @@ $(info $(origin .VARIABLES))
 @:;@:
 """
     out1 = run.gnumake_string(makefile)
+    fields = out1.split("\n")
+    assert fields[1] == "default"
+
+    out1 = run.pymake_string(makefile)
     fields = out1.split("\n")
     assert fields[1] == "default"
 

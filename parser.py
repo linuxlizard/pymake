@@ -469,6 +469,11 @@ def parse_undefine_directive(expr, directive_vstr, viter, virt_line, vline_iter 
     # TODO check for validity of expr (space in literals I suppose?)
     return UnDefineDirective(directive_vstr, expr)
 
+def parse_override_directive(expr, directive_vstr, viter, virt_line, vline_iter ):
+    # TODO any validity checks I need to do here? (Probably)
+    return OverrideDirective()
+    breakpoint()
+
 def seek_directive(viter, seek=directive):
     # viter - character iterator
     assert isinstance(viter, ScannerIterator), type(viter)
@@ -751,6 +756,7 @@ def parse_directive(expr, directive_vstr, viter, virt_line, vline_iter):
         "unexport" : parse_export_directive,
         "endif" : error_extraneous,
         "undefine" : parse_undefine_directive,
+        "override" : parse_override_directive,
     }
 
     return lut[str(directive_vstr)](expr, directive_vstr, viter, virt_line, vline_iter)
@@ -821,7 +827,7 @@ def parse_expression(expr, virt_line, vline_iter):
         # I'm growing weary of finding all these corner cases. I need to
         # rewrite my tokenize/parser with these sort of things in mind.
 
-        if dir_str in ("define", "export", "unexport") and viter.remain():
+        if dir_str in ("define", "export", "override", "unexport") and viter.remain():
             # at this point, we have something after the directive so probably
             # an actual factual directive.
             if viter.remain():
