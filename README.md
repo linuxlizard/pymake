@@ -7,14 +7,6 @@ I want to debug my GNU Makefiles.
 
 Ultimate long-term goal is a GNU Make visual debugger. I want breakpoints on variables changing. I want to single step through the rules. I want to put a breakpoint on a rule.
 
-## Update 20220924. Throwing in the Towel.
-
-My original plan of returning arrays of python strings in the $() functions has
-been scrapped. I'm now building a 100% python string from each function. The
-functions .eval() will return a python string with the proper whitespacing. A
-chained function will be responsible to split() a string again to find the
-fields. There were just too many strange corner cases.
-
 ## Update 20221224. Large Updates.
 
 I have rules started. I have conditional directives working (needs more
@@ -25,6 +17,14 @@ Still TODO:
 * include directives 
 * override directive
 * 'define' multi-line variable definitions.
+
+## Update 20220924. Throwing in the Towel.
+
+My original plan of returning arrays of python strings in the $() functions has
+been scrapped. I'm now building a 100% python string from each function. The
+functions .eval() will return a python string with the proper whitespacing. A
+chained function will be responsible to split() a string again to find the
+fields. There were just too many strange corner cases.
 
 ## Update 20220917. Whitespace Whitespace Whitespace.
 
