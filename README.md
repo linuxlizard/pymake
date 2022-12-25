@@ -15,6 +15,17 @@ functions .eval() will return a python string with the proper whitespacing. A
 chained function will be responsible to split() a string again to find the
 fields. There were just too many strange corner cases.
 
+## Update 20221224. Large Updates.
+
+I have rules started. I have conditional directives working (needs more
+testing).  The export and unexport directives work.  I've been adding as many
+new pytest tests as I can think of.
+
+Still TODO: 
+* include directives 
+* override directive
+* 'define' multi-line variable definitions.
+
 ## Update 20220917. Whitespace Whitespace Whitespace.
 
 Whitespace is incredibly finicky in GNU Make.  I have almost all of the string functions implemented but I keep running into strange whitespace problems.
