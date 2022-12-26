@@ -162,6 +162,38 @@ all:
     expect = ("printenv CFLAGS", "-Wextra")
     run_test(makefile, expect, extra_args=("CFLAGS=-Wextra",))
 
+def test_export_define():
+    # an old error makefile from way back
+    makefile="""
+# make 3.81 "export define" not allowed ("missing separator")
+# make 3.82 works
+# make 4.0  works
+export define foo
+bar
+endef
+$(info $(call foo))
+
+@:;@:
+"""
+    # XXX this test won't work in pymake until I implement 'define'
+    expect = ("bar",)
+#    run_test(makefile, expect)
+
+def test_export_equals():
+    makefile="""
+# looks like an assignment 
+export = a b c d 
+ifndef export
+$(error export should be a b c d)
+endif
+ifdef export
+$(info export=$(export))
+endif
+@:;@:
+"""
+    expect = ('export=a b c d',)
+    run_test(makefile, expect)
+
 if __name__ == '__main__':
     test1()
 #    test_multiple_assign()

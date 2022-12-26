@@ -10,8 +10,13 @@ import run
 # immediate += deferred or immediate
 # immediate != immediate
  
-def exe(makefile, expect):
-    pass
+def run_test(makefile, expect):
+    out = run.gnumake_string(makefile)
+    print("out=",out)
+    assert expect==out, out
+
+    out = run.pymake_string(makefile)
+    print("out=",out)
 
 def test1():
     makefile = """
@@ -19,5 +24,16 @@ CC:=gcc
 $(info CC=$(CC))
 @:;@:
 """
-    expect = ("CC=gcc",)
-    exe(makefile, expect)
+    expect = "CC=gcc"
+    run_test(makefile, expect)
+
+def test_add():
+    makefile = """
+FOO:=foo
+FOO+=bar
+$(info FOO=$(FOO))
+@:;@:
+"""
+    expect = "FOO=foo bar"
+    run_test(makefile, expect)
+

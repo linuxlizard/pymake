@@ -35,8 +35,10 @@ def _real_run(args, extra_args=None, extra_env=None):
     m = subprocess.run(all_args, shell=False, check=True, capture_output=True, env=env)
 
     if _debug:
-        print(m.stdout)
-    return m.stdout
+        print("stdout=",m.stdout)
+        print("stderr=",m.stderr)
+
+    return m.stdout if m.stdout else m.stderr
 
 def run_makefile(infilename, extra_args=None, extra_env=None):
     args = (MAKE, "-f", infilename)
@@ -46,7 +48,7 @@ def run_pymake(infilename, extra_args=None, extra_env=None):
     args = ("python3", "pymake.py", "-f", infilename)
     return _real_run(args, extra_args, extra_env)
 
-def _write_and_run(makefile, runner_fn, extra_args=None, extra_env=None):
+def _write_and_run(makefile, runner_fn, extra_args=None, extra_env=None, expect_fail=False):
     with tempfile.NamedTemporaryFile() as outfile:
         outfile.write(makefile.encode("utf8"))
         outfile.flush()
@@ -56,32 +58,41 @@ def _write_and_run(makefile, runner_fn, extra_args=None, extra_env=None):
             # save the failed file someplace accessible once we leave
             # (obviously this is not thread safe)
 #            breakpoint()
+            if expect_fail:
+                raise
             shutil.copyfile(outfile.name, fail_filename)
             print("*** test failure %s copied to %s ***" % (outfile.name, fail_filename), file=sys.stderr)
             print("*** stdout=%r ***" % err.stdout, file=sys.stderr)
             print("*** stderr=%r ***" % err.stderr, file=sys.stderr)
             assert 0, str(err)
-    return test_output.decode("utf8")
 
-def gnumake_string(makefile, extra_args=None, extra_env=None):
-    return _write_and_run(makefile, run_makefile, extra_args, extra_env)
+    return test_output.decode("utf8").strip()
 
-def pymake_string(makefile, extra_args=None, extra_env=None):
-    return _write_and_run(makefile, run_pymake, extra_args, extra_env)
+def gnumake_string(makefile, extra_args=None, extra_env=None, expect_fail=False):
+    return _write_and_run(makefile, run_makefile, extra_args, extra_env, expect_fail)
+
+def pymake_string(makefile, extra_args=None, extra_env=None, expect_fail=False):
+    return _write_and_run(makefile, run_pymake, extra_args, extra_env, expect_fail)
 
 def pymake_should_fail(makefile, extra_args=None, extra_env=None):
     try:
-        pymake_string(makefile, extra_args, extra_env)
+        pymake_string(makefile, extra_args, extra_env, expect_fail=True)
     except subprocess.CalledProcessError as err:
-        pass
+        return err.stderr.decode('utf8').strip()
     else:
         assert 0, "should have failed"
 
 def gnumake_should_fail(makefile, extra_args=None, extra_env=None):
     try:
-        gnumake_string(makefile, extra_args, extra_env)
+        stdout = gnumake_string(makefile, extra_args, extra_env, expect_fail=True)
     except subprocess.CalledProcessError as err:
-        pass
-    else:
-        assert 0, "should have failed"
+        return err.stderr.decode('utf8').strip()
+
+    with open(fail_filename,"wb") as outfile:
+        outfile.write(makefile.encode("utf8"))
+
+    print("*** test failure written to %s ***" % (fail_filename,), file=sys.stderr)
+    print("*** stdout=%r ***" % stdout, file=sys.stderr)
+#        print("*** stderr=%r ***" % err.stderr, file=sys.stderr)
+    assert 0, "should have failed"
 

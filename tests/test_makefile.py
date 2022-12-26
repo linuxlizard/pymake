@@ -62,6 +62,7 @@ def test_all():
         "filepatsubst.mk",
         "undefine.mk",
 
+        "info.mk",
         "ifeq.mk",
         "ifdef.mk",
         "ifeq-nested.mk",
