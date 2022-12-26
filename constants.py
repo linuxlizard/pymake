@@ -82,7 +82,18 @@ automatic_variables = {
     "?F",
 }
 
+# look for calls to define_variable_cname() in GNU Make src/*.c
+# TODO missing a lot of names here probably
 builtin_variables = {
+    ".VARIABLES",
+    ".SHELLSTATUS",
+    ".TARGETS",
+    ".SHELLFLAGS",
+    ".FEATURES",
+    ".RECIPEPREFIX",
+    ".LIBPATTEREN",
+
+    "OUTPUT_OPTION",
     "MAKEFILES",
     "VPATH",
     "SHELL",
@@ -96,7 +107,6 @@ builtin_variables = {
     "MAKECMDGOALS",
     "CURDIR",
     "SUFFIXES",
-    ".LIBPATTEREN",
 }
 
 

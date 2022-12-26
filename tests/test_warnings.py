@@ -1,7 +1,7 @@
 import run
 
 def run_test(makefile, expect):
-    out = run.gnumake_string(makefile)
+    out = run.gnumake_string(makefile, flags=run.FLAG_OUTPUT_STDERR)
     print("out=",out)
     assert expect in out, out
 

@@ -7,6 +7,7 @@ import collections
 import version
 import constants
 from symbol import Symbol
+from error import warning_message
 
 logger = logging.getLogger("pymake.symtable")
 
@@ -27,7 +28,7 @@ class Entry:
         self.pos = pos
 
         # I'm not sure this is a good idea yet.
-        self.read_only = False
+#        self.read_only = False
 
         self._export = False
 
@@ -51,13 +52,16 @@ class Entry:
         # TODO
         pass
 
+    def get_pos(self):
+        return self.pos
+
 class FileEntry(Entry):
     origin = "file"
 
     def __init__(self, name, value, pos):
         if pos is None:
             # happens with test code
-            pos = ((0,0),"/dev/null")
+            pos = ("/dev/null", (0,0))
         super().__init__(name, value, pos)
 
     def sanity(self):
@@ -71,7 +75,19 @@ class DefaultEntry(Entry):
     origin = "default"
     never_export = True
 
-# Environment Variables trump File variables but are trumped by Command Line args
+class CallbackEntry(DefaultEntry):
+    # Some built-in variables have complex requirements that can't be stored as
+    # a simple string in the symbol table. For example .VARIABLES returns a
+    # list of the variables currently defined.
+    
+    def __init__(self, name, callback_fn):
+        super().__init__(name)
+
+        # self._maybe_eval() will call this fn to get a value
+        self.callback_fn = callback_fn
+
+# Environment Variables higher precedence than File variables.  But Command
+# Line args are high precedence than Environment Variables.
 # "By default, only variables that came from the environment or the
 # command line are passed to recursive invocations."
 # -- GNU Make manual  Version 4.3 Jan 2020
@@ -79,7 +95,8 @@ class EnvVarEntry(Entry):
     origin = "environment"
 
     def __init__(self, name, value):
-        super().__init__(name,value)
+        pos = ("environment",(0,0))
+        super().__init__(name,value,pos)
         self.set_export( True )
 
 # Command line args are high priority than variables in the makefile except if
@@ -110,7 +127,7 @@ class AutomaticEntry(Entry):
 
 
 class SymbolTable(object):
-    def __init__(self):
+    def __init__(self, **kwargs):
         # key: variable name
         # value: _entry_template dict instance
         self.symbols = {}
@@ -121,6 +138,8 @@ class SymbolTable(object):
         self.stack = {}
 
         self.export_default_value = False
+
+        self.warn_undefined = kwargs.get("warn_undefined_variables", False)
 
         self._init_builtins()
         self._init_envvars()
@@ -134,12 +153,12 @@ class SymbolTable(object):
     def _init_builtins(self):
         # key: var name
         # value: symbol table method to return values
-        self.built_ins = {
-            ".VARIABLES" : self.variables,
-        }
+#        self.built_ins = {
+#            ".VARIABLES" : self.variables,
+#        }
         
         # TODO add more internal vars
-#        self._add_entry(DefaultEntry('.VARIABLES'))
+        self._add_entry(CallbackEntry('.VARIABLES', self.variables))
         self._add_entry(DefaultEntry('MAKE_VERSION', version.Version.vstring()))
 
     def _init_envvars(self):
@@ -153,9 +172,10 @@ class SymbolTable(object):
             self._add_entry(EnvVarEntry(k,v))
 
     def _add_entry(self, entry):
+
         # sanity check the entry fields
-        assert not entry.name in self.built_ins, entry.name
         entry.sanity()
+
         self.symbols[entry.name] = entry
 
     def add(self, name, value, pos=None):
@@ -171,31 +191,49 @@ class SymbolTable(object):
         # (will hit this if my tokenparser is screwing up)
         assert ' ' not in name, name
 
+        # GNU Make doesn't do this warning
+        if name in constants.builtin_variables:
+            warning_message(pos, "overwriting built-in variable \"%s\"" % name)
+
         try:
             entry = self.symbols[name]
+            logger.debug("overwrite value name=%s at pos=%r", entry.name, pos)
         except KeyError:
             entry = None
 
         # if we didn't find it, make it
-        if entry is None:
-            if self.command_line_flag:
-                # this flag is a weird hack to support command line vars
-                # implicitly
-                entry = CommandLineEntry(name, value)
-                # command line vars are always exported
-                # TODO unless unexport ?
-            else:
-                entry = FileEntry(name, value, pos)
-                entry.set_export(self.export_default_value)
+        if self.command_line_flag:
+            # this flag is a weird hack to support vars created by eval()'ing
+            # expressions from the command line
+            new_entry = CommandLineEntry(name, value)
+            # command line vars are always exported until explicitly unexported
         else:
-            logger.debug("overwrite value name=%s at pos=%r", entry.name, pos)
-            entry.set_value(value, pos)
+            # command line > file
+            if isinstance(entry,CommandLineEntry):
+                return
+
+            new_entry = FileEntry(name, value, pos)
+            new_entry.set_export(self.export_default_value)
+
+#        if entry is None:
+#            if self.command_line_flag:
+#                # this flag is a weird hack to support command line vars
+#                # implicitly
+#                entry = CommandLineEntry(name, value)
+#                # command line vars are always exported
+#                # TODO unless unexport ?
+#            else:
+#                entry = FileEntry(name, value, pos)
+#                entry.set_export(self.export_default_value)
+#        else:
+#            logger.debug("overwrite value name=%s at pos=%r", entry.name, pos)
+#            entry.set_value(value, pos)
 
         # XXX not sure read-only is a good idea yet
-        if entry.read_only:
-            raise PermissionDenied(name)
+#        if entry.read_only:
+#            raise PermissionDenied(name)
 
-        self._add_entry(entry)
+        self._add_entry(new_entry)
 
     def add_automatic(self, name, value, pos):
         entry = AutomaticEntry(name, value, pos)
@@ -222,6 +260,9 @@ class SymbolTable(object):
         if isinstance(entry.value,Symbol):
             step1 = [t.eval(self) for t in entry.value]
             return "".join(step1)
+
+        if isinstance(entry, CallbackEntry):  
+            return entry.callback_fn()
 
         return entry.value
 
@@ -256,7 +297,7 @@ class SymbolTable(object):
         new_value = " ".join([maybe_replace(s,pat1,pat2) for s in value.split()])
         return new_value
 
-    def fetch(self, key):
+    def fetch(self, key, pos=None):
         # now try a var lookup 
         # Will always return an empty string on any sort of failure. 
         logger.debug("fetch key=\"%r\"", key)
@@ -273,35 +314,50 @@ class SymbolTable(object):
             pass
 
         # built-in variable ?
-        try:
-            return self.built_ins[key](key)
-        except KeyError:
-            pass
+#        try:
+#            return self.built_ins[key](key)
+#        except KeyError:
+#            pass
 
         try:
 #            print("fetch value=\"%r\"" % self.symbols[key])
             return self._maybe_eval(self.symbols[key])
         except KeyError:
+            if self.warn_undefined:
+                warning_message(pos, "undefined variable '%s'" % key)
             if _fail_on_undefined:
                 raise
 
         logger.debug("sym=%s not in symbol table", key)
         return ""
 
+    def append(self, name, value, pos=None):
+        assert isinstance(value,str), type(value)
+
+        if name not in self.symbols:
+            return self.add(name, value, pos)
+
+        entry = self.symbols[name]
+        if isinstance(entry.value,Symbol):
+            breakpoint()
+            raise NotImplementedError()
+
+        # simple string append
+        entry.set_value( entry.value+" "+value, pos )
 
     def push(self, name):
         # save current value of 'name' in secure, undisclosed location
 
         # don't use self.fetch() because will eval the var which could lead to
         # side effects
-        if name in self.symbols:
-            entry = self.symbols[name]
-            # remove the other reference (otherwise 'add' will just update the
-            # self.symbols[name] entry which also points to our stack entry)
-            del self.symbols[name]
-        else:
+        if name not in self.symbols:
             # nothing to save
             return
+
+        entry = self.symbols[name]
+        # remove the other reference (otherwise 'add' will just update the
+        # self.symbols[name] entry which also points to our stack entry)
+        del self.symbols[name]
             
         # create the dequeue if doesn't exist
         if not name in self.stack:
@@ -384,13 +440,13 @@ class SymbolTable(object):
             assert entry.origin is not None, name
             return entry.origin
         except KeyError:
-            pass
-
-        try:
-            callback_fn = self.built_ins[name]
-            return "default"
-        except KeyError:
             return "undefined"
+
+#        try:
+#            callback_fn = self.built_ins[name]
+#            return "default"
+#        except KeyError:
+#            return "undefined"
 
     def value(self, name):
         # support for the $(value) function
@@ -407,15 +463,13 @@ class SymbolTable(object):
         except KeyError:
             pass
 
-    def variables(self, _):
+    def variables(self):
         # return $(.VARIABLES)
         return " ".join(self.symbols.keys())
 
     def is_defined(self, name):
         # is this varname in our symbol table (or other mechanisms)
-
-        return name in self.built_ins or\
-            name in self.symbols
+        return name in self.symbols
         
     def export(self, name=None):
         if name is None:

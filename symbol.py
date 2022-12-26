@@ -230,8 +230,7 @@ class VarRef(Expression):
         logger.debug("varref=%r eval start", self)
         key = [t.eval(symbol_table) for t in self.token_list]
         logger.debug("varref=%r key=%r", self, key)
-#        key = "".join([t.eval(symbol_table) for t in self.token_list])
-        return symbol_table.fetch("".join(key))
+        return symbol_table.fetch("".join(key), self.get_pos())
 
 class AssignmentExpression(Expression):
     def __init__(self, token_list):
@@ -270,21 +269,20 @@ class AssignmentExpression(Expression):
                 raise VersionError("!= not in this version of make")
 
             # execute RHS as shell
-#            s = self.token_list[2].eval(symbol_table)
             rhs = shell.execute_tokens(list(self.token_list[2]), symbol_table )
         elif op == "?=":
             # deferred expand
             # store the expression in the symbol table w/o eval
             rhs = self.token_list[2]
+        elif op == "+=":
+            # append is a little tricky because we have to treat recursively vs
+            # simply expanded variables differently (making the LHS sensitive)
+            rhs = self.token_list[2].eval(symbol_table)
         else:
             # TODO
             raise NotImplementedError("op=%s"%op)
 
         logger.debug("assignment rhs=%s", rhs)
-
-        # lhs should be an iterable of strings
-#        assert isinstance(lhs,list), type(lhs)
-#        assert isinstance(lhs[0],str), type(lhs[0])
 
         pos = self.token_list[0].get_pos()
         assert pos is not None
@@ -292,6 +290,8 @@ class AssignmentExpression(Expression):
         key = "".join(lhs)
         if op == "?=":
             symbol_table.maybe_add(key, rhs, pos)
+        elif op == "+=":
+            symbol_table.append(key, rhs, pos)
         else:
             symbol_table.add(key, rhs, pos)
         return ""

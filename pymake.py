@@ -225,10 +225,13 @@ def _add_internal_db(symtable):
         stmt = tokenize_statement(iter(v))
         stmt.eval(symtable)
 
-def execute(makefile, argslist=None):
+def execute(makefile, args):
+    # ha ha type checking
+    assert isinstance(args, Args)
+
     # tinkering with how to evaluate
     logger.info("Starting execute of %s", id(makefile))
-    symtable = SymbolTable()
+    symtable = SymbolTable(warn_undefined_variables=args.warn_undefined_variables)
 
     # XXX temp disabled while debugging
 #    _add_internal_db(symtable)
@@ -241,15 +244,15 @@ def execute(makefile, argslist=None):
     # e.g., make -f hello.mk 'CC=$(subst g,x,gcc)'
     # so the arglist must be parsed and assignment statements saved. Anything
     # not an Assignment is likely a target.
-    for arg in argslist:
-        v = vline.VirtualLine([arg], (0,0), "/dev/null")
+    for onearg in args.argslist:
+        v = vline.VirtualLine([onearg], (0,0), "/dev/null")
         stmt = tokenize_statement(iter(v))
         if isinstance(stmt,AssignmentExpression):
             symtable.command_line_start()
             stmt.eval(symtable)
             symtable.command_line_stop()
         else:
-            target_list.append(arg)
+            target_list.append(onearg)
 
     for tok in makefile.token_list:
 #        print("tok=",tok)
@@ -287,12 +290,8 @@ def execute(makefile, argslist=None):
                 # My code crashed. For shame!
                 logger.error("INTERNAL ERROR eval exception during token makefile=\"\"\"\n%s\n\"\"\"", tok.makefile())
                 logger.error("INTERNAL ERROR eval exception during token string=%s", str(tok))
-    #            logger.error("eval exception during token token_list=%s", tok.token_list)
-    #            for t in tok.token_list:
-    #                logger.error("token=%s string=%s", t, t.string)
                 filename,pos = tok.get_pos()
-    #            logger.exception("INTERNAL ERROR")
-                logger.error("eval failed tok=%s file=%s pos=%s", tok.name, filename, pos)
+                logger.error("eval failed tok=%r file=%s pos=%s", tok, filename, pos)
                 raise
 
     # TODO add cmdline arg to write the graphiz db
@@ -354,13 +353,16 @@ class Args:
         self.output = None
         self.s_expr = False
         self.argslist = []
+        self.warn_undefined_variables = False
 
 def parse_args():
     print_version ="""PY Make %d.%d\n
 Copyright (C) 2006-2022 David Poole davep@mbuf.com, testcluster@gmail.com""" % (0,0)
 
     args = Args()
-    optlist, arglist = getopt.gnu_getopt(sys.argv[1:], "hvo:dSf:", ["output=", "version", "debug", "file=", "makefile="])
+    optlist, arglist = getopt.gnu_getopt(sys.argv[1:], "hvo:dSf:", 
+                            ["output=", "version", "debug", "file=", 
+                            "makefile=", "warn-undefined-variables"])
     for opt in optlist:
         if opt[0] in ("-f", "--file", "--makefile"):
             args.filename = opt[1]                    
@@ -376,6 +378,11 @@ Copyright (C) 2006-2022 David Poole davep@mbuf.com, testcluster@gmail.com""" % (
         elif opt[0] in ("-h", "--help"):
             usage()
             sys.exit(0)
+        elif opt[0] == "--warn-undefined-variables":
+            args.warn_undefined_variables = True
+        else:
+            # wtf?
+            assert 0, opt
             
     # TODO parse env-var style args, e.g.
     # make CFLAGS=-g -f tst.mk CC=gcc
@@ -436,6 +443,6 @@ if __name__=='__main__':
             print(makefile.makefile(), file=outfile)
         print("# end makefile")
 
-    exit_code = execute(makefile, args.argslist)
+    exit_code = execute(makefile, args)
     sys.exit(exit_code)
 

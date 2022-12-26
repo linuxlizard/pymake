@@ -32,13 +32,14 @@ def _real_run(args, extra_args=None, extra_env=None):
         assert isinstance(extra_env,dict), type(extra_env)
         env.update(extra_env)
 
-    m = subprocess.run(all_args, shell=False, check=True, capture_output=True, env=env)
+    p = subprocess.run(all_args, shell=False, check=True, capture_output=True, env=env)
 
     if _debug:
-        print("stdout=",m.stdout)
-        print("stderr=",m.stderr)
+        print("stdout=",p.stdout)
+        print("stderr=",p.stderr)
 
-    return m.stdout if m.stdout else m.stderr
+    return p
+#    return m.stdout if m.stdout else m.stderr
 
 def run_makefile(infilename, extra_args=None, extra_env=None):
     args = (MAKE, "-f", infilename)
@@ -53,7 +54,7 @@ def _write_and_run(makefile, runner_fn, extra_args=None, extra_env=None, expect_
         outfile.write(makefile.encode("utf8"))
         outfile.flush()
         try:
-            test_output = runner_fn(outfile.name, extra_args, extra_env)
+            p = runner_fn(outfile.name, extra_args, extra_env)
         except subprocess.CalledProcessError as err:
             # save the failed file someplace accessible once we leave
             # (obviously this is not thread safe)
@@ -66,13 +67,34 @@ def _write_and_run(makefile, runner_fn, extra_args=None, extra_env=None, expect_
             print("*** stderr=%r ***" % err.stderr, file=sys.stderr)
             assert 0, str(err)
 
-    return test_output.decode("utf8").strip()
+    return p
 
-def gnumake_string(makefile, extra_args=None, extra_env=None, expect_fail=False):
-    return _write_and_run(makefile, run_makefile, extra_args, extra_env, expect_fail)
+FLAG_OUTPUT_STDOUT=1<<0
+FLAG_OUTPUT_STDERR=1<<1
 
-def pymake_string(makefile, extra_args=None, extra_env=None, expect_fail=False):
-    return _write_and_run(makefile, run_pymake, extra_args, extra_env, expect_fail)
+# This is a bit of a hack. I wrote a bazillion tests thinking I only needed
+# stdout OR stderr but now I have some tests that need both stdout AND stderr.
+# Whoops.
+def _select_output(p, flags):
+    # backwards compatibility with old tests
+    if flags==0:
+        return p.stdout.decode("utf8").strip()
+
+    # if both flags set, send results as a list
+    if flags & (FLAG_OUTPUT_STDOUT|FLAG_OUTPUT_STDERR) == (FLAG_OUTPUT_STDOUT|FLAG_OUTPUT_STDERR):
+        return [ s.decode("utf8").strip() for s in (p.stdout, p.stderr) ]
+
+    if flags & FLAG_OUTPUT_STDOUT:
+        return p.stdout.decode("utf8")
+
+    if flags & FLAG_OUTPUT_STDERR:
+        return p.stderr.decode("utf8")
+    
+def gnumake_string(makefile, extra_args=None, extra_env=None, expect_fail=False, flags=0):
+    return _select_output(_write_and_run(makefile, run_makefile, extra_args, extra_env, expect_fail), flags)
+
+def pymake_string(makefile, extra_args=None, extra_env=None, expect_fail=False, flags=0):
+    return _select_output(_write_and_run(makefile, run_pymake, extra_args, extra_env, expect_fail), flags)
 
 def pymake_should_fail(makefile, extra_args=None, extra_env=None):
     try:

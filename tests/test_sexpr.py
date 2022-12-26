@@ -3,14 +3,14 @@ import sys
 import logging
 
 logger = logging.getLogger("pymake")
-logging.basicConfig(level=logging.DEBUG)
+#logging.basicConfig(level=logging.DEBUG)
 
-import symbol
 from symbol import *
 from functions_str import *
 from symtable import SymbolTable
 
 # turn on internal behaviors that allow us to create literals without VCharString
+import symbol
 symbol._testing = True
 
 def test1():

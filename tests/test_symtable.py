@@ -3,15 +3,33 @@ import logging
 logger = logging.getLogger("pymake")
 logging.basicConfig(level=logging.DEBUG)
 
+from symbol import *
 import symtable
 
 # Verify we've found my symtable module.
 # FIXME rename my symtable.py to avoid colliding with Python's built-in
 symtable.Entry
 
-def test_add_fetch():
-    # TODO
-    pass
+# turn on internal behaviors that allow us to create literals without VCharString
+import symbol
+symbol._testing = True
+
+import run
+
+def test_simply_expanded():
+    symbol_table = symtable.SymbolTable()
+    # simply expanded
+    symbol_table.add("CC", "gcc")
+    value = symbol_table.fetch("CC")
+    assert value=="gcc", value
+
+def test_recursively_expanded():
+    symbol_table = symtable.SymbolTable()
+
+    # recursively expanded
+    symbol_table.add("CFLAGS", Expression([Literal("-g -Wall")]))
+    value = symbol_table.fetch("CFLAGS")
+    assert value=="-g -Wall", value
 
 def test_simple_push_pop():
     symbol_table = symtable.SymbolTable()
@@ -142,6 +160,73 @@ def test_maybe_add():
     symbol_table.maybe_add("CFLAGS", "-g -Wall")
     assert symbol_table.is_defined("CFLAGS")
     assert symbol_table.fetch("CFLAGS") == "-g -Wall"
+
+def test_builtin_VARIABLES():
+    symbol_table = symtable.SymbolTable()
+    value = symbol_table.fetch(".VARIABLES")
+    assert value
+    assert symbol_table.origin(".VARIABLES")=="default"
+
+    symbol_table.add("CC", "cc")
+    value = symbol_table.fetch("CC")
+    assert value=="cc"
+    value = symbol_table.fetch(".VARIABLES")
+    varlist = value.split(" ")
+    assert "CC" in varlist
+
+def test_builtin_overwrite():
+    # built-in variables have no special meaning so we can change them
+    symbol_table = symtable.SymbolTable()
+    value = symbol_table.fetch(".VARIABLES")
+    assert value
+    assert symbol_table.origin(".VARIABLES")=="default"
+
+    symbol_table.add(".VARIABLES", "die-die-die")
+    value = symbol_table.fetch(".VARIABLES")
+    assert value == "die-die-die"
+    assert symbol_table.origin(".VARIABLES")=="file"
+
+def test_builtin_MAKE_VERSION():
+    symbol_table = symtable.SymbolTable()
+    value = symbol_table.fetch("MAKE_VERSION")
+    assert value
+    
+def test_warn_undefined():
+    makefile = """
+$(info FOO=$(FOO))
+@:;@:
+"""
+    expect_stdout = "FOO="
+    expect_stderr = "warning: undefined variable 'FOO'"
+    flags = run.FLAG_OUTPUT_STDERR | run.FLAG_OUTPUT_STDOUT
+
+    output = run.pymake_string(makefile, extra_args=("--warn-undefined-variables",), flags=flags)
+    stdout, stderr = output
+    # stdout should just be one line
+    assert stdout == expect_stdout
+
+    # stderr will contain python logging module message so let's throw those
+    # away
+    stderr = [s for s in stderr.split("\n") if not s.startswith("INFO")] 
+#    breakpoint()
+    assert expect_stderr in stderr[0]
+    
+#    symbol_table = symtable.SymbolTable(warn_undefined_variables=True)
+#    value = symbol_table.fetch("CC")
+
+def test_append_simple():
+    symbol_table = symtable.SymbolTable()
+    symbol_table.add("FOO", "foo")
+    symbol_table.append("FOO", "bar")
+    value = symbol_table.fetch("FOO")
+    assert value=="foo bar"
+
+def test_append_recursive():
+    symbol_table = symtable.SymbolTable()
+    symbol_table.add("CFLAGS", Expression([Literal("-g -Wall")]))
+    value = symbol_table.fetch("CFLAGS")
+    assert value == "-g -Wall"
+    symbol_table.append("CFLAGS", "-Wextra")
 
 if __name__ == '__main__':
 #    test_push_push_pop_pop()

@@ -59,6 +59,7 @@ def test_all():
         # "origin.mk",
         # "flavor.mk",
         # "shell.mk",
+        # "variables.mk",
         "filepatsubst.mk",
         "undefine.mk",
 
@@ -66,6 +67,7 @@ def test_all():
         "ifeq.mk",
         "ifdef.mk",
         "ifeq-nested.mk",
+
     )
 
     for infilename in infilename_list:
