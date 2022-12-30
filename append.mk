@@ -48,7 +48,31 @@ $(info FOO=$(FOO))
 BAR=baz
 $(info FOO=$(FOO))
 
+A=a
+B=b
+C=c
+D=d
+E=e
+F=f
+ABCDEF+=$A
+ABCDEF+=$B
+ABCDEF+=$C
+ABCDEF+=$D
+ABCDEF+=$E
+ABCDEF+=$F
+$(info ABCDEF=$(ABCDEF))
 
+undefine FOO
+undefine BAR
+undefine BAZ
+undefine PHRASE
+
+# *** recursive variable 'FOO' references itself (eventually)
+FOO=foo
+BAR=bar
+FOO+=$(BAR)
+BAR+=$(FOO)
+$(info FOO=$(FOO))
 
 @:;@:
 

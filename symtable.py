@@ -7,7 +7,7 @@ import collections
 import version
 import constants
 from symbol import Symbol
-from error import warning_message
+from error import warning_message, MakeError
 
 logger = logging.getLogger("pymake.symtable")
 
@@ -22,7 +22,7 @@ class Entry:
     never_export = False
 
     def __init__(self, name, value=None, pos=None):
-        logger.debug("create var name=%s origin=%s", name, self.origin)
+        logger.debug("create var name=%s origin=%s pos=%r", name, self.origin, pos)
         self.name = name
         self._value = value
         self.pos = pos
@@ -31,6 +31,12 @@ class Entry:
 #        self.read_only = False
 
         self._export = False
+
+        # handle appended expressions
+        self._appends = []
+
+        # check for recursive variable expansion attempting to expand itself
+        self.loop = 0
 
     @property
     def export(self):
@@ -55,6 +61,31 @@ class Entry:
     def get_pos(self):
         return self.pos
 
+    def eval(self, symbol_table):
+        # handle the case where an expression is stored in the symbol table vs
+        # a value 
+        # e.g.,  a=10  (evaluated whenever $a is used)
+        # vs   a:=10  (evaluated immediately and "10" stored in symtable)
+        #
+        if isinstance(self._value, Symbol):
+            logger.debug("recursive eval %r name=%s at pos=%r", self, self.name, self.get_pos())
+            if self.loop > 0:
+                msg = "Recursive variable %r references itself (eventually)" % self.name
+                raise MakeError(description=msg, pos=self.get_pos())
+            self.loop += 1
+            step1 = [ self._value.eval(symbol_table) ]
+            step1.extend( [t.eval(symbol_table) for t in self._appends] )
+            self.loop -= 1
+            return " ".join(step1)
+
+        return self._value
+
+    def append_recursive(self, value):
+        # ha ha type checking
+        assert isinstance(value,Symbol), type(value)
+
+        return self._appends.append(value)
+
 class FileEntry(Entry):
     origin = "file"
 
@@ -66,6 +97,7 @@ class FileEntry(Entry):
 
     def sanity(self):
         assert self.pos is not None
+
 
 # "if variable has a default definition, as is usual with CC and so on. See Section 10.3
 # [Variables Used by Implicit Rules], page 119. Note that if you have redefined a
@@ -83,8 +115,11 @@ class CallbackEntry(DefaultEntry):
     def __init__(self, name, callback_fn):
         super().__init__(name)
 
-        # self._maybe_eval() will call this fn to get a value
+        # self.eval() will call this fn to get a value
         self.callback_fn = callback_fn
+
+    def eval(self, symbol_table):
+        return self.callback_fn(symbol_table)
 
 # Environment Variables higher precedence than File variables.  But Command
 # Line args are high precedence than Environment Variables.
@@ -99,10 +134,10 @@ class EnvVarEntry(Entry):
         super().__init__(name,value,pos)
         self.set_export( True )
 
-# Command line args are high priority than variables in the makefile except if
-# the variable is marked with 'override'
+# Command line args are higher precedence than variables in the makefile except
+# if the variable is marked with 'override'
 #
-# Command Line trumps Environment
+# Command Line higher precedence than Environment
 #
 # "By default, only variables that came from the environment or the
 # command line are passed to recursive invocations."
@@ -116,6 +151,7 @@ class CommandLineEntry(Entry):
 
     def set_value(self, value, pos):
         pass
+
 
 class AutomaticEntry(Entry):
     origin = "automatic"
@@ -250,21 +286,21 @@ class SymbolTable(object):
 
         return self.add(name, value, pos)
 
-    def _maybe_eval(self, entry):
-
-        # handle the case where an expression is stored in the symbol table vs
-        # a value 
-        # e.g.,  a=10  (evaluated whenever $a is used)
-        # vs   a:=10  (evaluated immediately and "10" stored in symtable)
-        #
-        if isinstance(entry.value,Symbol):
-            step1 = [t.eval(self) for t in entry.value]
-            return "".join(step1)
-
-        if isinstance(entry, CallbackEntry):  
-            return entry.callback_fn()
-
-        return entry.value
+#    def _maybe_eval(self, entry):
+#
+#        # handle the case where an expression is stored in the symbol table vs
+#        # a value 
+#        # e.g.,  a=10  (evaluated whenever $a is used)
+#        # vs   a:=10  (evaluated immediately and "10" stored in symtable)
+#        #
+#        if isinstance(entry.value,Symbol):
+#            step1 = [t.eval(self) for t in entry.value]
+#            return "".join(step1)
+#
+#        if isinstance(entry, CallbackEntry):  
+#            return entry.callback_fn()
+#
+#        return entry.value
 
     def _parse_abbrev_patsubst(self, key):
         # This function handles the case of an abbrevitated patsubst.
@@ -300,9 +336,8 @@ class SymbolTable(object):
     def fetch(self, key, pos=None):
         # now try a var lookup 
         # Will always return an empty string on any sort of failure. 
-        logger.debug("fetch key=\"%r\"", key)
+        logger.debug("fetch key=%r", key)
 #        print("fetch key=\"%r\"" % key)
-
         assert isinstance(key,str), type(key)
         assert len(key)  # empty key bad
 
@@ -321,7 +356,7 @@ class SymbolTable(object):
 
         try:
 #            print("fetch value=\"%r\"" % self.symbols[key])
-            return self._maybe_eval(self.symbols[key])
+            return self.symbols[key].eval(self)
         except KeyError:
             if self.warn_undefined:
                 warning_message(pos, "undefined variable '%s'" % key)
@@ -332,18 +367,21 @@ class SymbolTable(object):
         return ""
 
     def append(self, name, value, pos=None):
-        assert isinstance(value,str), type(value)
+        # ha ha type checking
+        assert isinstance(value,Symbol), type(value)
 
+        # "When the variable in question has not been defined before, ‘+=’ acts
+        # just like normal ‘=’: it defines a recursively-expanded variable."
+        # GNU Make 4.3 January 2020
         if name not in self.symbols:
             return self.add(name, value, pos)
 
         entry = self.symbols[name]
-        if isinstance(entry.value,Symbol):
-            breakpoint()
-            raise NotImplementedError()
+        if isinstance(entry.value, Symbol):
+            return entry.append_recursive(value)
 
-        # simple string append
-        entry.set_value( entry.value+" "+value, pos )
+        # simple string append, space separated
+        entry.set_value( entry.value+" "+value.eval(self), pos )
 
     def push(self, name):
         # save current value of 'name' in secure, undisclosed location
@@ -463,7 +501,7 @@ class SymbolTable(object):
         except KeyError:
             pass
 
-    def variables(self):
+    def variables(self, _):
         # return $(.VARIABLES)
         return " ".join(self.symbols.keys())
 
@@ -500,7 +538,7 @@ class SymbolTable(object):
     def undefine(self, name):
         # support the undefine directive
         try:
-            entry = self.fetch(name)
+            entry = self.symbols[name]
         except KeyError:
             # does not exist. no harm, no foul.
             return
@@ -524,7 +562,7 @@ class SymbolTable(object):
         self.export_stop()
 
     def get_exports(self):
-        return { k:self._maybe_eval(v) for k,v in self.symbols.items() if v.export }
+        return { name:entry.eval(self) for name,entry in self.symbols.items() if entry.export }
 
     def export_start(self):
         # The export start/stop allows us to separate the "export" and

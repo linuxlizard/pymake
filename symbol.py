@@ -195,7 +195,7 @@ class Expression(Symbol):
 
     def eval(self, symbol_table):
         for e in self.token_list:
-            logger.debug("expression e=%s", e)
+            logger.debug("expression eval e=%s", e)
 
         step1 = [e.eval(symbol_table) for e in self.token_list]
         return "".join(step1)
@@ -227,9 +227,9 @@ class VarRef(Expression):
         return "$(" + "".join([t.makefile() for t in self.token_list]) + ")"
 
     def eval(self, symbol_table):
-        logger.debug("varref=%r eval start", self)
+#        logger.debug("varref=%r eval start", self)
         key = [t.eval(symbol_table) for t in self.token_list]
-        logger.debug("varref=%r key=%r", self, key)
+        logger.debug("varref=%r eval key=%r", self, key)
         return symbol_table.fetch("".join(key), self.get_pos())
 
 class AssignmentExpression(Expression):
@@ -275,9 +275,11 @@ class AssignmentExpression(Expression):
             # store the expression in the symbol table w/o eval
             rhs = self.token_list[2]
         elif op == "+=":
-            # append is a little tricky because we have to treat recursively vs
-            # simply expanded variables differently (making the LHS sensitive)
-            rhs = self.token_list[2].eval(symbol_table)
+            # Append is a little tricky because we have to treat recursively vs
+            # simply expanded variables differently (making the expression
+            # sensitive to what's in the LHS). Pass the Expression to the
+            # symbol table to figure out.
+            rhs = self.token_list[2]
         else:
             # TODO
             raise NotImplementedError("op=%s"%op)

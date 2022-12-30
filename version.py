@@ -4,7 +4,7 @@ __all__ = [
     "Version",
 ]
 
-# for now, focus on 3.81 compatibility
+# for now, focus on 4.1 compatibility
 class Version(object):
     major = 4
     minor = 1

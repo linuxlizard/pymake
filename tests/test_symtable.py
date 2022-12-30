@@ -217,7 +217,7 @@ $(info FOO=$(FOO))
 def test_append_simple():
     symbol_table = symtable.SymbolTable()
     symbol_table.add("FOO", "foo")
-    symbol_table.append("FOO", "bar")
+    symbol_table.append("FOO", Literal("bar"))
     value = symbol_table.fetch("FOO")
     assert value=="foo bar"
 
@@ -226,7 +226,7 @@ def test_append_recursive():
     symbol_table.add("CFLAGS", Expression([Literal("-g -Wall")]))
     value = symbol_table.fetch("CFLAGS")
     assert value == "-g -Wall"
-    symbol_table.append("CFLAGS", "-Wextra")
+    symbol_table.append("CFLAGS", Expression([Literal("-Wextra")]))
 
 if __name__ == '__main__':
 #    test_push_push_pop_pop()

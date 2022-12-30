@@ -21,6 +21,7 @@ if sys.version_info.major < 3:
     raise Exception("Requires Python 3.x")
 
 from scanner import ScannerIterator
+from version import Version
 import vline
 from symbol import *
 from constants import *
@@ -240,6 +241,8 @@ def execute(makefile, args):
 
     target_list = []
 
+    exit_code = 0
+
     # GNU Make allows passing assignment statements on the command line.
     # e.g., make -f hello.mk 'CC=$(subst g,x,gcc)'
     # so the arglist must be parsed and assignment statements saved. Anything
@@ -281,9 +284,11 @@ def execute(makefile, args):
                     logger.error("unexpected non-empty eval result=\"%s\" at pos=%r" % (s, tok.get_pos()))
                     sys.exit(1)
                 # TODO eval of ConditionalBlocks can return array of "stuff"
-            except MakeError:
-                # let ParseError propagate
-                raise
+            except MakeError as err:
+                # Catch our own Error exceptions. Report, break out of our execute loop and leave.
+                error_message(tok.get_pos(), err.description)
+                exit_code = 1
+                break
             except SystemExit:
                 raise
             except Exception as err:
@@ -294,6 +299,9 @@ def execute(makefile, args):
                 logger.error("eval failed tok=%r file=%s pos=%s", tok, filename, pos)
                 raise
 
+    if exit_code != 0:
+        return exit_code
+
     # TODO add cmdline arg to write the graphiz db
 #    filename = get_basename(makefile.get_pos()[0])
 #    graphfilename = rulesdb.graph(filename)
@@ -302,7 +310,6 @@ def execute(makefile, args):
     if not target_list:
         target_list = [ rulesdb.get_default_target() ]
 
-    exit_code = 0
     for target in target_list:
         rule = rulesdb.get(target)
 #        print("rule=",rule)
@@ -356,8 +363,8 @@ class Args:
         self.warn_undefined_variables = False
 
 def parse_args():
-    print_version ="""PY Make %d.%d\n
-Copyright (C) 2006-2022 David Poole davep@mbuf.com, testcluster@gmail.com""" % (0,0)
+    print_version ="""PY Make %s. Work in Progress.
+Copyright (C) 2006-2022 David Poole davep@mbuf.com, testcluster@gmail.com""" % (Version.vstring(),)
 
     args = Args()
     optlist, arglist = getopt.gnu_getopt(sys.argv[1:], "hvo:dSf:", 
@@ -384,32 +391,8 @@ Copyright (C) 2006-2022 David Poole davep@mbuf.com, testcluster@gmail.com""" % (
             # wtf?
             assert 0, opt
             
-    # TODO parse env-var style args, e.g.
-    # make CFLAGS=-g -f tst.mk CC=gcc
     args.argslist = arglist
     return args
-
-#    parser = argparse.ArgumentParser(description="Makefile Debugger")
-#    parser.add_argument('-o', '--output', help="write regenerated makefile to file") 
-#    parser.add_argument('-d', '--debug', action='count', help="set log level to DEBUG (default is INFO)") 
-#    parser.add_argument('-S', dest='s_expr', action='store_true', help="output the S-expression to stdout") 
-#
-#    # var assignment(s)
-#    #    e.g. make CC=gcc 
-#    # or a target(s)
-#    #    e.g. make clean all
-#    parser.add_argument("args", metavar='args', nargs='*')
-#    # result (if any) will be in args.args
-#    
-#    # arguments 100% compatible with GNU Make
-#    parser.add_argument('-f', '--file', '--makefile', dest='filename', help='read FILE as a makefile', default="Makefile" )
-#    parser.add_argument('-v', '--version', action='version', version=print_version, help="Print the version number of make and exit.")
-#
-#    args = parser.parse_args()
-#
-#    # TODO additional checks
-#
-#    return args
 
 if __name__=='__main__':
     args = parse_args()
