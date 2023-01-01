@@ -202,7 +202,7 @@ class RealPath(Function):
             if ver.major==3 and ver.minor >= 10:
                 # strict argument added in python 3.10
                 try:
-                    s = os.path.realpath(fname, strict=True)
+                    return os.path.realpath(fname, strict=True)
                 except OSError:
                     return ""
 
