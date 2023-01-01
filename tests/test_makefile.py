@@ -68,6 +68,7 @@ def test_all():
         "ifdef.mk",
         "ifeq-nested.mk",
 
+        "recursive.mk",
     )
 
     for infilename in infilename_list:

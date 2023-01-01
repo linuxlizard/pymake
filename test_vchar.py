@@ -69,8 +69,8 @@ def test5():
     assert str(vs)=="hello, world", "\"%s\""%str(vs)
 
 def main():
-#    test1()
-#    test2()
+    test1()
+    test2()
     test3()
     test4()
     test5()

@@ -4,10 +4,10 @@ import sys
 
 __all__ = [ "ParseError",
             "MakeError",
-#            "NestedTooDeep",
-#            "Unimplemented",
-#            "VersionError",
-#            "EvalError",
+            "RecipeCommencesBeforeFirstTarget",
+            "MissingSeparator",
+            "InvalidFunctionArguments",
+
             "warning_message",
             "error_message",
           ]
@@ -18,9 +18,6 @@ assert_on_parse_error = False
 
 class MakeError(Exception):
     # base class of all pymake exceptions
-    filename = None   # filename containing the error
-    pos = (-1, -1)  # row/col of position, zero based
-    code = None  # code line that caused the error (a VirtualLine)
     description = "(No description!)" # useful description of the error
 
     def __init__(self,*args,**kwargs):
@@ -28,13 +25,13 @@ class MakeError(Exception):
         self.code = kwargs.get("code",None)
         self.pos = kwargs.get("pos", ("missing",(-1,-1)))
         self.filename = self.pos[0]
-        self.description = kwargs.get("description", "(missing description)")
+        self.msg = kwargs["msg"]
 
     def __str__(self):
         return "*** filename=\"{0}\" pos={1}: {2}".format(
-                self.filename,self.pos[1],self.description)
+                self.filename,self.pos[1],self.msg)
 #        return "*** filename=\"{0}\" pos={1} src=\"{2}\": {3}".format(
-#                self.filename,self.pos,str(self.code).strip(),self.description)
+#                self.filename,self.pos,str(self.code).strip(),self.msg)
 
 class ParseError(MakeError):
     def __init__(self, *args, **kwargs):
@@ -45,19 +42,23 @@ class ParseError(MakeError):
             # (especially when the parse error is unexpected or wrong)
             assert 0
 
-#class NestedTooDeep(MakeError):
-#    pass
+class RecipeCommencesBeforeFirstTarget(MakeError):
+    description = """Usually a parse error. Make has gotten confused by a <tab>
+(RECIPEPREFIX) found at the start of line and thinks we've found a Recipe.
+TODO add more description here
+"""
 
-class Unimplemented(MakeError):
-    """Feature not yet implemented"""
-    pass
+class MissingSeparator(MakeError):
+    description = """Usually a parse error.  Make has found some text that
+    doesn't successfully pares into a rule or an expression.
+TODO add more description here
+"""
+
+class InvalidFunctionArguments(MakeError):
+    description = """Arguments to a function are incorrect."""
 
 #class VersionError(MakeError):
 #    """Feature not in this version"""
-#    pass
-
-#class EvalError(MakeError):
-#    """execution error e.g., bad function call"""
 #    pass
 
 def warning_message(pos, msg):

@@ -14,6 +14,8 @@ logger = logging.getLogger("pymake.parser")
 
 #logger.setLevel(level=logging.DEBUG)
 
+parse_vline_stream = None
+
 # used by the tokenzparser to match a directive name with its class
 conditional_directive_lut = {
   "ifdef" : IfdefDirective,
@@ -203,7 +205,7 @@ def parse_ifeq_conditionals(ifeq_expr, directive_str, viter):
             or (oc == '"' and cc == '"') \
             or (oc == "'" and cc == "'")):
             raise ParseError(pos=open_vchar.get_pos(), 
-                    description="invalid syntax in conditional; unbalanced open/close chars in %s" % directive_str)
+                    msg="invalid syntax in conditional; unbalanced open/close chars in %s" % directive_str)
 
     state = state_start
     expr1 = []
@@ -326,7 +328,7 @@ def parse_ifeq_conditionals(ifeq_expr, directive_str, viter):
             elif vchar.char not in whitespace:
                 # Ignore whitespace but anything else is invalid.  
                 # TODO need a nice error message
-                raise ParseError(pos=vchar.get_pos(), description="invalid character")
+                raise ParseError(pos=vchar.get_pos(), msg="invalid character")
 
         elif state == state_paren_expr1:
             if vchar.char == comma:
@@ -409,14 +411,14 @@ def parse_ifeq_conditionals(ifeq_expr, directive_str, viter):
     if state != state_closed:
         if state == state_paren_expr2_start:
             raise ParseError( pos=prev_vchar.get_pos(),
-                        description="invalid syntax in conditional; missing closing )")
+                        msg="invalid syntax in conditional; missing closing )")
         elif state == state_quote_expr:
             raise ParseError( pos=prev_vchar.get_pos(),
-                        description="invalid syntax in conditional; missing closing quote")
+                        msg="invalid syntax in conditional; missing closing quote")
         else:
             # TODO can we find good error messages for other closing conditions?
             raise ParseError( pos=prev_vchar.get_pos(),
-                        description="invalid syntax in conditional")
+                        msg="invalid syntax in conditional")
 
 #    print("expr1=",expr1)
 #    print("expr2=",expr2)
@@ -471,8 +473,12 @@ def parse_undefine_directive(expr, directive_vstr, viter, virt_line, vline_iter 
 
 def parse_override_directive(expr, directive_vstr, viter, virt_line, vline_iter ):
     # TODO any validity checks I need to do here? (Probably)
+    raise NotImplementedError(directive_str)
     return OverrideDirective()
-    breakpoint()
+
+def parse_include_directive(expr, directive_vstr, viter, *ignore):
+    # TODO any validity checks I need to do here? (Probably)
+    return IncludeDirective(directive_vstr, expr)
 
 def seek_directive(viter, seek=directive):
     # viter - character iterator
@@ -497,9 +503,12 @@ def seek_directive(viter, seek=directive):
 
     # look at first char first
     vchar = next(viter)
+    warn_on_recipe_prefix = None
     if vchar.char == recipe_prefix:
-        # TODO need to mimic how GNU Make handles an ambiguous recipe char
-        raise NotImplementedError(vchar.get_pos())
+        warn_on_recipe_prefix = vchar.get_pos()
+        warn_msg = "recipe prefix means directive %r might be confused as a rule"
+#        # TODO need to mimic how GNU Make handles an ambiguous recipe char
+#        raise NotImplementedError(vchar.get_pos())
 
     state_whitespace = 1  # ignore leading whitespace
     state_char = 2
@@ -539,6 +548,9 @@ def seek_directive(viter, seek=directive):
     if (s:=str(vcstr)) in directive:
         # we found a directive
         logger.debug("seek_directive found \"%s\" at %r", s, vcstr.get_pos())
+
+        if warn_on_recipe_prefix:
+            warning_message(warn_on_recipe_prefix, warn_msg % str(vcstr))
         return vcstr
 
     # nope, not a directive
@@ -594,7 +606,7 @@ def handle_conditional_directive(directive_inst, vline_iter):
     # contents of the block. Sending in the fn because the circular references
     # between pymake.py and symbol.py make calling tokenize from
     # ConditionalBlock impossible. A genuine fancy-pants dependency injection!
-    cond_block = ConditionalBlock(tokenize)
+    cond_block = ConditionalBlock(parse_vline_stream)
     cond_block.add_conditional( directive_inst )
 
     def make_conditional(dir_str, directive_vstr, expr1=None, expr2=None):
@@ -703,7 +715,7 @@ def handle_conditional_directive(directive_inst, vline_iter):
     # did we hit bottom of file before finding our end?
     if state != state_endif :
         errmsg = "missing endif"
-        raise ParseError(pos=starting_pos, description=errmsg)
+        raise ParseError(pos=starting_pos, msg=errmsg)
     
     return cond_block
 
@@ -757,6 +769,7 @@ def parse_directive(expr, directive_vstr, viter, virt_line, vline_iter):
         "endif" : error_extraneous,
         "undefine" : parse_undefine_directive,
         "override" : parse_override_directive,
+        "include" : parse_include_directive,
     }
 
     return lut[str(directive_vstr)](expr, directive_vstr, viter, virt_line, vline_iter)
@@ -848,14 +861,14 @@ def parse_expression(expr, virt_line, vline_iter):
             #       ^^^^^^^^^-- original Literal at token_list[0]
             # becomes:
             #       ifdef foo
-            #             ^^^-- new Literal
+            #             ^^^-- new Literal at token_list[0]
             expr.token_list[0] = Literal(vline.VCharString(viter.remain()))
             viter = None
         else:
             # we have an Expression with a token_list that looks like e.g.,
             # ifdef $(FOO)  
-            #       ^^^^^^-- VarRef token_list[1]
             # ^^^^^--------- Literal token_list[0]
+            #       ^^^^^^-- VarRef token_list[1]
             # We want to throw away the first Literal containing the directive
             expr.token_list = expr.token_list[1:]
 

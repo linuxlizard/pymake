@@ -37,7 +37,7 @@ def get_basename( filename ) :
     return os.path.splitext( os.path.split( filename )[1] )[0]
 
 # TODO rename this fn
-def tokenize(virt_line, vline_iter, line_scanner): 
+def parse_vline_stream(virt_line, vline_iter, line_scanner): 
     # pull apart a single line into token/symbol(s)
     #
     # virt_line - the current line we need to tokenize (a VirtualLine)
@@ -144,14 +144,14 @@ def parse_makefile_from_src(src):
     vline_iter = vline.get_vline(src.name, line_scanner)
 
     # XXX temp hack dependency injection
-    parser.tokenize = tokenize
+    parser.parse_vline_stream = parse_vline_stream 
 
     # The vline_iter will read from line_scanner. But line_scanner should be at the
     # proper place at all times. In other words, there are two readers from
     # line_scanner: this function and tokenize_vline()
     # Recipes need to read from line_scanner (different backslash rules).
     # Rest of tokenizer reads from vline_iter.
-    statement_list = [tokenize(vline, vline_iter, line_scanner) for vline in vline_iter] 
+    statement_list = [parse_vline_stream(vline, vline_iter, line_scanner) for vline in vline_iter] 
 
     # good time for some sanity checks
     for t in statement_list:
@@ -237,11 +237,7 @@ def execute(makefile, args):
     # XXX temp disabled while debugging
 #    _add_internal_db(symtable)
 
-    rulesdb = rules.RuleDB()
-
     target_list = []
-
-    exit_code = 0
 
     # GNU Make allows passing assignment statements on the command line.
     # e.g., make -f hello.mk 'CC=$(subst g,x,gcc)'
@@ -256,6 +252,9 @@ def execute(makefile, args):
             symtable.command_line_stop()
         else:
             target_list.append(onearg)
+
+    rulesdb = rules.RuleDB()
+    exit_code = 0
 
     for tok in makefile.token_list:
 #        print("tok=",tok)
@@ -273,20 +272,35 @@ def execute(makefile, args):
         else:
             try:
 #                breakpoint()
-                s = tok.eval(symtable)
-                logger.info("execute result s=\"%s\"", s)
-                if isinstance(s,str) and s.strip():
-                    # TODO need to parse/reinterpret the result of the expression.
-                    # Functions such as $(eval) and $(call) can generate new
-                    # makefile rules, statements, etc.
-                    # GNU Make itself seems to interpret raw text as a rule and
-                    # will print a "missing separator" error
-                    logger.error("unexpected non-empty eval result=\"%s\" at pos=%r" % (s, tok.get_pos()))
-                    sys.exit(1)
-                # TODO eval of ConditionalBlocks can return array of "stuff"
+                result = tok.eval(symtable)
+                logger.info("execute result=\"%s\"", result)
+                # eval can return a string
+                # or
+                # eval can return an array of TODO something I haven't figured out yet
+                if isinstance(result,str):
+                    if result.strip():
+                        # TODO need to parse/reinterpret the result of the expression.
+                        # Functions such as $(eval) and $(call) can generate new
+                        # makefile rules, statements, etc.
+                        # GNU Make itself seems to interpret raw text as a rule and
+                        # will print a "missing separator" error
+                        msg = "unexpected non-empty eval result=\"%s\"" % (result, )
+                        raise MakeError(tok.get_pos(), msg=msg)
+                else:
+                    # TODO eval of ConditionalBlocks can return array of "stuff"
+                    # eval of include returns array of strings we must parse
+                    # must be an array of strings
+                    assert isinstance(result,list), type(result)
+#                    breakpoint()
+#                    if len(result):
+#                        line_scanner = ScannerIterator(result, "(name TODO)")
+#                        vline_iter = vline.get_vline("(name TODO)", line_scanner)
+#                        statement_list = [tokenize(vline, vline_iter, line_scanner) for vline in vline_iter] 
+                        
             except MakeError as err:
                 # Catch our own Error exceptions. Report, break out of our execute loop and leave.
-                error_message(tok.get_pos(), err.description)
+                error_message(tok.get_pos(), err.msg)
+                # TODO add cmdline arg to dump err.description for a more detailed error message
                 exit_code = 1
                 break
             except SystemExit:

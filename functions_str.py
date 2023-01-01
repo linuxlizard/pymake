@@ -63,7 +63,7 @@ class IntegerArgument:
         if errmsg:
             logger.error(errmsg)
             filename, pos = self.get_pos()
-            raise EvalError(filename=filename, pos=pos, description=errmsg)
+            raise EvalError(filename=filename, pos=pos, msg=errmsg)
 
         return num 
 
@@ -378,12 +378,12 @@ class Word(FunctionWithArguments):
         try:
             index_num = int(index_str)
         except ValueError:
-            raise ParseError
+            errmsg = "non-numeric first argument to '{0}' function: '{1}'".format(self, index_str)
+            raise InvalidFunctionArguments(pos=self.get_pos(), msg=errmsg)
 
         if index_num <= 0:
             errmsg = "first argument to '{.name}' must be greater than 0.".format(self)
-            logger.error(errmsg)
-            raise EvalError(description=errmsg)
+            raise InvalidFunctionArguments(pos=self.get_pos(), msg=errmsg)
 
         # text is an iterable yielding strings
         counter = 0

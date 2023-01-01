@@ -16,6 +16,7 @@ from version import Version
 from error import *
 import shell
 from scanner import ScannerIterator
+import source
 
 _debug = True
 
@@ -530,6 +531,16 @@ class UnExportDirective(ExportDirective):
 class IncludeDirective(Directive):
     name = "include"
 
+    def __init__(self, keyword, expression):
+        self.source = None
+        super().__init__(keyword, expression)
+
+    def eval(self, symbol_table):
+        s = self.expression.eval(symbol_table)
+        self.source = source.SourceFile(s)
+        self.source.load()
+        return self.source.file_lines
+
 class MinusIncludeDirective(IncludeDirective):
     # handles -include directives
     name = "-include"
@@ -612,8 +623,9 @@ class LineBlock(Symbol):
 
         for vline in vline_iter:
             # XXX temp hack ; pass None for raw line_scanner
-            # XXX double temp hack ; use self.tokenze_fn()
-            statement = self.tokenize_fn(vline, vline_iter, None)
+            # XXX double temp hack ; use self.parse_fn()  (would be nice to
+            # call a global parse fn but circual imports make that difficult)
+            statement = self.parse_fn(vline, vline_iter, None)
 
             # TODO handle weird stuff like stray function call in expression
             # context (Same as what execute() in pymake.py needs to handle)
@@ -621,6 +633,11 @@ class LineBlock(Symbol):
             logger.info("block execute result=\"%s\"", result)
 
         # XXX what do I do about rules?
+        # I should not return an empty string, I should return the contents of
+        # the block
+#        breakpoint()
+#        raise NotImplementedError()
+
         return ''
 
 
@@ -660,11 +677,11 @@ class ConditionalBlock(Symbol):
     # Is an array of unparsed text (LineBlock) intermixed with more nested
     # conditionals (ConditionalBlock).
 
-    def __init__(self, tokenize_fn) :
+    def __init__(self, parse_fn) :
         super().__init__()
         
         # https://en.wikipedia.org/wiki/Dependency_injection
-        self.tokenize_fn = tokenize_fn
+        self.parse_fn = parse_fn
 
         # cond_expr is an array of ConditionalDirective
         #
@@ -758,16 +775,16 @@ class ConditionalBlock(Symbol):
 
             for block in cond_block_list:
 
-                # FIXME passing tokenize down here is ugly and I hate it and it's ugly.
-                # Fix it somehow.
-                block.tokenize_fn = self.tokenize_fn
+                # FIXME passing the parse fn down here is ugly and I hate it
+                # and it's ugly.  Fix it somehow.
+                block.parse_fn = self.parse_fn
                 results.append( block.eval(symbol_table) )
 #            breakpoint()
             return results
 
         for idx,expr in enumerate(self.cond_exprs):
             # FIXME more monkey patching bletcherousness
-            expr.tokenize_fn = self.tokenize_fn
+            expr.parse_fn = self.parse_fn
 
             flag = expr.eval(symbol_table)
             if not flag:
@@ -889,7 +906,7 @@ class IfeqDirective(ConditionalDirective):
 
     def _exprs_eval(self, symbol_table):
         if self.expr1 is None:
-            # if this fails, partial_init() should have been called
+            # if this fails, partial_init() was not called as required
             assert self.vcstring is not None
 
             self._parse()
