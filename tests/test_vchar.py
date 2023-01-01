@@ -20,10 +20,10 @@ def test1():
 
 def test2():
     # read a file, display vchar by vchar
-    infilename = "test_vchar.py"
+    infilename = "tests/test_vchar.py"
 
     lines = getfile(infilename)
-    vline_iter = vline.get_vline(infilename, scanner.ScannerIterator(lines))
+    vline_iter = vline.get_vline(infilename, scanner.ScannerIterator(lines, infilename))
 
     for virt_line in vline_iter:
         for vchar in virt_line:
