@@ -9,7 +9,7 @@ logger = logging.getLogger("pymake.functions")
 
 #logger.setLevel(level=logging.DEBUG)
 
-from symbol import VarRef, Literal
+from symbolmk import VarRef, Literal
 from vline import VCharString, whitespace
 from error import *
 from functions_base import Function, FunctionWithArguments

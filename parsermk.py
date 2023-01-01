@@ -2,7 +2,7 @@ import logging
 
 from constants import *
 from error import *
-from symbol import *
+from symbolmk import *
 from printable import printable_char
 from scanner import ScannerIterator
 from tokenizer import tokenize_recipe, tokenize_assign_RHS

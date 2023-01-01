@@ -8,7 +8,7 @@ from constants import *
 from error import *
 from printable import printable_char, printable_string
 import vline
-from symbol import *
+from symbolmk import *
 import functions 
 
 def comment(vchar_scanner):

@@ -5,7 +5,7 @@ logger = logging.getLogger("pymake")
 logging.basicConfig(level=logging.DEBUG)
 
 import pymake
-from symbol import *
+from symbolmk import *
 #from vline import VirtualLine, VCharString
 #from tokenizer import tokenize_statement
 #from parser import parse_ifeq_conditionals

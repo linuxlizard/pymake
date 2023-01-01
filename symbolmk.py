@@ -900,7 +900,7 @@ class IfeqDirective(ConditionalDirective):
         # FIXME this ugly and slow and ugly and I'd like to fix it
         # (circular imports are circular)
         from tokenizer import tokenize_statement
-        from parser import parse_ifeq_conditionals
+        from parsermk import parse_ifeq_conditionals
         expr = tokenize_statement(ScannerIterator(self.vcstring.chars, None))
         self.expr1, self.expr2 = parse_ifeq_conditionals(expr, self.name, None)
 

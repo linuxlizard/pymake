@@ -23,13 +23,13 @@ if sys.version_info.major < 3:
 from scanner import ScannerIterator
 from version import Version
 import vline
-from symbol import *
+from symbolmk import *
 from constants import *
 from error import *
 from tokenizer import tokenize_statement
-import parser
+import parsermk
 import source
-from symtable import SymbolTable
+from symtablemk import SymbolTable
 import makedb
 import rules
 
@@ -62,7 +62,7 @@ def parse_vline_stream(virt_line, vline_iter, line_scanner):
 
         # we found a bare Expression that needs a second pass
         if isinstance(statement,Expression):
-            return parser.parse_expression(statement, virt_line, vline_iter)
+            return parsermk.parse_expression(statement, virt_line, vline_iter)
 
         # do we ever get here now? 
         assert 0
@@ -111,9 +111,9 @@ def parse_vline_stream(virt_line, vline_iter, line_scanner):
 #            print("dangling={0}".format(dangling_recipe_vline.virt_chars))
 #            print("dangling={0}".format(dangling_recipe_vline.phys_lines))
 
-        recipe_list = parser.parse_recipes(line_scanner, dangling_recipe_vline)
+        recipe_list = parsermk.parse_recipes(line_scanner, dangling_recipe_vline)
     else :
-        recipe_list = parser.parse_recipes(line_scanner)
+        recipe_list = parsermk.parse_recipes(line_scanner)
 
     assert isinstance(recipe_list,RecipeList)
 
@@ -144,7 +144,7 @@ def parse_makefile_from_src(src):
     vline_iter = vline.get_vline(src.name, line_scanner)
 
     # XXX temp hack dependency injection
-    parser.parse_vline_stream = parse_vline_stream 
+    parsermk.parse_vline_stream = parse_vline_stream 
 
     # The vline_iter will read from line_scanner. But line_scanner should be at the
     # proper place at all times. In other words, there are two readers from

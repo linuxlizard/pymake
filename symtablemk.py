@@ -6,7 +6,7 @@ import collections
 
 import version
 import constants
-from symbol import Symbol
+from symbolmk import Symbol
 from error import warning_message, MakeError
 
 logger = logging.getLogger("pymake.symtable")

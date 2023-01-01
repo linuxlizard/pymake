@@ -23,7 +23,7 @@ from error import *
 from functions_base import Function, FunctionWithArguments
 from flatten import flatten
 from wildcard import wildcard_replace, wildcard_match_list
-from symbol import Literal
+from symbolmk import Literal
 from constants import whitespace
 
 __all__ = [ "FilterClass", "FilterOutClass", "FindString", "FirstWord", 

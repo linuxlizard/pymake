@@ -9,20 +9,16 @@ logger = logging.getLogger("pymake")
 logging.basicConfig(level=logging.DEBUG)
 
 from error import *
-from symbol import *
+from symbolmk import *
 import functions_str
-import symtable
-
-# Verify we've found my symtable module.
-# FIXME rename my symtable.py to avoid colliding with Python's built-in
-symtable.Entry
+import symtablemk
 
 # turn on internal behaviors that allow us to create literals without VCharString
-import symbol
-symbol._testing = True
+import symbolmk
+symbolmk._testing = True
 
 def test1():
-    symbol_table = symtable.SymbolTable()
+    symbol_table = symtablemk.SymbolTable()
     expr = Literal('1,foo bar baz qux')
 
     word_fn = functions_str.Word( [expr] )
@@ -30,7 +26,7 @@ def test1():
     assert result=="foo"
     
 def test_word_invalid_index():
-    symbol_table = symtable.SymbolTable()
+    symbol_table = symtablemk.SymbolTable()
     expr = Literal('q,foo bar baz qux')
 
     word_fn = functions_str.Word( [expr] )
@@ -42,7 +38,7 @@ def test_word_invalid_index():
         assert 0, "should have failed"
 
 def test_word_bad_index():
-    symbol_table = symtable.SymbolTable()
+    symbol_table = symtablemk.SymbolTable()
     expr = Literal('-1,foo bar baz qux')
 
     word_fn = functions_str.Word( [expr] )
