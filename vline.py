@@ -19,7 +19,7 @@ _debug = False
 import hexdump
 from scanner import ScannerIterator
 from printable import printable_char, printable_string
-from constants import eol, backslash, whitespace
+from constants import eol, backslash, whitespace, recipe_prefix
 
 # indices into VirtualLine's characters' position.
 VCHAR_ROW = 0
@@ -482,8 +482,44 @@ class VirtualLine(object):
 
 class RecipeVirtualLine(VirtualLine):
     # This is a block containing recipe(s). Don't collapse around backslashes.
+    # Different rules apply.
+    #
+    # 5.1.1 Splitting Recipe Lines
+    #
+    # "... backslash/newline pairs are not removed from the recipe. Both the
+    # backslash and the newline characters are preserved and passed to the shell."
+    #
+    # If the first character of the next line after the backslash/newline is the
+    # recipe prefix character (a tab by default [...]) then that character (and
+    # only that character) is removed. Whitespace is never added to the recipe."
+    #
+    # -- GNU Make 4.3 Jan 2020
+    #
+    # Since we've already broken the file lines into an array of characters, we
+    # just need to peek/poke the first and last chars of those arrays.
+    #
     def _collapse_virtual_line(self):
-        pass
+        # reminder: self.virt_chars is an array of arrays of vchars
+        # outer array contains lines
+        # inner array contains the characters in the line
+
+        # don't modifiy first row 
+        row_iter = iter(self.virt_chars)
+        row = next(row_iter)
+
+        # check the end of the line for backslash/newline
+        while len(row) >= 2 and row[-1].char in eol and row[-2].char == backslash:
+            print("r pos=%r is backslash/eol" % (row[-1].get_pos(),))
+            # move to next row (allow StopIteration to propagate which
+            # would indicate a trailing backslash with no further recipe
+            # which would indicate a parse failure)
+            row = next(row_iter)
+
+            # if first char of the next row is a tab (or recipe_prefix)
+            # then hide it
+            if row[0].char == recipe_prefix:
+                print("r pos=%r hidden" % (row[0].get_pos(),))
+                row[0].hide = True
 
 def get_vline(filename, line_iter): 
     # GENERATOR

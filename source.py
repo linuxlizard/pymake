@@ -1,3 +1,5 @@
+import io
+
 __all__ = [ "SourceFile" ]
 
 class Source(object):
@@ -16,6 +18,10 @@ class SourceFile(Source):
 
 
 class SourceString(Source):
-    # TODO read from StringIO
-    pass
+    def __init__(self, input_str):
+        super().__init__("stringio")
+        self.infile = io.StringIO(input_str)       
+
+    def load(self):
+        self.file_lines = self.infile.readlines()
 
