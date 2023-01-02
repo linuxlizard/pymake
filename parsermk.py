@@ -27,6 +27,8 @@ conditional_directive_lut = {
 def parse_recipes(line_scanner, semicolon_vline=None): 
     logger.debug("parse_recipes()")
 
+    # TODO handle DOS line ending
+
     state_start = 1
     state_comment_backslash = 2
     state_recipe_backslash = 3
@@ -42,7 +44,7 @@ def parse_recipes(line_scanner, semicolon_vline=None):
     if semicolon_vline : 
         # we have something that trails a ; on the rule
         recipe = tokenize_recipe(iter(semicolon_vline))
-        recipe.save(semicolon_vline)
+#        recipe.save(semicolon_vline)
         recipe_list.append(recipe)
 
     # we're working with the raw strings (not VirtualLine) here so need to
@@ -58,11 +60,12 @@ def parse_recipes(line_scanner, semicolon_vline=None):
 
         # file line of 'line'
         row = line_scanner.idx - 1
+        line_stripped = line.strip()
 
         if state==state_start : 
             if line.startswith(recipe_prefix):
-                # TODO handle DOS line ending
-                if line.endswith('\\\n'):
+                if line_stripped.endswith(backslash):
+                    # we have a recipe continued over multiple lines
                     starting_row.append(row)
                     lines_list = [ line ] 
                     state = state_recipe_backslash
@@ -71,18 +74,17 @@ def parse_recipes(line_scanner, semicolon_vline=None):
                     recipe_vline = vline.RecipeVirtualLine([line], (row,0), line_scanner.filename)
                     recipe = tokenize_recipe(iter(recipe_vline))
                     logger.debug("recipe=%s", recipe.makefile())
-                    recipe.save(recipe_vline)
+#                    recipe.save(recipe_vline)
                     recipe_list.append(recipe)
             else : 
-                line_stripped = line.strip()
                 if len(line_stripped)==0:
                     # ignore blank lines
                     pass
                 elif line_stripped.startswith("#"):
                     # ignore makefile comments
-                    # TODO handle DOS line ending
                     logger.debug("recipe comment %s", line_stripped)
-                    if line.endswith('\\\n'):
+                    if line_stripped.endswith(backslash):
+                        # gross, a comment line with a backslash
                         lines_list = [ line ] 
                         state = state_comment_backslash
                 else:
@@ -92,21 +94,19 @@ def parse_recipes(line_scanner, semicolon_vline=None):
                     break
 
         elif state==state_comment_backslash : 
-            # TODO handle DOS line ending
             lines_list.append( line )
-            if not line.endswith('\\\n'):
+            if not line_stripped.endswith(backslash):
                 # end of the makefile comment (is ignored)
                 state = state_start
 
         elif state==state_recipe_backslash : 
-            # TODO handle DOS line ending
             lines_list.append( line )
-            if not line.endswith('\\\n'):
+            if not line_stripped.endswith(backslash):
                 # now have an array of lines that need to be one line for the
                 # recipes tokenizer
                 recipe_vline = vline.RecipeVirtualLine(lines_list, (starting_row.pop(),0), line_scanner.filename)
                 recipe = tokenize_recipe(iter(recipe_vline))
-                recipe.save(recipe_vline)
+#                recipe.save(recipe_vline)
                 recipe_list.append(recipe)
 
                 # go back and look for more
@@ -465,7 +465,7 @@ def parse_ifdef_directive(expr, directive_vstr, viter, virt_line, vline_iter ):
 
 def parse_define_directive(expr, directive_vstr, viter, virt_line, vline_iter ):
     # arguments same as parse_directive
-    raise NotImplementedError(directive_str)
+    raise NotImplementedError(directive_vstr)
 
 def parse_undefine_directive(expr, directive_vstr, viter, virt_line, vline_iter ):
     # TODO check for validity of expr (space in literals I suppose?)
@@ -473,7 +473,7 @@ def parse_undefine_directive(expr, directive_vstr, viter, virt_line, vline_iter 
 
 def parse_override_directive(expr, directive_vstr, viter, virt_line, vline_iter ):
     # TODO any validity checks I need to do here? (Probably)
-    raise NotImplementedError(directive_str)
+    raise NotImplementedError(directive_vstr)
     return OverrideDirective()
 
 def parse_include_directive(expr, directive_vstr, viter, *ignore):

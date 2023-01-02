@@ -4,15 +4,10 @@
 # Needed an iterator that supports pushback and state save/restore.
 # (fancy shmancy https://en.wikipedia.org/wiki/Pushdown_automaton)
 
-import sys
 import string
 import logging
 
 logger = logging.getLogger("pymake.scanner")
-
-# require Python 3.x because reasons
-if sys.version_info.major < 3:
-    raise Exception("Requires Python 3.x")
 
 class ScannerIterator(object):
     # string iterator that allows look ahead and push back
@@ -60,12 +55,3 @@ class ScannerIterator(object):
         # Test/debug method. Return what remains of the data.
         return self.data[self.idx:]
 
-    def peek_back(self):
-        # return one char previous (created to handle \ (backslashed)
-        # characters) (does not modify our state)
-        # The -2 is because: idx-1 is the current character, idx-1-1 is the
-        # previous character (idx is always the *next* char to be returned by
-        # this iterator)
-        if self.idx-2 < 0:
-            raise IndexError
-        return self.data[self.idx-2]

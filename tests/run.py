@@ -4,7 +4,7 @@ import tempfile
 import subprocess
 import shutil
 
-_debug = False
+_debug = True
 
 # on failure, copy the makefile under test to this filename
 fail_filename = "/tmp/fail.mk"
@@ -67,6 +67,9 @@ def _write_and_run(makefile, runner_fn, extra_args=None, extra_env=None, expect_
             print("*** stderr=%r ***" % err.stderr, file=sys.stderr)
             assert 0, str(err)
 
+    if _debug:
+        print("stdout=",p.stdout)
+        print("stderr=",p.stderr)
     return p
 
 FLAG_OUTPUT_STDOUT=1<<0

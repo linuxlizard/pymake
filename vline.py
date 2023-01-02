@@ -14,15 +14,12 @@ import logging
 
 logger = logging.getLogger("pymake.vline")
 
-_debug = True
+_debug = False
 
 import hexdump
 from scanner import ScannerIterator
 from printable import printable_char, printable_string
-
-eol = set("\r\n")
-# can't use string.whitespace because want to preserve line endings
-whitespace = set(' \t')
+from constants import eol, backslash, whitespace
 
 # indices into VirtualLine's characters' position.
 VCHAR_ROW = 0
@@ -41,7 +38,7 @@ def is_line_continuation(line):
     pos = len(line)-1
     while pos >= 0 and line[pos] in eol:
         pos -= 1
-    return pos >= 0 and line[pos] == '\\'
+    return pos >= 0 and line[pos] == backslash
 
 def vchars_debug_string(vchar_list):
     """Utility function to debug dump an array of vchars"""
@@ -88,23 +85,22 @@ def validate_vchars(vchar_list):
         # I replace '\' line continuation char with ' ' in the string.
         # Is this original character a '\' that's been replaced?
         # (see also VChar.set_backspace())
-        if file_char != vchar.char and file_char != '\\':
+        if file_char != vchar.char and file_char != backslash:
             # this is bad, very bad
             breakpoint()
 
-            assert file_char != '\\' and file_char == vchar.char, (file_char,vchar.char)
+            assert file_char != backslash and file_char == vchar.char, (file_char,vchar.char)
 
     if infile:
         infile.close()
 
-def validate_vchars_hide(vchar_list):
-    for vchar in vchar_list:
-        
-        if vchar.char in eol:
-            if not vchar.hide:
-                breakpoint()
-            assert vchar.hide, (printable_char(vchar.char),vchar.pos)
-
+#def validate_vchars_hide(vchar_list):
+#    for vchar in vchar_list:
+#        
+#        if vchar.char in eol:
+#            if not vchar.hide:
+#                breakpoint()
+#            assert vchar.hide, (printable_char(vchar.char),vchar.pos)
 
 # using a class for the virtual char so can interchange string with VirtualLine
 # in ScannerIterator
@@ -154,16 +150,22 @@ class VChar(object):
 
     def printable(self):
         return printable_char(self.char)
-#        if self.char == '\n':
-#            return '\\n'
-#        return self.char
 
     def set_backslash(self):
         # This is a weird wart on the whole thing. A series of lines joined
         # together with a '\' are treated as a single line (the VirtualLine).
         # The VirutalLine is given as a single unbroken line, terminated with a
         # single '\n', to the scanner and parser. In GNU Make, the separate
-        # lines are joined by a space (0x20). In VirtualLine, I'm replacing the
+        # lines are joined by a space (0x20). 
+        #
+        # Section 3.1.1  Splitting Long Lines.  
+        # "Outside of recipe lines, backslash/newlines are converted into a single space character.
+        # Once that is done, all whitespace around the backslash/newline is condensed into a single
+        # space: this includes all whitespace preceding the backslash, all whitespace at the beginning
+        # of the line after the backslash/newline, and any consecutive backslash/newline combina-
+        # tions."  -- GNU Make 4.3 Jan 2020
+        #
+        # In VirtualLine, I'm replacing the
         # '\' with a space so the array of individual lines can be joined
         # together with that space.
         # The upper level code must see a space, not the backslash. But the
@@ -210,7 +212,7 @@ class VCharString(object):
     @classmethod
     def from_string(cls, python_string):
         # make a VCharString from a regular python string (mostly used with
-        # testing) the positions and filename will be nonsense)
+        # testing so the positions and filename will be nonsense)
         return cls([VChar(c, (0,0), "/dev/null") for c in python_string])
 
     def validate(self):
@@ -282,6 +284,8 @@ class VirtualLine(object):
                 pos = (row_idx+starting_row, 
                        col_idx+starting_col)
                 vchar = VChar(char, pos, self.filename)
+                if _debug:
+                    print("vchar=%r at %r" % (vchar.char, vchar.get_pos()))
                 vchar_list.append(vchar)
             # reset the column back to zero since we're on a new line
             starting_col = 0
@@ -291,6 +295,7 @@ class VirtualLine(object):
         # collapse continuation lines according to the whitepace rules around
         # the backslash (The rules will change if we're inside a recipe list or
         # if .POSIX is enabled or or or or ...)
+        # TODO .POSIX support
 
         # if only a single line, don't bother
         if len(self.phys_lines)==1 :
@@ -322,13 +327,16 @@ class VirtualLine(object):
 
         # -1 because the last line needs special handling
         while row < len(self.virt_chars)-1 :
-#            print("row={0} {1}".format(row, hexdump.dump(self.phys_lines[row], 16)), end="")
+            if _debug:
+                print("row={0} {1}".format(row, hexdump.dump(self.phys_lines[row], 16)), end="")
             
             # sweep left to right, killing whitespace until we find a non-whitespace character
             col = 0
-#            print("collapse1 row=%d col=%d c=%s" % (row, col, printable_char(self.virt_chars[row][col].char)))
+            if _debug:
+                print("collapse1 row=%d col=%d c=%r" % (row, col, printable_char(self.virt_chars[row][col].char)))
             while col < len(self.virt_chars[row]) and self.virt_chars[row][col].char in whitespace :
-#                print("collapse2 row=%d col=%d c=%s" % (row, col, printable_char(self.virt_chars[row][col].char)))
+                if _debug:
+                    print("collapse2 row=%d col=%d c=%r" % (row, col, printable_char(self.virt_chars[row][col].char)))
                 self.virt_chars[row][col].hide = True
                 col += 1
 
@@ -337,7 +345,8 @@ class VirtualLine(object):
 
             # start at eol
             col = len(self.virt_chars[row])-1
-#            print("collapse3 row=%d col=%d c=%s" % (row, col, printable_char(self.virt_chars[row][col].char)))
+            if _debug:
+                print("collapse3 row=%d col=%d c=%r" % (row, col, printable_char(self.virt_chars[row][col].char)))
 
             # kill EOL
             assert self.virt_chars[row][col].char in eol, (row, col, self.virt_chars[row][col].char)
@@ -345,13 +354,14 @@ class VirtualLine(object):
             col -= 1
 
             # hide the line continuation "\"
-            assert self.virt_chars[row][col].char=='\\', (row, col, self.virt_chars[row][col].char)
+            assert self.virt_chars[row][col].char==backslash, (row, col, self.virt_chars[row][col].char)
             self.virt_chars[row][col].set_backslash()
-#            self.virt_chars[row][col].hide = True
             col -= 1
 
-            # eat whitespace backwards
-            while col >= 0 and self.virt_chars[row][col].char in whitespace :
+            # eat whitespace backwards until we hit start of line or we find an already hidden character or we find non-whitespace
+            while col >= 0 and not self.virt_chars[row][col].hide and self.virt_chars[row][col].char in whitespace :
+                if _debug:
+                    print("collapse4 row=%d col=%d c=%r" % (row, col, printable_char(self.virt_chars[row][col].char)))
                 self.virt_chars[row][col].hide = True
                 col -= 1
 
@@ -372,26 +382,19 @@ class VirtualLine(object):
         assert self.virt_chars[row][col].char in eol, (row, col, self.virt_chars[row][col].char)
         col -= 1
         if col >= 0:
-            assert self.virt_chars[row][col].char != '\\', (row, col, self.virt_chars[row][col].char)
+            assert self.virt_chars[row][col].char != backslash, (row, col, self.virt_chars[row][col].char)
 
     def __str__(self):
         # build string from the visible characters
-#        vchar_iter = itertools.chain(*self.virt_chars)
-#        return "".join([vchar.char for vchar in vchar_iter if not vchar.hide])
         lines = []
         for row in self.virt_chars:
-            lines.append("".join([vchar.char for vchar in row if not vchar.hide]) )
-        # discard empty lines
-        return  " ".join([s for s in lines if len(s)])
+            s = "".join([vchar.char for vchar in row if not vchar.hide]) 
+            # ignore empty lines
+            if s.strip():
+                lines.append("".join([vchar.char for vchar in row if not vchar.hide]))
 
-#    def printable_str(self):
-#        # Build string from the visible characters.
-#        # The virt_chars is an array of arrays, the internal array being a single
-#        # line of the file.
-#        s = []
-#        for row in self.virt_chars:
-#            s.append("".join([printable_char(vchar.char) for vchar in row if not vchar.hide]) )
-#        return  " ".join(s)
+        return "".join(lines)
+        return "".join([s for s in lines if len(s)])
 
     def __iter__(self):
         # This iterator we will feed the characters that are still visible to

@@ -14,9 +14,6 @@ class Rule:
     # Rule contains a RecipeList from the Symbol hierarchy but don't want to 
     # pull symbol.py in here (to keep pymake.py a little more clean).
     def __init__(self, target, prereq_list, recipe_list, pos):
-        # ha ha type checking;  must quack like a symbol.RecipeList
-        [r.recipe for r in recipe_list]
-
         # target is string and prereq_list[] is array of strings
         self.target = target
         self.prereq_list = prereq_list

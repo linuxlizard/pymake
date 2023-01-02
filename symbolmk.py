@@ -442,11 +442,22 @@ class Recipe(Expression):
 
     def __init__(self, token_list):
         super().__init__(token_list)
-        self.recipe = None
+#        self.recipe = None
 
-    def save(self, recipe):
-        self.recipe = recipe
+#    def save(self, recipe):
+#        self.recipe = recipe
 
+    def eval(self, symbol_table):
+        # this method does NOT execute the shell but simply will run the string
+        # through the symbol table.
+        s = super().eval(symbol_table)
+
+        # recipes will have $$ as an escape for a single $ that should be
+        # passed to the shell
+        # e.g., "echo $$PATH" becomes "echo $PATH" sent to the shell
+        return s.replace("$$","$")
+
+    
 class RecipeList( Expression ) : 
     # A collection of Recipe objects
     def __init__(self, recipe_list):

@@ -84,9 +84,8 @@ def parse_vline_stream(virt_line, vline_iter, line_scanner):
     # foo : bar ; @echo baz
     #          ^--- truncate here
     #
-    # I have to parse the full like as a rule to know where the
-    # rule ends and the recipe(s) begin. The backslash makes me
-    # crazy.
+    # I have to parse the full line as a rule to know where the rule ends and
+    # the recipe(s) begin.  A backslash makes me crazy. For example:
     #
     # foo : bar ; @echo baz\
     # I am more recipe hur hur hur

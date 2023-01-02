@@ -1,7 +1,8 @@
 import string
 
+# can't use string.whitespace because want to preserve line endings
 whitespace = set(' \t')
-#
+
 # davep 04-Dec-2014 ; FIXME ::= != are not in Make 3.81, 3.82 (Introduced in 4.0)
 assignment_operators = {"=", "?=", ":=", "::=", "+=", "!="}
 rule_operators = {":", "::"}
@@ -11,6 +12,8 @@ eol = set("\r\n")
 platform_eol = "\n"
 
 recipe_prefix = "\t"
+
+backslash = '\\'
 
 # 4.8 Special Built-In Target Names
 built_in_targets = {

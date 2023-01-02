@@ -12,32 +12,14 @@ from symbolmk import *
 import functions 
 
 def comment(vchar_scanner):
-    state_start = 1
-    state_eat_comment = 2
-
-    state = state_start
-
-    # this could definitely be faster (method in ScannerIterator to eat until EOL?)
-    for vchar in vchar_scanner : 
-        c = vchar.char
-#        print("# c={0} state={1}".format(printable_char(c), state))
-        if state==state_start:
-            if c=='#':
-                state = state_eat_comment
-            else:
-                # shouldn't be here unless we're eating a comment
-                raise ParseError()
-
-        elif state==state_eat_comment:
-            # comments finish at end of line
-            if c in eol :
-                return
-            # otherwise char is eaten
-
-        else:
-            # should not get here
-            assert 0, state
-
+    # Seems weird to character by character consume a line comment until the
+    # end of line. This function used to keep the char scanner in sync with
+    # expected results. There are some places where I'm making sure I've
+    # consumed the entire line.
+    vchar = next(vchar_scanner)
+    assert vchar.char == '#', vchar.get_pos()
+    for vchar in vchar_scanner:
+        pass
 
 def tokenize_define_directive(vchar_scanner):
     # multi-line macro
@@ -192,7 +174,7 @@ def tokenize_statement(vchar_scanner):
 
         # The statement is a directive or bare words or function call. We
         # better have consumed the whole thing.
-        assert len(vchar_scanner.remain())==0, (len(vchar_scanner.remain(), starting_pos))
+        assert len(vchar_scanner.remain())==0, vchar_scanner.remain()[0].get_pos()
         
         # Should be one big Expression. We'll dig into the Expression during
         # the 2nd pass.
@@ -288,7 +270,7 @@ def tokenize_statement_LHS(vchar_scanner, separators=""):
                 state = state_in_word
 
         elif state==state_in_word:
-            if c=='\\':
+            if c==backslash:
                 state = state_backslash
                 token += vchar
 
@@ -309,6 +291,7 @@ def tokenize_statement_LHS(vchar_scanner, separators=""):
                 # capture anything we might have seen 
                 # and start new token
                 token = pushtoken(token)
+                # done with this line
                 # eat the comment 
                 vchar_scanner.pushback()
                 comment(vchar_scanner)
@@ -561,7 +544,7 @@ def tokenize_rule_RHS(vchar_scanner):
                 # start eating whitespace
                 state = state_whitespace
 
-            elif c=='\\':
+            elif c==backslash:
                 state = state_backslash
 
             elif c==':':
@@ -587,7 +570,7 @@ def tokenize_rule_RHS(vchar_scanner):
                 return None
 
             elif c=='#':
-                # eat comment 
+                # comment so ignore from here to the end of line
                 vchar_scanner.pushback()
                 comment(vchar_scanner)
                 # save the token we've captured
@@ -671,7 +654,7 @@ def tokenize_rule_RHS(vchar_scanner):
         elif state==state_backslash : 
             if not c in eol : 
                 # literal backslash + some char
-                token += vchar_scanner.peek_back() # capture the literal backslash
+                token += prev_vchar # capture the literal backslash
                 token += vchar
                 state = state_word
             else:
@@ -686,19 +669,13 @@ def tokenize_rule_RHS(vchar_scanner):
             # should not get here
             assert 0, state
 
+        # save the vchar in case we need it in the next go round
+        prev_vchar = vchar
+
+    # bottom of loop
+
     # davep 07-Dec-2014 ; do we ever get here? 
     assert 0, state
-
-    if state==state_word:
-        # save the token we've seen so far
-        token_list.append(Literal(token.rstrip()))
-    elif state in (state_whitespace, state_start) :
-        pass
-    else:
-        # premature end of file?
-        raise ParseError()
-
-    return PrerequisiteList(prereq_list)
 
 def tokenize_assign_RHS(vchar_scanner):
     logger.debug("tokenize_assign_RHS()")
@@ -712,19 +689,20 @@ def tokenize_assign_RHS(vchar_scanner):
     token = vline.VCharString()
     token_list = []
 
+    vchar = next(vchar_scanner)
+    # it's stupid to have state_start inside the loop since I'll only be in it
+    # once
+    if vchar.char in whitespace :
+        state = state_whitespace
+    else :
+        vchar_scanner.pushback()
+        state = state_literal
+
     for vchar in vchar_scanner :
         c = vchar.char
         logger.debug("a c={0} state={1} idx={2}".format(printable_char(c), state, vchar_scanner.idx, vchar_scanner.remain()))
-        # FIXME it's stupid to have state_start inside the loop since I'll only
-        # be in it once
-        if state==state_start :
-            if c in whitespace :
-                state = state_whitespace
-            else :
-                vchar_scanner.pushback()
-                state = state_literal
 
-        elif state==state_whitespace :
+        if state==state_whitespace :
             if not c in whitespace : 
                 vchar_scanner.pushback()
                 state = state_literal
@@ -735,9 +713,9 @@ def tokenize_assign_RHS(vchar_scanner):
             elif c=='#':
                 # save the token we've seen so far
                 vchar_scanner.pushback()
+                # stay in same state
                 # eat comment 
                 comment(vchar_scanner)
-                # stay in same state
             elif c in eol :
                 # assignment terminates at end of line
                 # end of scanner
@@ -759,8 +737,7 @@ def tokenize_assign_RHS(vchar_scanner):
                 # restart token
                 token = vline.VCharString()
 
-                # jump to variable_ref tokenizer
-                # restore "$" + "(" in the scanner
+                # restore current char and '$' back to the scanner
                 vchar_scanner.pushback()
                 vchar_scanner.pushback()
 
@@ -933,15 +910,10 @@ def tokenize_recipe(vchar_scanner):
     token_list = []
     vchar_stack = []
 
-    sanity_count = 0
-
     for vchar in vchar_scanner :
         c = vchar.char
         logger.debug("r c={} state={} idx={} token=\"{}\" pos={}".format(
             printable_char(c), state, vchar_scanner.idx, printable_string(str(token)), vchar.pos))
-
-        sanity_count += 1
-#        assert sanity_count < 50
 
         if state==state_start : 
             # Must arrive here right after the end of the prerequisite list.
@@ -973,7 +945,7 @@ def tokenize_recipe(vchar_scanner):
                 return Recipe(token_list) 
             elif c=='$':
                 state = state_dollar
-            elif c=='\\':
+            elif c==backslash:
                 vchar_stack.append(vchar)
                 state = state_backslash
             else:
@@ -982,19 +954,18 @@ def tokenize_recipe(vchar_scanner):
         elif state==state_dollar : 
             if c=='$':
                 # a $$ in a rule expression needs to be preserved as a double $$
-                token += vchar_scanner.peek_back() # capture the previous '$'
+                token += prev_vchar # capture the previous '$'
                 token += vchar
                 state = state_recipe
             else:
                 # definitely a variable ref of some sort
-                # save token so far; note no rstrip()!
+                # save token so far
                 if len(token):
                     token_list.append(Literal(token))
                 # restart token
                 token = vline.VCharString()
 
-                # jump to variable_ref tokenizer
-                # restore "$" + "(" in the scanner
+                # restore current char and "$" to the scanner
                 vchar_scanner.pushback()
                 vchar_scanner.pushback()
 
@@ -1013,6 +984,11 @@ def tokenize_recipe(vchar_scanner):
             # should not get here
             assert 0, state
 
+        # save the vchar in case we need it in the next go round
+        prev_vchar = vchar
+
+    # bottom of loop
+
     logger.debug("end of scanner state=%d", state)
 
     # end of scanner
@@ -1021,7 +997,7 @@ def tokenize_recipe(vchar_scanner):
         token_list.append(Literal(token))
     else:
         # should not get here
-        assert 0,(state, vchar_scanner.starting_file_line)
+        assert 0, state
 
     return Recipe( token_list )
 
