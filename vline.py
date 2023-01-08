@@ -14,7 +14,7 @@ import logging
 
 logger = logging.getLogger("pymake.vline")
 
-_debug = False
+_debug = True
 
 import hexdump
 from scanner import ScannerIterator
@@ -84,7 +84,7 @@ def validate_vchars(vchar_list):
         # VChar underlying char must match the file. But...
         # I replace '\' line continuation char with ' ' in the string.
         # Is this original character a '\' that's been replaced?
-        # (see also VChar.set_backspace())
+        # (see also VChar.set_backslash())
         if file_char != vchar.char and file_char != backslash:
             # this is bad, very bad
             breakpoint()
@@ -279,22 +279,26 @@ class VirtualLine(object):
             for col_idx, char in enumerate(line):
                 # char is the original character
                 # pos is the (row, col) of the char in the file
-                # hide indicates a hidden character (don't feed to the
-                # tokenizer, don't highlight in View)
                 pos = (row_idx+starting_row, 
                        col_idx+starting_col)
                 vchar = VChar(char, pos, self.filename)
-                if _debug:
-                    print("vchar=%r at %r" % (vchar.char, vchar.get_pos()))
+#                if _debug:
+#                    print("vchar=%r at %r" % (vchar.char, vchar.get_pos()))
                 vchar_list.append(vchar)
             # reset the column back to zero since we're on a new line
             starting_col = 0
             self.virt_chars.append(vchar_list)
 
     def _collapse_virtual_line(self):
+        # Section 3.1.1  Splitting Long Lines.  
+        # "Outside of recipe lines, backslash/newlines are converted into a single space character.
+        # Once that is done, all whitespace around the backslash/newline is condensed into a single
+        # space: this includes all whitespace preceding the backslash, all whitespace at the beginning
+        # of the line after the backslash/newline, and any consecutive backslash/newline combina-
+        # tions."  -- GNU Make 4.3 Jan 2020
+        #
         # collapse continuation lines according to the whitepace rules around
-        # the backslash (The rules will change if we're inside a recipe list or
-        # if .POSIX is enabled or or or or ...)
+        # the backslash (The rules will change if .POSIX is enabled)
         # TODO .POSIX support
 
         # if only a single line, don't bother
@@ -302,7 +306,7 @@ class VirtualLine(object):
             assert not is_line_continuation(self.phys_lines[0]), self.phys_lines[0]
             return
 
-        # for each line in our virtual lines
+        # for each line in our virtual lines:
         # kill the eol and whitepace on both sides of \
         # kill empty lines
         #
@@ -315,86 +319,93 @@ class VirtualLine(object):
         # """
         # becomes "this is a test"
         #
-        # Whitespace before and after each line is stripped. Whitespace between
-        # tokens in the line is maintained.
-        # """this\
+        # Whitespace before and after each backslash joined line is maintained.
+        # Whitespace between tokens in the line is maintained.
+        #
+        #    vv---- leading spaces preserved
+        # """  this\
         #   is     a     \
-        #   test
-        #"""  
-        # becomes "this is     a test"
+        #   test  
+        # """   ^^-- trailing spaces preserved
+        # becomes "   this is     a test  "
 
-        row = 0
+        def clean_front(row):
+            for vchar in row:
+                if not vchar.char in whitespace:
+                    break
+                vchar.hide = True
 
-        # -1 because the last line needs special handling
-        while row < len(self.virt_chars)-1 :
-            if _debug:
-                print("row={0} {1}".format(row, hexdump.dump(self.phys_lines[row], 16)), end="")
-            
-            # sweep left to right, killing whitespace until we find a non-whitespace character
-            col = 0
-            if _debug:
-                print("collapse1 row=%d col=%d c=%r" % (row, col, printable_char(self.virt_chars[row][col].char)))
-            while col < len(self.virt_chars[row]) and self.virt_chars[row][col].char in whitespace :
-                if _debug:
-                    print("collapse2 row=%d col=%d c=%r" % (row, col, printable_char(self.virt_chars[row][col].char)))
-                self.virt_chars[row][col].hide = True
-                col += 1
+        def clean_back(row):
+            assert row[-1].char in eol
+            assert row[-2].char == backslash
 
-            # now jump to end-of-line, work backwards killing the eol and line
-            # continuation and any whitespace 
+#            print("hide c=%r at %r" % (row[-1].char, row[-1].get_pos()))
+            row[-1].hide = True
 
-            # start at eol
-            col = len(self.virt_chars[row])-1
-            if _debug:
-                print("collapse3 row=%d col=%d c=%r" % (row, col, printable_char(self.virt_chars[row][col].char)))
+            # we will decide what to do with the backslash after we've checked
+            # for an empty line
 
-            # kill EOL
-            assert self.virt_chars[row][col].char in eol, (row, col, self.virt_chars[row][col].char)
-            self.virt_chars[row][col].hide = True
-            col -= 1
+            # -1 to convert from length to index
+            # -2 to skip the trailing backslash+eol
+            idx = len(row)-1-2
 
-            # hide the line continuation "\"
-            assert self.virt_chars[row][col].char==backslash, (row, col, self.virt_chars[row][col].char)
-            self.virt_chars[row][col].set_backslash()
-            col -= 1
+            if idx < 0:
+                # we have a very corner case of a line of just backslash+eol
+                # for example:
+                # \\\n
+                row[-2].hide = True
+                return
 
-            # eat whitespace backwards until we hit start of line or we find an already hidden character or we find non-whitespace
-            while col >= 0 and not self.virt_chars[row][col].hide and self.virt_chars[row][col].char in whitespace :
-                if _debug:
-                    print("collapse4 row=%d col=%d c=%r" % (row, col, printable_char(self.virt_chars[row][col].char)))
-                self.virt_chars[row][col].hide = True
-                col -= 1
+            # In this loop, we check for entirely hidden lines (all whitespace
+            # or an empty line, (but still joined by backslashes)). 
+            # For example: 
+            #
+            # foo=\\\n
+            #    \\\n
+            #    \\\n
+            #    bar\n
+            # becomes "foo= bar\n"
+            #
+            # foo=\\\n
+            # \\\n
+            # \\\n
+            # bar\n
+            # also becomes "foo= bar\n"
 
-            # move to next line
-            row += 1
+            while idx >= 0 and row[idx].char in whitespace:
+                if row[idx].hide:
+                    # we've bumped into a whitespace already hidden by clean_front()
+                    # so this entire line must be hidden
+                    row[-2].hide = True
+                    return
+                    
+                row[idx].hide = True
+                idx -= 1
 
-        # trim leading chars from last line but not trailing chars
-        # (verified empirically with make 4.3 that trailing spaces on the last continuation line are preserved)
-#        breakpoint()
-        col = 0
-        while col < len(self.virt_chars[row]) and self.virt_chars[row][col].char in whitespace :
-            self.virt_chars[row][col].hide = True
-            col += 1
+#            print("backslash c=%r at %r" % (row[-2].char, row[-2].get_pos()))
+            row[-2].set_backslash()
+        # end of clean_back()
 
-        # Last char of the last line should be an EOL. There should be no
-        # backslash on this last line.
-        col = len(self.virt_chars[row])-1
-        assert self.virt_chars[row][col].char in eol, (row, col, self.virt_chars[row][col].char)
-        col -= 1
-        if col >= 0:
-            assert self.virt_chars[row][col].char != backslash, (row, col, self.virt_chars[row][col].char)
+        # leading spaces on first line are preserved
+        clean_back(self.virt_chars[0])
+
+        rowidx = 1
+        while rowidx < len(self.virt_chars)-1:
+            clean_front(self.virt_chars[rowidx])
+            clean_back(self.virt_chars[rowidx])
+            rowidx += 1
+
+        # trailing spaces on last line are preserved
+        clean_front(self.virt_chars[rowidx])
 
     def __str__(self):
         # build string from the visible characters
         lines = []
         for row in self.virt_chars:
             s = "".join([vchar.char for vchar in row if not vchar.hide]) 
-            # ignore empty lines
-            if s.strip():
-                lines.append("".join([vchar.char for vchar in row if not vchar.hide]))
+            lines.append(s)
 
         return "".join(lines)
-        return "".join([s for s in lines if len(s)])
 
     def __iter__(self):
         # This iterator we will feed the characters that are still visible to
@@ -515,7 +526,7 @@ class RecipeVirtualLine(VirtualLine):
             # which would indicate a parse failure)
             row = next(row_iter)
 
-            # if first char of the next row is a tab (or recipe_prefix)
+            # if first char of the next row is a tab (aka recipe_prefix)
             # then hide it
             if row[0].char == recipe_prefix:
                 print("r pos=%r hidden" % (row[0].get_pos(),))
