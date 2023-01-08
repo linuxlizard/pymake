@@ -311,7 +311,8 @@ def tokenize_statement_LHS(vchar_scanner, separators=""):
                 if vchar_scanner.lookahead().char == '=':
                     eq = vchar_scanner.next()
                     assign = AssignOp(vline.VCharString([vchar, eq]))
-                    token_list.append(Literal(token.rstrip()))
+                    token_cleaned = token.rstrip()
+                    token = pushtoken(token_cleaned)
                     return Expression(token_list), assign
                 else:
                     token += vchar
