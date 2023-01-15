@@ -99,13 +99,24 @@ def gnumake_string(makefile, extra_args=None, extra_env=None, expect_fail=False,
 def pymake_string(makefile, extra_args=None, extra_env=None, expect_fail=False, flags=0):
     return _select_output(_write_and_run(makefile, run_pymake, extra_args, extra_env, expect_fail), flags)
 
+
+def _should_have_failed(makefile, output_str):
+    with open(fail_filename,"wb") as outfile:
+        outfile.write(makefile.encode("utf8"))
+
+    print("*** test failure written to %s ***" % (fail_filename,), file=sys.stderr)
+    print("*** stdout=%r ***" % output_str, file=sys.stderr)
+#        print("*** stderr=%r ***" % err.stderr, file=sys.stderr)
+    assert 0, "should have failed"
+
+
 def pymake_should_fail(makefile, extra_args=None, extra_env=None):
     try:
-        pymake_string(makefile, extra_args, extra_env, expect_fail=True)
+        stdout = pymake_string(makefile, extra_args, extra_env, expect_fail=True)
     except subprocess.CalledProcessError as err:
         return err.stderr.decode('utf8').strip()
-    else:
-        assert 0, "should have failed"
+
+    _should_have_failed(makefile, stdout)
 
 def gnumake_should_fail(makefile, extra_args=None, extra_env=None):
     try:
@@ -113,11 +124,4 @@ def gnumake_should_fail(makefile, extra_args=None, extra_env=None):
     except subprocess.CalledProcessError as err:
         return err.stderr.decode('utf8').strip()
 
-    with open(fail_filename,"wb") as outfile:
-        outfile.write(makefile.encode("utf8"))
-
-    print("*** test failure written to %s ***" % (fail_filename,), file=sys.stderr)
-    print("*** stdout=%r ***" % stdout, file=sys.stderr)
-#        print("*** stderr=%r ***" % err.stderr, file=sys.stderr)
-    assert 0, "should have failed"
-
+    _should_have_failed(makefile, stdout)

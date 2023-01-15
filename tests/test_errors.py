@@ -10,6 +10,8 @@ def run_test(makefile, expect):
     print("err=",err)
     assert expect in err, err
 
+    # TODO add pymake tests
+
 def test_error_function():
     makefile="""
 # this is a test of the error function
@@ -18,6 +20,13 @@ $(error hello, world)
 @:;@:
 """
     run_test(makefile, "*** hello, world")
+
+def test_error_recipe_commences_before_first_target_fn():
+    makefile="""
+	$(info leading tab)
+@:;@:
+"""
+    run_test(makefile, "*** recipe commences before first target")
 
 def test_error_recipe_commences_before_first_target_directive():
 # The leading tabs mean this is treated as a recipe.
@@ -71,6 +80,27 @@ def test_error_empty_variable_name():
 @:;@:
 """
     run_test(makefile,"*** empty variable name")
+
+def test_error_empty_variable_name_rule_confusion():
+    # parsed as a rule with a target specific variable
+    # e.g., a b are prereqs  then : for the rule
+    # G-Make doesn't seen := like a single token.
+    makefile = """
+# "empty variable name"
+a b :=foo
+
+@:;@:
+"""
+    run_test(makefile,"*** empty variable name")
+
+def test_whitespace_in_variable_assign():
+    makefile = """
+# "missing separator"
+a b = foo
+
+@:;@:
+"""
+    run_test(makefile,"*** missing separator")
 
 def test_error_ifeq_paren():
     # "Invalid syntax in conditional."

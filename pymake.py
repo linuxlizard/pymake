@@ -36,7 +36,6 @@ import rules
 def get_basename( filename ) : 
     return os.path.splitext( os.path.split( filename )[1] )[0]
 
-# TODO rename this fn
 def parse_vline_stream(virt_line, vline_iter, line_scanner): 
     # pull apart a single line into token/symbol(s)
     #
@@ -173,12 +172,7 @@ def parse_makefile(infilename) :
     logger.debug("parse_makefile infilename=%s", infilename)
     src = source.SourceFile(infilename)
 
-    try : 
-        return parse_makefile_from_src(src)
-    except ParseError as err:
-        err.filename = infilename
-        print("ERROR! "+str(err), file=sys.stderr)
-        raise
+    return parse_makefile_from_src(src)
 
 def find_location(tok):
     return tok.get_pos()
@@ -283,8 +277,8 @@ def execute(makefile, args):
                         # makefile rules, statements, etc.
                         # GNU Make itself seems to interpret raw text as a rule and
                         # will print a "missing separator" error
-                        msg = "unexpected non-empty eval result=\"%s\"" % (result, )
-                        raise MakeError(tok.get_pos(), msg=msg)
+#                        msg = "unexpected non-empty eval result=\"%s\"" % (result, )
+                        raise MissingSeparator(tok.get_pos())
                 else:
                     # TODO eval of ConditionalBlocks can return array of "stuff"
                     # eval of include returns array of strings we must parse
@@ -299,7 +293,9 @@ def execute(makefile, args):
             except MakeError as err:
                 # Catch our own Error exceptions. Report, break out of our execute loop and leave.
                 error_message(tok.get_pos(), err.msg)
-                # TODO add cmdline arg to dump err.description for a more detailed error message
+                # check cmdline arg to dump err.description for a more detailed error message
+                if args.detailed_error_explain:
+                    error_message(tok.get_pos(), err.description)
                 exit_code = 1
                 break
             except SystemExit:
@@ -353,13 +349,9 @@ def execute(makefile, args):
                     print("make:", ret["stderr"], file=sys.stderr, end="")
                     print("make: *** [%r] Error %d" % (rule.get_pos(), exit_code))
                     print("make: *** [%r]: %s Error %d" % (recipe.get_pos(), rule.target, exit_code))
-                    break
+                    return exit_code
                 print(ret['stdout'],end="")
 
-            if exit_code != 0:
-                break
-        if exit_code != 0:
-            break
     return exit_code
     
 def usage():
@@ -374,6 +366,7 @@ class Args:
         self.s_expr = False
         self.argslist = []
         self.warn_undefined_variables = False
+        self.detailed_error_explain = False
 
 def parse_args():
     print_version ="""PY Make %s. Work in Progress.
@@ -382,7 +375,9 @@ Copyright (C) 2006-2022 David Poole davep@mbuf.com, testcluster@gmail.com""" % (
     args = Args()
     optlist, arglist = getopt.gnu_getopt(sys.argv[1:], "hvo:dSf:", 
                             ["output=", "version", "debug", "file=", 
-                            "makefile=", "warn-undefined-variables"])
+                            "makefile=", 
+                            "warn-undefined-variables", 
+                            "explain"])
     for opt in optlist:
         if opt[0] in ("-f", "--file", "--makefile"):
             args.filename = opt[1]                    
@@ -400,6 +395,8 @@ Copyright (C) 2006-2022 David Poole davep@mbuf.com, testcluster@gmail.com""" % (
             sys.exit(0)
         elif opt[0] == "--warn-undefined-variables":
             args.warn_undefined_variables = True
+        elif opt[0] == "--explain":
+            args.detailed_error_explain = True
         else:
             # wtf?
             assert 0, opt
@@ -422,8 +419,12 @@ if __name__=='__main__':
     infilename = args.filename
     try : 
         makefile = parse_makefile(infilename)
-    except ParseError:
+    except MakeError as err:
         # TODO dump lots of lovely useful information about the failure.
+        print("%s"%err, file=sys.stderr)
+        if args.detailed_error_explain:
+            print("%s"%err.description, file=sys.stderr)
+
         sys.exit(1)
 
     # print the S Expression
@@ -434,10 +435,10 @@ if __name__=='__main__':
 
     # regenerate the makefile
     if args.output:
-        print("# start makefile")
+        print("# start makefile %s" % args.output)
         with open(args.output,"w") as outfile:
             print(makefile.makefile(), file=outfile)
-        print("# end makefile")
+        print("# end makefile %s" % args.output)
 
     exit_code = execute(makefile, args)
     sys.exit(exit_code)

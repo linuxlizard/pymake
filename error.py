@@ -19,13 +19,17 @@ assert_on_parse_error = False
 class MakeError(Exception):
     # base class of all pymake exceptions
     description = "(No description!)" # useful description of the error
+    default_msg = "(no message)"
 
     def __init__(self,*args,**kwargs):
         super().__init__(*args)
         self.code = kwargs.get("code",None)
         self.pos = kwargs.get("pos", ("missing",(-1,-1)))
         self.filename = self.pos[0]
-        self.msg = kwargs["msg"]
+        self.msg = kwargs.get("msg") or self.default_msg
+
+    def get_pos(self):
+        return self.pos
 
     def __str__(self):
         return "*** filename=\"{0}\" pos={1}: {2}".format(
@@ -42,19 +46,27 @@ class ParseError(MakeError):
             # (especially when the parse error is unexpected or wrong)
             assert 0
 
-class RecipeCommencesBeforeFirstTarget(MakeError):
-    description = """Usually a parse error. Make has gotten confused by a <tab>
-(RECIPEPREFIX) found at the start of line and thinks we've found a Recipe.
+class RecipeCommencesBeforeFirstTarget(ParseError):
+    description = """\"Recipe Commmences Before First Target\"
+Usually a parse error. Make has gotten confused by a RECIPEPREFIX (by default,
+\\t (tab)) found at the start of line and thinks we've found a Recipe.  
 TODO add more description here
 """
+    default_msg = "recipe commences before first target"
 
-class MissingSeparator(MakeError):
-    description = """Usually a parse error.  Make has found some text that
-    doesn't successfully pares into a rule or an expression.
-TODO add more description here
+class MissingSeparator(ParseError):
+    description = """\"Missing Separator\"
+Usually a parse error.  Make has found some text that
+doesn't successfully parse into a rule or an expression.
+-    Can happen when a Recipe doesn't the proper recipe prefix (default \\t (tab))
+-    Can happen when a text transformation function "leaks" text into the parser
+     where it should be captured by a variable.
+
+TODO add better+more description here
 """
+    default_msg = "missing separator"
 
-class InvalidFunctionArguments(MakeError):
+class InvalidFunctionArguments(ParseError):
     description = """Arguments to a function are incorrect."""
 
 #class VersionError(MakeError):

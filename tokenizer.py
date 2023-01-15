@@ -227,8 +227,8 @@ def tokenize_statement_LHS(vchar_scanner, separators=""):
     # Statement ::= Assignment | Rule | Directive | Expression
     # Assignment ::= LHS AssignmentOperator RHS
     # Rule       ::= LHS RuleOperator RHS
-    # Directive  ::= TODO
-    # Expression ::= TODO
+    # Directive  ::= define ifdef etc etc
+    # Expression ::= everything else
     #
     # Directive is stuff like ifdef export vpath define. Directives get
     # slightly complicated because
@@ -237,19 +237,24 @@ def tokenize_statement_LHS(vchar_scanner, separators=""):
     #   ifdef =  <--- legal
     #   ifdef=   <--- legal
     # 
-    # Expression is single function like $(info) $(warning). Not all functions
-    # are valid in statement context. TODO finish directive.mk to discover
-    # which directives are legal in statement context.
-    # A lone expression in GNU make usually triggers the "missing separator"
-    # error.
+    # Expression is single function like $(info) or $(warning). Not all
+    # functions are valid in statement context.  A lone Expression in GNU Make
+    # usually triggers the "missing separator" error because the parser gets
+    # confused.
     #
+    # RECIPEPREFIX (aka <tab>) makes this so much harder. A leading <tab> is
+    # supposed to indicate a Recipe. But GNU Make allows directives after the
+    # <tab>. We'll need to carefully preserve a line with a leading <tab> (Or
+    # whatever RECIPEPREFIX is set to)
 
     # get the starting position of this scanner (for error reporting)
     starting_pos = vchar_scanner.lookahead().pos
     logger.debug("LHS starting_pos=%s", starting_pos)
 
     for vchar in vchar_scanner : 
+        # ha ha type checking
         assert vchar.filename 
+
         c = vchar.char
         logger.debug("s c={} state={} idx={} token=\"{}\" pos={} src={}".format(
             printable_char(c), state, vchar_scanner.idx, str(token), vchar.pos, vchar.filename))
@@ -257,8 +262,11 @@ def tokenize_statement_LHS(vchar_scanner, separators=""):
 #            printable_char(c), state, vchar_scanner.idx, str(token), vchar.pos, vchar.filename))
 
         if state==state_start:
-            # always eat whitespace while in the starting state
-            if c in whitespace : 
+            # sometimes eat whitespace while in the starting state
+            if c == recipe_prefix:
+                vchar_scanner.pushback()
+                state = state_in_word
+            elif c in whitespace: 
                 # eat whitespace
                 pass
             elif c==':':

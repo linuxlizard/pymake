@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-2.0
 
-# test parsing a block of recipes
+# whitebox test parsing a block of recipes
 
 from scanner import ScannerIterator
 import parsermk
@@ -129,5 +129,5 @@ endif # FOO
     line_scanner = ScannerIterator(src.file_lines, src.name)
     recipe_list = parsermk.parse_recipes(line_scanner)
 
-    breakpoint()
+#    breakpoint()
 

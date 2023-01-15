@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: GPL-2.0
 
 # test parsing a whole rule
+#
+# XXX work in progress!
 
 from scanner import ScannerIterator
 import source
@@ -25,4 +27,11 @@ foo:
     statement = tokenize_statement(vchar_scanner)
     assert isinstance(statement, symbolmk.RuleExpression)
 
+
+def test_circular_dependency():
+    s = """\
+foo: foo
+	@echo foo
+"""
+    # warning: Circular foo <- foo dependency dropped
 

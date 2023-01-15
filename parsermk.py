@@ -782,6 +782,7 @@ def parse_expression(expr, virt_line, vline_iter):
     #   export something
     #   define foo   # start of multi-line variable
 
+    logger.debug("parse %s", expr.__class__.__name__)
 #    breakpoint()
     assert isinstance(expr,Expression), type(expr)
 
@@ -818,8 +819,18 @@ def parse_expression(expr, virt_line, vline_iter):
 
     # seek_directive() needs a character iterator 
     viter = ScannerIterator(tok.string, tok.string.get_pos()[0])
+
+    # peek at the first character of the line. If it's a <tab> aka recipeprefix then 
+    # WOW does our life get complicated.  GNU Make allows directives (with a
+    # couple exceptions) to be recipeprefix'd. 
+    first_vchar = viter.lookahead()
+
     directive_vstr = seek_directive(viter)
     if not directive_vstr:
+        if first_vchar.char == recipe_prefix:
+            # We're confused. 
+            raise RecipeCommencesBeforeFirstTarget(pos=first_vchar.get_pos())
+
         # nope, not a directive. Ignore this expression and let execute figure it out
         return assign_expr if assign_expr else expr
 
