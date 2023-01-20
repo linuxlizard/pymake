@@ -33,7 +33,7 @@ vline._debug = True
 # of the line after the backslash/newline, and any consecutive backslash/newline combina-
 # tions."
 
-class DebugVirtualLine(VirtualLine):
+class DebugVirtualLine(vline.VirtualLine):
     # wrapper around VirtualLine which allows us to feed in strings that don't
     # strictly come from files
     def __init__(self, phys_lines_list):
@@ -58,7 +58,7 @@ def test_line_cont():
 
     for test in test_list : 
         test_string,result = test
-        assert is_line_continuation(test_string)==result, (test_string,)
+        assert vline.is_line_continuation(test_string)==result, (test_string,)
 
 def test_vline():
     # Section 3.1.1  Splitting Long Lines.  
@@ -154,6 +154,91 @@ def test_vline():
             breakpoint()
         assert test_result==valid_str
 
+
+def test_get_vline():
+    makefile = """
+# this is a comment
+this_is := an_assign
+
+I am another line
+
+this line\\
+ continues on the next line
+
+this line\\ 
+  has a --^ space
+
+I have # a line comment
+
+this line\\
+
+should not continue to this line
+
+	oh look a dreaded leading tab
+
+    ifdef\\
+    FOO # directive
+
+	ifdef\\
+    FOO # directive even though tab
+
+	foo\\
+	bar\\
+		baz\\
+	    qux
+"""
+    src = source.SourceString( makefile )
+    src.load()
+    scanner = ScannerIterator(src.file_lines, src.name)
+    vline_iter = vline.get_vline(src.name, scanner)
+
+    s = str(next(vline_iter))
+
+    # comment should be eaten
+    assert s == "this_is := an_assign\n"
+
+    # blank line should be ignored
+    s = str(next(vline_iter))
+    assert s == "I am another line\n"
+
+    s = str(next(vline_iter))
+    assert s == "this line continues on the next line\n"
+
+    s = str(next(vline_iter))
+    assert s == "this line\\ \n"
+
+    s = str(next(vline_iter))
+    assert s == "  has a --^ space\n"
+
+    # line comments are passed through to the tokenizer
+    s = str(next(vline_iter))
+    assert s == "I have # a line comment\n"
+
+    # note the space between line and \\n
+    s = str(next(vline_iter))
+    assert s == "this line \n"
+
+    s = str(next(vline_iter))
+    assert s == "should not continue to this line\n"
+
+    one_vline = next(vline_iter)
+    assert isinstance(one_vline, vline.RecipeVirtualLine), type(one_vline)
+    assert str(one_vline) == '\toh look a dreaded leading tab\n'
+
+    s = str(next(vline_iter))
+    assert s == "    ifdef FOO # directive\n"
+
+    one_vline = next(vline_iter)
+    assert isinstance(one_vline, vline.RecipeVirtualLine), type(one_vline)
+    assert str(one_vline) == "\tifdef\\\n    FOO # directive even though tab\n"
+
+    one_vline = next(vline_iter)
+    assert isinstance(one_vline, vline.RecipeVirtualLine), type(one_vline)
+    assert str(one_vline) == "\tfoo\\\nbar\\\n\tbaz\\\n    qux\n"
+#    breakpoint()
+
+    for one_vline in vline_iter:
+        pass
 
 def file_test(infilename):
     # load, print a file. The virtual line will hide the backslash line

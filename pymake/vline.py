@@ -554,18 +554,22 @@ def get_vline(filename, line_iter):
     starting_line_number = -1
     state = state_start 
 
+    is_recipe_prefix = False
+
     # note! line_iter is shared with the caller.
     # Also can't use enumerate() because the line_iter will also be used inside
     # parse_recipes() and the idx can change with push_back
     for line in line_iter :
-#        # line_iter.idx is the *next* line number counting from zero 
-#        starting_line_number = line_iter.idx-1
         logger.debug("get_vline line_num=%d state=%d", line_iter.idx, state)
-#        print("{0}".format(hexdump.dump(line), end=""))
 
         if state==state_start : 
             # line_iter.idx is the *next* line number counting from zero 
             starting_line_number = line_iter.idx-1
+
+            if line[0] == recipe_prefix:
+                is_recipe_prefix = True
+            else:
+                is_recipe_prefix = False
 
             start_line_stripped = line.strip()
 
@@ -595,21 +599,31 @@ def get_vline(filename, line_iter):
             # wtf?
             assert 0, state
 
+        # Note the state machine falls through from the above state_start
+        # and state_backslash handlers to this point. 
+
         if state==state_tokenize: 
-            # is this a line comment?
-            if start_line_stripped.startswith("#") :
-                # ignore
+            # is this a Makefile line comment?
+            # (not a recipe line because comments are passed through to the shell)
+            if not is_recipe_prefix and start_line_stripped.startswith("#") :
+                # ignore the whole line
                 state = state_start
                 continue
 
             # make a virtual line (joins together backslashed lines into one
-            # line visible through a character by character iterator)
-            virt_line = VirtualLine(line_list, (starting_line_number,0), filename)
-            del line_list # detach the ref (VirtualLine keeps the array)
+            # single line visible through a character by character iterator)
+            if is_recipe_prefix:
+                virt_line = RecipeVirtualLine(line_list, (starting_line_number,0), filename)
+            else:
+                virt_line = VirtualLine(line_list, (starting_line_number,0), filename)
+
+            # get rid of the array so I will fail with None.append() if I wind
+            # up in the wrong state
+            del line_list 
 
             yield virt_line
 
-            # back around the horn
+            # start searching for a new line
             state = state_start
 
     return None
