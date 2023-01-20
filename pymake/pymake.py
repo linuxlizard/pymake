@@ -10,7 +10,7 @@
 import sys
 import logging
 import os
-import shell
+
 import getopt
 
 logger = logging.getLogger("pymake")
@@ -20,18 +20,19 @@ logger = logging.getLogger("pymake")
 if sys.version_info.major < 3:
     raise Exception("Requires Python 3.x")
 
-from scanner import ScannerIterator
-from version import Version
-import vline
-from symbolmk import *
-from constants import *
-from error import *
-from tokenizer import tokenize_statement
-import parsermk
-import source
-from symtablemk import SymbolTable
-import makedb
-import rules
+from pymake.scanner import ScannerIterator
+from pymake.version import Version
+import pymake.vline as vline
+from pymake.symbolmk import *
+from pymake.constants import *
+from pymake.error import *
+from pymake.tokenizer import tokenize_statement
+import pymake.parsermk as parsermk
+import pymake.source as source
+from pymake.symtablemk import SymbolTable
+import pymake.makedb as makedb
+import pymake.rules as rules
+import pymake.shell as shell
 
 def get_basename( filename ) : 
     return os.path.splitext( os.path.split( filename )[1] )[0]

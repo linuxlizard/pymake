@@ -9,7 +9,7 @@ import sys
 if sys.version_info.major < 3:
     raise Exception("Requires Python 3.x")
 
-from pymake import *
+from pymake.pymake import *
 
 def run():
     comments_test_list = ( 

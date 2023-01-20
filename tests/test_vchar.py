@@ -4,8 +4,8 @@ import logging
 import string
 import itertools
 
-import vline
-import scanner
+import pymake.vline as vline
+import pymake.scanner as scanner
 
 logger = logging.getLogger("pymake.test_vchar")
 

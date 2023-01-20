@@ -3,11 +3,11 @@ import logging
 logger = logging.getLogger("pymake")
 logging.basicConfig(level=logging.DEBUG)
 
-from symbolmk import *
-import symtablemk
+from pymake.symbolmk import *
+import pymake.symtablemk as symtablemk
 
 # turn on internal behaviors that allow us to create literals without VCharString
-import symbolmk
+import pymake.symbolmk as symbolmk
 symbolmk._testing = True
 
 import run

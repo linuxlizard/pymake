@@ -1,4 +1,4 @@
-from wildcard import split_percent, wildcard_match, wildcard_replace
+from pymake.wildcard import split_percent, wildcard_match, wildcard_replace
 
 def test_split():
     p = split_percent("hello.c")

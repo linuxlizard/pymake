@@ -45,9 +45,8 @@ As of this writing, I am implementing the GNU make $() functions. I cannot yet e
 
 Read a makefile, dumps incredible amounts of debugging while parsing. Output of the makefile got to stdout
 
-    python3 pymake.py Makefile
+     python -m pymake.pymake -f Makefile
 
 Parse/execute functions.mk, rewrite the makefile from the parsed source to out.mk (very useful for seeing a cleaned makefile)
 
-    python3 pymake.py -o out.mk functions.mk
-
+    python -m pymake.pymake -o out.mk -f Makefile

@@ -4,10 +4,13 @@ import tempfile
 import subprocess
 import shutil
 
+import pytest
+
 _debug = True
 
 # on failure, copy the makefile under test to this filename
-fail_filename = "/tmp/fail.mk"
+fail_filename = os.path.join(os.path.dirname(__file__), "..", "log", "fail.mk")
+
 
 MAKE='make'
 #MAKE='/home/dpoole/src/make-4.3/make'
@@ -42,15 +45,19 @@ def _real_run(args, extra_args=None, extra_env=None):
 #    return m.stdout if m.stdout else m.stderr
 
 def run_makefile(infilename, extra_args=None, extra_env=None):
+    if os.name == 'nt':
+        pytest.skip("Make on Windows :s")
+
     args = (MAKE, "-f", infilename)
     return _real_run(args, extra_args, extra_env)
 
 def run_pymake(infilename, extra_args=None, extra_env=None):
-    args = ("python3", "pymake.py", "-f", infilename)
+    args = (sys.executable, "-m", "pymake.pymake", "-f", infilename)
     return _real_run(args, extra_args, extra_env)
 
 def _write_and_run(makefile, runner_fn, extra_args=None, extra_env=None, expect_fail=False):
-    with tempfile.NamedTemporaryFile() as outfile:
+    # For windows we cannot use the context because the permission will be denied later
+    with tempfile.NamedTemporaryFile(delete=os.name != 'nt') as outfile:
         outfile.write(makefile.encode("utf8"))
         outfile.flush()
         try:
@@ -66,6 +73,10 @@ def _write_and_run(makefile, runner_fn, extra_args=None, extra_env=None, expect_
             print("*** stdout=%r ***" % err.stdout, file=sys.stderr)
             print("*** stderr=%r ***" % err.stderr, file=sys.stderr)
             assert 0, str(err)
+        finally:
+            if os.name == 'nt':
+                outfile.close()
+                os.remove(outfile.name)
 
     if _debug:
         print("stdout=",p.stdout)

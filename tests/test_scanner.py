@@ -4,8 +4,8 @@
 #
 # davep 16-Nov-2014
 
-from scanner import ScannerIterator
-from vline import VChar, VirtualLine
+from pymake.scanner import ScannerIterator
+from pymake.vline import VChar, VirtualLine
 
 def test1() : 
     input_str = "hello, world"

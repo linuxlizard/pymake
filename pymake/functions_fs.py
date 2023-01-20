@@ -8,9 +8,9 @@ import glob
 import os.path
 import itertools
 
-from functions_base import Function, FunctionWithArguments
-from todo import TODOMixIn
-from flatten import flatten
+from pymake.functions_base import Function, FunctionWithArguments
+from pymake.todo import TODOMixIn
+from pymake.flatten import flatten
 
 __all__ = [ "AbsPath", 
             "AddPrefix",

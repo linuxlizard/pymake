@@ -2,12 +2,12 @@
 
 # whitebox test parsing a block of recipes
 
-from scanner import ScannerIterator
-import parsermk
-import source
-import symtablemk
-from constants import backslash
-import vline
+from pymake.scanner import ScannerIterator
+import pymake.parsermk as parsermk
+import pymake.source as source
+import pymake.symtablemk as symtablemk
+from pymake.constants import backslash
+import pymake.vline as vline
 
 def make_recipelist(s):
     src = source.SourceString(s)

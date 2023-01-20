@@ -1,11 +1,11 @@
 # SPDX-License-Identifier: GPL-2.0
-from vline import VirtualLine, RecipeVirtualLine
-from scanner import ScannerIterator
-import tokenizer
-import symtablemk
-import source
-from constants import backslash, eol
-import shell
+from pymake.vline import VirtualLine, RecipeVirtualLine
+from pymake.scanner import ScannerIterator
+import pymake.tokenizer as tokenizer
+import pymake.symtablemk as symtablemk
+import pymake.source as source
+from pymake.constants import backslash, eol
+import pymake.shell as shell
 
 def make_viter(s):
     # note: only use this fn for recipes that don't have backslashes

@@ -4,10 +4,10 @@ import os
 import logging
 import collections
 
-import version
-import constants
-from symbolmk import Symbol
-from error import warning_message, MakeError
+import pymake.version as version
+import pymake.constants as constants
+from pymake.symbolmk import Symbol
+from pymake.error import warning_message, MakeError
 
 logger = logging.getLogger("pymake.symtable")
 
