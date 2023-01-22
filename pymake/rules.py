@@ -86,13 +86,12 @@ class RuleDB:
     def __str__(self):
         return ",".join(self.rules.keys())
 
-    def graph(self, graphname):
+    def graph(self, title, dotfilename):
         # Build a graphviz dot file. This is the 2nd biggest reason I made this
         # whole silly program.
 
-        dotfilename = graphname + "-graph.dot"
         with open(dotfilename,"w") as outfile:
-            outfile.write("digraph %s {\n" % graphname)
+            outfile.write("digraph %s {\n" % title)
 
             for target,rule in self.rules.items():
                 # add the nodes 
@@ -110,4 +109,4 @@ class RuleDB:
             outfile.write("}\n")
 
         return dotfilename
-        
+
