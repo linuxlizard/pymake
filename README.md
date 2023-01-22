@@ -7,6 +7,12 @@ I want to debug my GNU Makefiles.
 
 Ultimate long-term goal is a GNU Make visual debugger. I want breakpoints on variables changing. I want to single step through the rules. I want to put a breakpoint on a rule.
 
+## Update 20230122. More Pythonic.
+
+Thanks to a PR, the code is in a much cleaner, more Pythonic state. All the test code and test makefiles are now in tests/ directory. 
+
+I've been battling problems with recipeprefix (aka <tab>).  GNU Make's parser is a bit ad-hoc and I need to match their behavior. Correctly supporting the is-a-recipe / is-not-a-recipe on lines starting with <tab> is going to require a refactor of the tokenizer.
+
 ## Update 20221224. Large Updates.
 
 I have rules started. I have conditional directives working (needs more
