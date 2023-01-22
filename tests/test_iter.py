@@ -3,8 +3,8 @@
 # test vline_iter and line_iter stay in sync
 
 import sys
-from vline import get_vline
-from scanner import ScannerIterator
+from pymake.vline import get_vline
+from pymake.scanner import ScannerIterator
 import random
 
 def iter_test(file_lines):

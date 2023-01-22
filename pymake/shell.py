@@ -6,7 +6,8 @@ import logging
 import os.path
 import errno
 import subprocess
-from error import *
+
+from pymake.error import *
 
 logger = logging.getLogger("pymake.shell")
 

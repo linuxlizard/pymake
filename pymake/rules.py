@@ -5,7 +5,7 @@ import os
 
 logger = logging.getLogger("pymake.rules")
 
-from error import *
+from pymake.error import *
 
 _debug = True
 

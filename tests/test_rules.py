@@ -4,12 +4,12 @@
 #
 # XXX work in progress!
 
-from scanner import ScannerIterator
-import source
-from tokenizer import tokenize_statement
-import symbolmk
-import symtablemk
-import vline
+from pymake.scanner import ScannerIterator
+import pymake.source as source
+from pymake.tokenizer import tokenize_statement
+import pymake.symbolmk as symbolmk
+import pymake.symtablemk as symtablemk
+import pymake.vline as vline
 
 def test_simple_rule():
     s = """\

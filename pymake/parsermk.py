@@ -1,12 +1,12 @@
 import logging
 
-from constants import *
-from error import *
-from symbolmk import *
-from printable import printable_char
-from scanner import ScannerIterator
-from tokenizer import tokenize_recipe, tokenize_assign_RHS
-import vline
+from pymake.constants import *
+from pymake.error import *
+from pymake.symbolmk import *
+from pymake.printable import printable_char
+from pymake.scanner import ScannerIterator
+from pymake.tokenizer import tokenize_recipe, tokenize_assign_RHS
+import pymake.vline as vline
 
 _debug = True
 

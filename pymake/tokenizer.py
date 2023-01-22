@@ -4,12 +4,12 @@ _debug = True
 
 logger = logging.getLogger("pymake.tokenize")
 
-from constants import *
-from error import *
-from printable import printable_char, printable_string
-import vline
-from symbolmk import *
-import functions 
+from pymake.constants import *
+from pymake.error import *
+from pymake.printable import printable_char, printable_string
+import pymake.vline as vline
+from pymake.symbolmk import *
+import pymake.functions as functions
 
 def comment(vchar_scanner):
     # Seems weird to character by character consume a line comment until the

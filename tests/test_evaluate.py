@@ -6,8 +6,9 @@ import logging
 
 logger = logging.getLogger("pymake")
 
-from symbol import *
-from symtable import SymbolTable
+from pymake.symbolmk import  (
+    Literal, Expression, VarRef, AssignmentExpression, AssignOp,)
+from pymake.symtablemk import SymbolTable
 
 def test1():
     # foo

@@ -9,16 +9,16 @@ logger = logging.getLogger("pymake.functions")
 
 #logger.setLevel(level=logging.DEBUG)
 
-from symbolmk import VarRef, Literal
-from vline import VCharString, whitespace
-from error import *
-from functions_base import Function, FunctionWithArguments
-from functions_fs import *
-from functions_cond import *
-from functions_str import *
-from todo import TODOMixIn
+from pymake.symbolmk import VarRef, Literal
+from pymake.vline import VCharString, whitespace
+from pymake.error import *
+from pymake.functions_base import Function, FunctionWithArguments
+from pymake.functions_fs import *
+from pymake.functions_cond import *
+from pymake.functions_str import *
+from pymake.todo import TODOMixIn
 
-import shell
+import pymake.shell as shell
 
 __all__ = [ "Info", 
             "WarningClass",

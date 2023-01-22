@@ -4,8 +4,8 @@ import logging
 
 logger = logging.getLogger("pymake.functions")
 
-from symbolmk import VarRef, Literal
-from vline import VCharString, whitespace
+from pymake.symbolmk import VarRef, Literal
+from pymake.vline import VCharString, whitespace
 
 class Function(VarRef):
     def __init__(self, args):

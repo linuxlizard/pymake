@@ -16,10 +16,10 @@ logger = logging.getLogger("pymake.vline")
 
 _debug = True
 
-import hexdump
-from scanner import ScannerIterator
-from printable import printable_char, printable_string
-from constants import eol, backslash, whitespace, recipe_prefix
+import pymake.hexdump as hexdump
+from pymake.scanner import ScannerIterator
+from pymake.printable import printable_char, printable_string
+from pymake.constants import eol, backslash, whitespace, recipe_prefix
 
 # indices into VirtualLine's characters' position.
 VCHAR_ROW = 0

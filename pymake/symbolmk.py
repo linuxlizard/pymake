@@ -10,13 +10,13 @@ _testing = False
 
 logger = logging.getLogger("pymake.symbol")
 
-from printable import printable_char, printable_string
-from vline import VirtualLine, VChar, VCharString
-from version import Version
-from error import *
-import shell
-from scanner import ScannerIterator
-import source
+from pymake.printable import printable_char, printable_string
+from pymake.vline import VirtualLine, VChar, VCharString
+from pymake.version import Version
+from pymake.error import *
+import pymake.shell as shell
+from pymake.scanner import ScannerIterator
+import pymake.source as source
 
 _debug = True
 

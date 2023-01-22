@@ -15,15 +15,15 @@ import io
 
 logger = logging.getLogger("pymake.test_vline")
 
-from scanner import ScannerIterator
-from vline import get_vline
-from source import SourceFile
-import hexdump
-from vline import is_line_continuation, VirtualLine
-from printable import printable_string
+from pymake.scanner import ScannerIterator
+from pymake.vline import get_vline
+from pymake.source import SourceFile
+import pymake.hexdump as hexdump
+from pymake.vline import is_line_continuation, VirtualLine
+from pymake.printable import printable_string
 
 # turn on the big global debug flags
-import vline
+import pymake.vline as vline
 vline._debug = True
 
 # GNU Make Manual section 3.1.1 Splitting Long Lines.

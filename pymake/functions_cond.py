@@ -1,6 +1,6 @@
 # functions for conditionals
 
-from functions_base import Function, FunctionWithArguments
+from pymake.functions_base import Function, FunctionWithArguments
 
 __all__ = [ "AndClass", "IfClass", "OrClass" ]
 
