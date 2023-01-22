@@ -10,7 +10,7 @@ import pytest
 
 # Find file relative to tests location
 test_dir = os.path.dirname(__file__)
-example_dir = os.path.abspath(os.path.join(test_dir, '..', "pymake"))
+example_dir = os.path.abspath(os.path.join(test_dir, '..', "tests"))
 
 
 def _run_makefile(infilename):

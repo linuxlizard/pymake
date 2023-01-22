@@ -148,7 +148,7 @@ class Expression(Symbol):
     #    filename/pos of everything in the Makefile
     def __init__(self, token_list ):
         # expect a list/array/tuple (test by calling len())
-        assert len(token_list)>=0, (type(token_list), token_list)
+        assert len(token_list) >= 0
         logger.debug("new Expression with %d tokens", len(token_list))
         self.token_list = token_list
         Symbol.validate(token_list)
@@ -854,7 +854,7 @@ class IfdefDirective(ConditionalDirective):
     def _parse(self):
         # FIXME this ugly and slow and ugly and I'd like to fix it
         # (circular imports are circular)
-        from tokenizer import tokenize_statement
+        from pymake.tokenizer import tokenize_statement
         self.expression = tokenize_statement(ScannerIterator(self.vcstring.chars, None))
         
     def _eval(self, symbol_table):
@@ -910,8 +910,8 @@ class IfeqDirective(ConditionalDirective):
         #
         # FIXME this ugly and slow and ugly and I'd like to fix it
         # (circular imports are circular)
-        from tokenizer import tokenize_statement
-        from parsermk import parse_ifeq_conditionals
+        from pymake.tokenizer import tokenize_statement
+        from pymake.parsermk import parse_ifeq_conditionals
         expr = tokenize_statement(ScannerIterator(self.vcstring.chars, None))
         self.expr1, self.expr2 = parse_ifeq_conditionals(expr, self.name, None)
 

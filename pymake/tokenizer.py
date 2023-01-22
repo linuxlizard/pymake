@@ -93,6 +93,11 @@ def tokenize_statement(vchar_scanner):
     # Only difference between a rule LHS and an assignment LHS is the
     # whitespace. In a rule, the whitespace is ignored. In an assignment, the
     # whitespace is preserved.
+    #
+    # RECIPEPREFIX (aka <tab>) makes this so much harder. A leading <tab> is
+    # supposed to indicate a Recipe. But GNU Make allows directives after the
+    # <tab>. We'll need to carefully preserve a line with a leading <tab> (Or
+    # whatever RECIPEPREFIX is set to)
 
     # get the starting position of this string (for error reporting)
     starting_pos = vchar_scanner.lookahead().pos
@@ -242,10 +247,6 @@ def tokenize_statement_LHS(vchar_scanner, separators=""):
     # usually triggers the "missing separator" error because the parser gets
     # confused.
     #
-    # RECIPEPREFIX (aka <tab>) makes this so much harder. A leading <tab> is
-    # supposed to indicate a Recipe. But GNU Make allows directives after the
-    # <tab>. We'll need to carefully preserve a line with a leading <tab> (Or
-    # whatever RECIPEPREFIX is set to)
 
     # get the starting position of this scanner (for error reporting)
     starting_pos = vchar_scanner.lookahead().pos
@@ -262,11 +263,8 @@ def tokenize_statement_LHS(vchar_scanner, separators=""):
 #            printable_char(c), state, vchar_scanner.idx, str(token), vchar.pos, vchar.filename))
 
         if state==state_start:
-            # sometimes eat whitespace while in the starting state
-            if c == recipe_prefix:
-                vchar_scanner.pushback()
-                state = state_in_word
-            elif c in whitespace: 
+            # eat whitespace while in the starting state
+            if c in whitespace: 
                 # eat whitespace
                 pass
             elif c==':':
@@ -407,6 +405,8 @@ def tokenize_statement_LHS(vchar_scanner, separators=""):
 
     # ran out of string; save anything we might have seen
     token = pushtoken(token)
+
+    logger.debug("end of LHS state=%d", state)
 
     # hit end of scanner; what was our final state?
     if state==state_colon:

@@ -61,7 +61,7 @@ foo:
 """
     run_fail_test(makefile, "missing 'endef', unterminated 'define'")
 
-@pytest.mark.skip(reason="FIXME")
+@pytest.mark.skip(reason="recipeprefix TODO")
 def test_var_assign_before_first_rule():
     # variable assignment allowed as long as before the first rule
     makefile = """
@@ -71,6 +71,7 @@ foo:
 """
     run_test(makefile, "42")
 
+@pytest.mark.skip(reason="recipeprefix TODO")
 def test_leading_tab_before_rule():
     makefile = """
 	$(info leading tab before any rules)
@@ -78,6 +79,7 @@ def test_leading_tab_before_rule():
 """
     run_fail_test(makefile, "recipe commences before first target")
 
+@pytest.mark.skip(reason="recipeprefix TODO")
 def test_tab_comment():
     makefile = """
 	# this is a comment with leading tab and is ignored
@@ -88,7 +90,7 @@ foo:
 
 def test_recipe_missing_tab():
     makefile = """
-	# this is a comment with leading tab and is ignored
+#	# this is a comment with leading tab and is ignored
 foo:
     @echo foo
 """

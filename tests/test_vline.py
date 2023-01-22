@@ -17,7 +17,7 @@ logger = logging.getLogger("pymake.test_vline")
 
 from pymake.scanner import ScannerIterator
 from pymake.vline import get_vline
-from pymake.source import SourceFile
+from pymake.source import SourceFile, SourceString
 import pymake.hexdump as hexdump
 from pymake.vline import is_line_continuation, VirtualLine
 from pymake.printable import printable_string
@@ -187,7 +187,7 @@ should not continue to this line
 		baz\\
 	    qux
 """
-    src = source.SourceString( makefile )
+    src = SourceString( makefile )
     src.load()
     scanner = ScannerIterator(src.file_lines, src.name)
     vline_iter = vline.get_vline(src.name, scanner)
