@@ -545,7 +545,8 @@ def seek_directive(viter, seek=directive):
                 break
 
     # did we find a directive amidst all this whitespace?
-    if (s:=str(vcstr)) in directive:
+    s = str(vcstr)
+    if s in directive:
         # we found a directive
         logger.debug("seek_directive found \"%s\" at %r", s, vcstr.get_pos())
 
