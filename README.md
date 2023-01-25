@@ -24,7 +24,7 @@ Still TODO:
 * override directive
 * 'define' multi-line variable definitions.
 
-## Update 20220924. Throwing in the Towel.
+## Update 20220924. Array of Strings vs Space Separated Strings.
 
 My original plan of returning arrays of python strings in the $() functions has
 been scrapped. I'm now building a 100% python string from each function. The
