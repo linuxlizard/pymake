@@ -20,7 +20,7 @@ def _run_makefile(infilename):
     filepath = os.path.join(example_dir, infilename)
     assert os.path.exists(filepath)
 
-    m = subprocess.run(("make", "-f", filepath), shell=False, check=True, capture_output=True)
+    m = subprocess.run(("make", "-f", filepath), shell=False, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     print(m.stdout)
     return m.stdout
 
@@ -28,7 +28,7 @@ def _run_pymake(infilename):
     filepath = os.path.join(example_dir, infilename)
     assert os.path.exists(filepath)
 
-    m = subprocess.run((sys.executable, "-m", "pymake.pymake", "-f", filepath), shell=False, check=True, capture_output=True)
+    m = subprocess.run((sys.executable, "-m", "pymake.pymake", "-f", filepath), shell=False, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     print(m.stdout)
     return m.stdout
 

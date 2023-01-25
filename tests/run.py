@@ -35,7 +35,7 @@ def _real_run(args, extra_args=None, extra_env=None):
         assert isinstance(extra_env,dict), type(extra_env)
         env.update(extra_env)
 
-    p = subprocess.run(all_args, shell=False, check=True, capture_output=True, env=env)
+    p = subprocess.run(all_args, shell=False, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env)
 
     if _debug:
         print("stdout=",p.stdout)

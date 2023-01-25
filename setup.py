@@ -12,7 +12,7 @@ if __name__ == "__main__":
         description="Parse GNU Makefiles with Python",
         long_description=(Path(__file__).parent / "README.md").read_text(),
         author="linuxlizard",
-        author_email="{{cookiecutter.email}}",
+        author_email="davep@mbuf.com",
         license="GNU General Public License v2.0",
         url="https://pymake.readthedocs.io",
         classifiers=[
@@ -20,11 +20,12 @@ if __name__ == "__main__":
             "Programming Language :: Python :: 3.7",
             "Programming Language :: Python :: 3.8",
             "Programming Language :: Python :: 3.9",
+            "Programming Language :: Python :: 3.10",
+            "Programming Language :: Python :: 3.11",
             "Operating System :: OS Independent",
         ],
         packages=[
             "pymake", 
         ],
         setup_requires=["setuptools"],
-        install_requires=["pyparsing"],
     )
