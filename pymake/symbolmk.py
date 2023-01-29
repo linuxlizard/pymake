@@ -325,7 +325,7 @@ class RuleExpression(Expression):
         # add sanity check in constructor
         Symbol.validate(token_list)
 
-        assert len(token_list)==3 or len(token_list)==4, len(token_list)
+        assert len(token_list)==3, len(token_list)
 
         assert isinstance(token_list[0], Expression), (type(token_list[0]),)
         assert isinstance(token_list[1], RuleOp), (type(token_list[1]),)
@@ -340,14 +340,15 @@ class RuleExpression(Expression):
         else:
             assert 0, (type(token_list[2]),)
 
-        # If one not provided, start with a default empty recipe list
-        # (so this object will always have a RecipeList instance)
-        if len(token_list)==3 : 
-            self.recipe_list = RecipeList([]) 
-            token_list.append( self.recipe_list )
-        elif len(token_list)==4 : 
-            assert isinstance(token_list[3], RecipeList), (type(token_list[3]),)
-            self.recipe_list = self.token_list[3]
+        self.recipe_list = RecipeList([]) 
+#        # If one not provided, start with a default empty recipe list
+#        # (so this object will always have a RecipeList instance)
+#        if len(token_list)==3 : 
+#            self.recipe_list = RecipeList([]) 
+#            token_list.append( self.recipe_list )
+#        elif len(token_list)==4 : 
+#            assert isinstance(token_list[3], RecipeList), (type(token_list[3]),)
+#            self.recipe_list = self.token_list[3]
 
         super().__init__(token_list)
 
@@ -386,17 +387,11 @@ class RuleExpression(Expression):
             assert s[-1]=='\n'
         return s
 
-    def add_recipe_list( self, recipe_list ) : 
-        assert isinstance(recipe_list, RecipeList)
+    def add_recipe( self, recipe ) : 
+        assert isinstance(recipe, Recipe)
 
-        logger.debug("add_recipe_list() rule=%s", str(self))
-        logger.debug("add_recipe_list() recipe_list=%s", str(recipe_list))
-
-        # replace my recipe list with this recipe list
-        self.token_list[3] = recipe_list
-        self.recipe_list = recipe_list
-
-#        logger.debug("add_recipe_list() %s", self.makefile())
+        logger.debug("add_recipe() rule=%s", str(self))
+        self.recipe_list.append(recipe)
 
     def eval(self, symbol_table):
         # Return a dict:
@@ -465,6 +460,9 @@ class RecipeList( Expression ) :
             assert isinstance(r, Recipe), (r,)
         
         super().__init__(recipe_list)
+
+    def append(self, recipe):
+        self.token_list.append(recipe)
 
     def makefile(self):
         # newline separated, tab prefixed

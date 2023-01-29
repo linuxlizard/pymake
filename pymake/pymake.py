@@ -32,19 +32,26 @@ import pymake.shell as shell
 def get_basename( filename ) : 
     return os.path.splitext( os.path.split( filename )[1] )[0]
 
-def parse_vline_stream(virt_line, vline_iter, line_scanner): 
+def parse_vline_stream(virt_line, vline_iter): 
     # pull apart a single line into token/symbol(s)
     #
     # virt_line - the current line we need to tokenize (a VirtualLine)
     #
     # vline_iter - <generator> across the entire file (returns VirtualLine instances) 
     #
-    # line_scanner - ScannerIterator across the file lines (supports pushback)
-    #               Need this because we need the raw file lines to support the
-    #               different backslash usage in recipes.
-    #
 
     logger.debug("tokenize()")
+
+    # A line with a leading RECIPEPREFIX aka <tab> by will FOR NOW always
+    # tokenize to a Recipe. Will later add a step to dig deeper into the line
+    # to determine if it should be treated as a statement instead. GNU-Make has
+    # several cases where it allows RP lines to plain statements.
+    if isinstance(virt_line,vline.RecipeVirtualLine):
+        # TODO this is exactly where we need test the line to see if the R-P
+        # falls under one of several GNU Make exceptions to the recipeprefix
+        # rule.
+        recipe = parsermk.tokenize_recipe(iter(virt_line))
+        return recipe
 
     # tokenize character by character across a VirtualLine
     vchar_scanner = iter(virt_line)
@@ -88,33 +95,22 @@ def parse_vline_stream(virt_line, vline_iter, line_scanner):
     # The recipe is "@echo baz\\\nI am more recipe hur hur hur\n"
     # and that's what needs to exec'd.
     remaining_vchars = vchar_scanner.remain()
+    dangling_recipe_vline = None
     if len(remaining_vchars) > 0:
         # truncate at position of first char of whatever is
         # leftover from the rule
         truncate_pos = remaining_vchars[0].pos
-#            print("remaining=%s" % remaining_vchars)
-#            print("first remaining=%s pos=%r" % (remaining_vchars[0].char,remaining_vchars[0].pos))
-#            print("truncate_pos=%r" % (truncate_pos,))
 
         recipe_str_list = virt_line.truncate(truncate_pos)
 
         # make a new virtual line from the semicolon trailing
         # recipe (using a virtual line because backslashes)
-        dangling_recipe_vline = vline.RecipeVirtualLine(recipe_str_list, truncate_pos, remaining_vchars[0].filename)
-#            print("dangling={0}".format(dangling_recipe_vline))
-#            print("dangling={0}".format(dangling_recipe_vline.virt_chars))
-#            print("dangling={0}".format(dangling_recipe_vline.phys_lines))
+        dangling_recipe_vline = vline.RecipeVirtualLine(recipe_str_list, truncate_pos, 
+                                    remaining_vchars[0].filename)
+        recipe = parsermk.tokenize_recipe(iter(dangling_recipe_vline))
 
-        recipe_list = parsermk.parse_recipes(line_scanner, dangling_recipe_vline)
-    else :
-        recipe_list = parsermk.parse_recipes(line_scanner)
-
-    assert isinstance(recipe_list,RecipeList)
-
-    logger.debug("recipe_list=%s", str(recipe_list))
-
-    # attach the recipe(s) to the rule
-    statement.add_recipe_list(recipe_list)
+        # attach the recipe to the rule
+        statement.add_recipe(recipe)
 
     logger.debug("statement=%s", str(statement))
     return statement
@@ -140,12 +136,7 @@ def parse_makefile_from_src(src):
     # XXX temp hack dependency injection
     parsermk.parse_vline_stream = parse_vline_stream 
 
-    # The vline_iter will read from line_scanner. But line_scanner should be at the
-    # proper place at all times. In other words, there are two readers from
-    # line_scanner: this function and tokenize_vline()
-    # Recipes need to read from line_scanner (different backslash rules).
-    # Rest of tokenizer reads from vline_iter.
-    statement_list = [parse_vline_stream(vline, vline_iter, line_scanner) for vline in vline_iter] 
+    statement_list = [parse_vline_stream(vline, vline_iter) for vline in vline_iter] 
 
     # good time for some sanity checks
     for t in statement_list:
@@ -224,7 +215,7 @@ def execute(makefile, args):
     symtable = SymbolTable(warn_undefined_variables=args.warn_undefined_variables)
 
     # XXX temp disabled while debugging
-#    _add_internal_db(symtable)
+    _add_internal_db(symtable)
 
     target_list = []
 
@@ -245,9 +236,26 @@ def execute(makefile, args):
     rulesdb = rules.RuleDB()
     exit_code = 0
 
+    # To handle the confusing mix of conditional blocks and rules/recipes, we
+    # will track the last Rule we've seen. When we find a Recipe in the token
+    # stream, that Recipe will belong to the last seen Rule. If there is no
+    # last seen Rule, then we throw the infamous "recipe commences before first
+    # target" error.
+    # 
+    # Basically, we have context sensitive evaluation.
+    last_rules = []
+
     for tok in makefile.token_list:
 #        print("tok=",tok)
-        if isinstance(tok,RuleExpression):
+
+        if isinstance(tok, Recipe):
+            # We're confused. 
+            if not last_rules:
+                raise RecipeCommencesBeforeFirstTarget(pos=tok.get_pos())
+            [rule.add_recipe(tok) for rule in last_rules]
+
+        elif isinstance(tok,RuleExpression):
+            last_rules = []
             rule_expr = tok
 
             # Note a RuleExpression.eval() is very different from all other
@@ -258,6 +266,7 @@ def execute(makefile, args):
             for target_str, prereq_list in rule_dict.items():
                 rule = rules.Rule(target_str, prereq_list, rule_expr.recipe_list, rule_expr.get_pos())
                 rulesdb.add(rule)
+                last_rules.append(rule)
         else:
             try:
 #                breakpoint()
@@ -276,11 +285,11 @@ def execute(makefile, args):
 #                        msg = "unexpected non-empty eval result=\"%s\"" % (result, )
                         raise MissingSeparator(tok.get_pos())
                 else:
-                    # TODO eval of ConditionalBlocks can return array of "stuff"
-                    # eval of include returns array of strings we must parse
-                    # must be an array of strings
+                    # TODO eval of ConditionalBlocks can return array of "stuff".
+                    # For example, the eval of include returns TODO "stuff"
+                    # A conditional block's eval returns TODO "stuff"
                     assert isinstance(result,list), type(result)
-#                    breakpoint()
+                    breakpoint()
 #                    if len(result):
 #                        line_scanner = ScannerIterator(result, "(name TODO)")
 #                        vline_iter = vline.get_vline("(name TODO)", line_scanner)
@@ -307,7 +316,7 @@ def execute(makefile, args):
     if exit_code != 0:
         return exit_code
 
-    # write the graphiz db if requested
+    # write the rules db to graphviz if requested
     if args.dotfile:
         title = get_basename(makefile.get_pos()[0])
         rulesdb.graph(title + "_makefile", args.dotfile)
@@ -316,6 +325,9 @@ def execute(makefile, args):
     if not target_list:
         target_list = [ rulesdb.get_default_target() ]
 
+    #
+    # At this point, we start executing the makefile Rules.
+    #
     for target in target_list:
         rule = rulesdb.get(target)
 #        print("rule=",rule)
@@ -405,14 +417,14 @@ class Args:
 
 def parse_args():
     print_version ="""PY Make %s. Work in Progress.
-Copyright (C) 2006-2023 David Poole davep@mbuf.com, testcluster@gmail.com""" % (Version.vstring(),)
+Copyright (C) 2014-2023 David Poole davep@mbuf.com, testcluster@gmail.com""" % (Version.vstring(),)
 
     args = Args()
     optlist, arglist = getopt.gnu_getopt(sys.argv[1:], "hvo:dSf:", 
                             [
                             "debug", 
                             "dotfile=",
-                            "explain"
+                            "explain",
                             "file=", 
                             "makefile=", 
                             "output=", 

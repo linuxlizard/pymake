@@ -24,102 +24,6 @@ conditional_directive_lut = {
   "ifneq" : IfneqDirective 
 }
 
-def parse_recipes(line_scanner, semicolon_vline=None): 
-    logger.debug("parse_recipes()")
-
-    # TODO handle DOS line ending
-
-    state_start = 1
-    state_comment_backslash = 2
-    state_recipe_backslash = 3
-
-    state = state_start
-
-    # array of Recipe
-    recipe_list = []
-
-    # array of text lines (recipes with \)
-    lines_list = []
-
-    if semicolon_vline : 
-        # we have something that trails a ; on the rule
-        recipe = tokenize_recipe(iter(semicolon_vline))
-#        recipe.save(semicolon_vline)
-        recipe_list.append(recipe)
-
-    # we're working with the raw strings (not VirtualLine) here so need to
-    # carefully handle backslashes ourselves
-
-    # start iterating over the array of strings in the line_scanner
-  
-    # sometimes need to maintain a previous position across states
-    starting_row = []
-
-    for line in line_scanner : 
-        logger.debug( "r state={0}".format(state))
-
-        # file line of 'line'
-        row = line_scanner.idx - 1
-        line_stripped = line.strip()
-
-        if state==state_start : 
-            if line.startswith(recipe_prefix):
-                if line_stripped.endswith(backslash):
-                    # we have a recipe continued over multiple lines
-                    starting_row.append(row)
-                    lines_list = [ line ] 
-                    state = state_recipe_backslash
-                else :
-                    # single line
-                    recipe_vline = vline.RecipeVirtualLine([line], (row,0), line_scanner.filename)
-                    recipe = tokenize_recipe(iter(recipe_vline))
-                    logger.debug("recipe=%s", recipe.makefile())
-#                    recipe.save(recipe_vline)
-                    recipe_list.append(recipe)
-            else : 
-                if len(line_stripped)==0:
-                    # ignore blank lines
-                    pass
-                elif line_stripped.startswith("#"):
-                    # ignore makefile comments
-                    logger.debug("recipe comment %s", line_stripped)
-                    if line_stripped.endswith(backslash):
-                        # gross, a comment line with a backslash
-                        lines_list = [ line ] 
-                        state = state_comment_backslash
-                else:
-                    # found a line that doesn't belong to the recipe;
-                    # done with recipe list
-                    line_scanner.pushback()
-                    break
-
-        elif state==state_comment_backslash : 
-            lines_list.append( line )
-            if not line_stripped.endswith(backslash):
-                # end of the makefile comment (is ignored)
-                state = state_start
-
-        elif state==state_recipe_backslash : 
-            lines_list.append( line )
-            if not line_stripped.endswith(backslash):
-                # now have an array of lines that need to be one line for the
-                # recipes tokenizer
-                recipe_vline = vline.RecipeVirtualLine(lines_list, (starting_row.pop(),0), line_scanner.filename)
-                recipe = tokenize_recipe(iter(recipe_vline))
-#                recipe.save(recipe_vline)
-                recipe_list.append(recipe)
-
-                # go back and look for more
-                state = state_start
-
-        else : 
-            # should not get here
-            assert 0, state
-
-    logger.debug("bottom of parse_recipes()")
-
-    return RecipeList(recipe_list)
-
 
 def handle_define_directive(define_inst, vline_iter):
 
@@ -496,9 +400,9 @@ def seek_directive(viter, seek=directive):
     # found a directive.
     viter.push_state()
 
-    # Consume leading whitespace; throw a fit if first char is the recipeprefix.
-    # We never call this fn for a recipe so we know there's a confusing parse
-    # ahead of us if we see a recipeprefix as first char.
+    # Consume leading whitespace; throw a warning if first char is the recipeprefix.
+    # GNU Make allows <tab><directive> so we have to carefully see if there's a
+    # directive in what originally is a recipe line.
     vcstr = vline.VCharString()
 
     # look at first char first
@@ -828,10 +732,6 @@ def parse_expression(expr, virt_line, vline_iter):
 
     directive_vstr = seek_directive(viter)
     if not directive_vstr:
-        if first_vchar.char == recipe_prefix:
-            # We're confused. 
-            raise RecipeCommencesBeforeFirstTarget(pos=first_vchar.get_pos())
-
         # nope, not a directive. Ignore this expression and let execute figure it out
         return assign_expr if assign_expr else expr
 

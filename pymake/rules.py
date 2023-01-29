@@ -29,6 +29,10 @@ class Rule:
     def get_pos(self):
         return self.pos
 
+    def add_recipe(self, recipe):
+        logger.debug("add recipe to rule=%r", self)
+        self.recipe_list.append(recipe)
+
 class RuleDB:
     # TODO need to better handle built-in rules
     pseudo_targets = [ ".PHONY" ]
