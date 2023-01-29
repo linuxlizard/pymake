@@ -18,7 +18,7 @@ this program.  If not, see <http://www.gnu.org/licenses/>.  */
 // Want to see how it works.
 // davep 20230101
 //
-// gcc -g -Wall -Wpedantic -Wconversion -o dave-collapse dave-collapse.c
+// gcc -g -Wall -Wpedantic -Wconversion -o run-collapse run-collapse.c
 //
 
 #include <stdio.h>
@@ -192,6 +192,8 @@ int main(void)
 
 	// comments
 	run("foo : # this comment\\\ncontinues on this line\n");
+
+	run("foo\\\n\n");
 
 	return 0;
 }
