@@ -42,33 +42,31 @@ def parse_vline_stream(virt_line, vline_iter):
 
     logger.debug("tokenize()")
 
-    # A line with a leading RECIPEPREFIX aka <tab> by will FOR NOW always
+    # A line with a leading RP (RECIPEPREFIX) aka <tab> by will FOR NOW always
     # tokenize to a Recipe. Will later add a step to dig deeper into the line
     # to determine if it should be treated as a statement instead. GNU-Make has
     # several cases where it allows RP lines to plain statements.
     if isinstance(virt_line,vline.RecipeVirtualLine):
-        # TODO this is exactly where we need test the line to see if the R-P
-        # falls under one of several GNU Make exceptions to the recipeprefix
-        # rule.
-        recipe = parsermk.tokenize_recipe(iter(virt_line))
-        return recipe
+        # This is where we need test the line to see if the RP falls under one
+        # of several GNU Make exceptions to the recipeprefix rule.
+        # Using GNU Make 4.1 eval() - src/read.c as baseline behavior.
+        # 
+        # TODO test for assignment before first recipe omg why do you do this
+        # to me, GNU Make?
+        if not parsermk.seek_directive(iter(virt_line)):
+            recipe = parsermk.tokenize_recipe(iter(virt_line))
+            return recipe
 
     # tokenize character by character across a VirtualLine
     vchar_scanner = iter(virt_line)
     statement = tokenize_statement(vchar_scanner)
 
-    # If we found a rule, we need to change how we're handling the
-    # lines. (Recipes have different whitespace and backslash rules.)
     if not isinstance(statement,RuleExpression) : 
         logger.debug("statement=%s", str(statement))
 
         # we found a bare Expression that needs a second pass
-        if isinstance(statement,Expression):
-            return parsermk.parse_expression(statement, virt_line, vline_iter)
-
-        # do we ever get here now? 
-        assert 0
-        return statement
+        assert isinstance(statement,Expression), type(statement)
+        return parsermk.parse_expression(statement, virt_line, vline_iter)
 
     # At this point we have a Rule.
     # rule line can contain a recipe following a ; 
@@ -289,7 +287,6 @@ def execute(makefile, args):
                     # For example, the eval of include returns TODO "stuff"
                     # A conditional block's eval returns TODO "stuff"
                     assert isinstance(result,list), type(result)
-                    breakpoint()
 #                    if len(result):
 #                        line_scanner = ScannerIterator(result, "(name TODO)")
 #                        vline_iter = vline.get_vline("(name TODO)", line_scanner)

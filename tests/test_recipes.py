@@ -2,20 +2,29 @@
 
 # whitebox test parsing a block of recipes
 
+from pymake import pymake
 from pymake.scanner import ScannerIterator
 import pymake.parsermk as parsermk
 import pymake.source as source
+import pymake.symbolmk as symbolmk
 import pymake.symtablemk as symtablemk
 from pymake.constants import backslash
 import pymake.vline as vline
 
-def make_recipelist(s):
+def parse_string(s):
     src = source.SourceString(s)
     src.load()
     line_scanner = ScannerIterator(src.file_lines, src.name)
-    recipe_list = parsermk.parse_recipes(line_scanner)
+    vline_iter = vline.get_vline(src.name, line_scanner)
+    statement_list = [pymake.parse_vline_stream(vline, vline_iter) for vline in vline_iter] 
+
     assert not line_scanner.remain()
-    return recipe_list
+    return statement_list
+
+def make_recipelist(s):
+    # everything in 's' should be a recipe
+    statement_list = parse_string(s)
+    return symbolmk.RecipeList(statement_list)
 
 def test_parse_recipes_simple():
     s = """\
@@ -80,39 +89,32 @@ def test_parse_end_of_recipes():
 
 $(info this should be end of recipes)
 """
-    src = source.SourceString(s)
-    src.load()
-    line_scanner = ScannerIterator(src.file_lines, src.name)
-    recipe_list = parsermk.parse_recipes(line_scanner)
+    statement_list = parse_string(s)
+    recipe_list = symbolmk.RecipeList(statement_list[0:2])
 
-    # should be one line remaining
-    remaining_lines_list = line_scanner.remain()
-    assert len(remaining_lines_list)==1
-    assert remaining_lines_list[0] == "$(info this should be end of recipes)\n"
+    # last statement should be an Expression
+    last = statement_list[-1]
+    assert isinstance(last, symbolmk.Expression)
+    assert str(last) == 'Expression([Info([Literal("this should be end of recipes")])])'
 
 def test_trailing_recipes():
     # handle rules that have recipes on the same line as the rule 
-    # e.g., foo: ; @echo bar
-    dangling = "; @echo baz\n"
     s = """\
-	@echo foo
+foo: ; @echo foo
 	@echo bar
+	@echo baz
 """
-    # dangling recipe must be VChars
-    dangling_recipe_vline = vline.RecipeVirtualLine([dangling], (0,0), "/dev/null")
-    src = source.SourceString(s)
-    src.load()
-    line_scanner = ScannerIterator(src.file_lines, src.name)
+    statement_list = parse_string(s)
+    assert len(statement_list)==3
+    rule = statement_list[0]
+    rule.add_recipe(statement_list[1])
+    rule.add_recipe(statement_list[2])
 
-    recipe_list = parsermk.parse_recipes(line_scanner, dangling_recipe_vline)
-
-    assert not line_scanner.remain()
-    assert len(recipe_list)==3
     symbol_table = symtablemk.SymbolTable()
   
-    expect_list = ( "@echo baz", "@echo foo", "@echo bar" )
+    expect_list = ( "@echo foo", "@echo bar", "@echo baz" )
     symbol_table = symtablemk.SymbolTable()
-    for (recipe, expect_str) in zip(recipe_list, expect_list):
+    for (recipe, expect_str) in zip(rule.recipe_list, expect_list):
         s = recipe.eval(symbol_table)
         assert s == expect_str
         
@@ -124,10 +126,8 @@ ifdef FOO
 endif # FOO
 	@echo bar
 """
-    src = source.SourceString(s)
-    src.load()
-    line_scanner = ScannerIterator(src.file_lines, src.name)
-    recipe_list = parsermk.parse_recipes(line_scanner)
+    statement_list = parse_string(s)
+    assert isinstance(statement_list[0], symbolmk.Recipe)
+    assert isinstance(statement_list[2], symbolmk.Recipe)
 
-#    breakpoint()
-
+    # TODO add eval of the ifdef block to peek at the Recipe within

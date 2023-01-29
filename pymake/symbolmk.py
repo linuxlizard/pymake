@@ -631,10 +631,9 @@ class LineBlock(Symbol):
         vline_iter = iter(self.vline_list)
 
         for vline in vline_iter:
-            # XXX temp hack ; pass None for raw line_scanner
-            # XXX double temp hack ; use self.parse_fn()  (would be nice to
-            # call a global parse fn but circual imports make that difficult)
-            statement = self.parse_fn(vline, vline_iter, None)
+            # XXX temp hack ; use self.parse_fn()  (would be nice to call a
+            # global parse fn but circual imports make that difficult)
+            statement = self.parse_fn(vline, vline_iter)
 
             # TODO handle weird stuff like stray function call in expression
             # context (Same as what execute() in pymake.py needs to handle)

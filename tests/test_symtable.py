@@ -205,7 +205,11 @@ $(info FOO=$(FOO))
     # away
     stderr = [s for s in stderr.split("\n") if not s.startswith("INFO")] 
 #    breakpoint()
-    assert expect_stderr in stderr[0]
+    for s in stderr:
+        if expect_stderr in s:
+            break
+    else:
+        assert 0
     
 #    symbol_table = symtablemk.SymbolTable(warn_undefined_variables=True)
 #    value = symbol_table.fetch("CC")
