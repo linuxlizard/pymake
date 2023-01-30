@@ -630,23 +630,10 @@ class LineBlock(Symbol):
     def eval(self, symbol_table):
         vline_iter = iter(self.vline_list)
 
-        for vline in vline_iter:
-            # XXX temp hack ; use self.parse_fn()  (would be nice to call a
-            # global parse fn but circual imports make that difficult)
-            statement = self.parse_fn(vline, vline_iter)
-
-            # TODO handle weird stuff like stray function call in expression
-            # context (Same as what execute() in pymake.py needs to handle)
-            result = statement.eval(symbol_table)
-            logger.info("block execute result=\"%s\"", result)
-
-        # XXX what do I do about rules?
-        # I should not return an empty string, I should return the contents of
-        # the block
-#        breakpoint()
-#        raise NotImplementedError()
-
-        return ''
+        # XXX temp hack ; use self.parse_fn()  (would be nice to call a
+        # global parse fn but circular imports make that difficult)
+        statement_list = [self.parse_fn(vline, vline_iter) for vline in vline_iter] 
+        return statement_list
 
 
 class ConditionalBlock(Symbol):
@@ -761,7 +748,7 @@ class ConditionalBlock(Symbol):
         s += ", ".join( [ "("+str(expr)+", "+blocklist_str(blocklist)+")" for expr, blocklist in zip(self.cond_exprs, self.cond_blocks) ] )
         s += "]"
 
-        # TODO add else case
+        # add else case
         if len(self.cond_blocks) > len(self.cond_exprs):
             # have an else
             s += ", " + blocklist_str(self.cond_blocks[-1])
@@ -772,36 +759,29 @@ class ConditionalBlock(Symbol):
     def eval(self, symbol_table):
         logger.debug("eval %s", self.name)
 
-        # XXX eventually we'll return a Rule if the block contains a rule?
-    
-        # Before I handle LineBlocks, I need to figure out how to handle rules.
-        # I need to understand how I'm going to do Rules before I start
-        # handling blocks of unparsed text inside conditional blocks.
+        def eval_blocks(block_list):
+            statement_list = []
 
-        def eval_blocks(cond_block_list):
-            results = []
-
-            for block in cond_block_list:
-
+            # block list must be a LineBlock or a ConditionalBlock
+            for block in block_list:
                 # FIXME passing the parse fn down here is ugly and I hate it
                 # and it's ugly.  Fix it somehow.
                 block.parse_fn = self.parse_fn
-                results.append( block.eval(symbol_table) )
-#            breakpoint()
-            return results
+                result = block.eval(symbol_table)
+                if isinstance(result,list):
+                    statement_list.extend(result)
+                else:
+                    statement_list.append(result)
+            return statement_list
 
-        for idx,expr in enumerate(self.cond_exprs):
+        for expr,block in zip(self.cond_exprs,self.cond_blocks):
             # FIXME more monkey patching bletcherousness
             expr.parse_fn = self.parse_fn
 
             flag = expr.eval(symbol_table)
-            if not flag:
-                # try next conditional
-                continue
-
-            # we found a truthy so execute the block then we're done
-            results = eval_blocks(self.cond_blocks[idx])
-            return results
+            if flag:
+                # We found a truthy so execute the block then we're done.
+                return eval_blocks(block)
 
         # At this point we have run out of expressions to evaluate.
         # Is there one more cond_block which indicates an unconditional else?
@@ -811,7 +791,9 @@ class ConditionalBlock(Symbol):
             results = eval_blocks(self.cond_blocks[-1])
             return results
 
-        return ""
+        # At this point we found no truthy conditionals and no else condition.
+        # So we have nothing to return.
+        return []
 
 class ConditionalDirective(Directive):
     name = "(should not see this)"
@@ -830,7 +812,8 @@ class ConditionalDirective(Directive):
         #         ^^^-- don't parse this conditional until we're eval'ing the outer FOO block
         # Need to preserve the raw vcharstring so we can parse it later.
         assert isinstance(vcstring,VCharString)
-        logger.debug("%s partial_init of \"%s\" at %r", self.string, vcstring, vcstring.get_pos())
+        logger.debug("%s partial_init of \"%s\" at %r", self.string, 
+            printable_string(str(vcstring)), vcstring.get_pos())
         self.vcstring = vcstring
 
     def get_pos(self):

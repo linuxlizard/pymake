@@ -204,6 +204,85 @@ def _add_internal_db(symtable):
         stmt = tokenize_statement(iter(v))
         stmt.eval(symtable)
 
+def _execute_statement_list(stmt_list, curr_rules, rulesdb, symtable):
+
+    exit_code = 0
+
+    for tok in stmt_list:
+#        print("execute tok=",tok)
+
+        if isinstance(tok, Recipe):
+            if not curr_rules:
+                # We're confused. 
+                raise RecipeCommencesBeforeFirstTarget(pos=tok.get_pos())
+            [rule.add_recipe(tok) for rule in curr_rules]
+
+        elif isinstance(tok,RuleExpression):
+            # restart the rules list but maintain the same ref!
+            curr_rules.clear()
+
+            rule_expr = tok
+
+            # Note a RuleExpression.eval() is very different from all other
+            # eval() methods (so far).  A RuleExpression.eval() returns a dict;
+            # everything else returns a string.
+            rule_dict = rule_expr.eval(symtable)
+
+            for target_str, prereq_list in rule_dict.items():
+                rule = rules.Rule(target_str, prereq_list, rule_expr.recipe_list, rule_expr.get_pos())
+                rulesdb.add(rule)
+                curr_rules.append(rule)
+        else:
+            try:
+                result = tok.eval(symtable)
+#                logger.debug("execute result=\"%s\"", result)
+                # eval can return a string
+                # or
+                # eval can return an array of TODO something I haven't figured out yet
+                if isinstance(result,str):
+                    if result.strip():
+                        # TODO need to parse/reinterpret the result of the expression.
+                        # Functions such as $(eval) and $(call) can generate new
+                        # makefile rules, statements, etc.
+                        # GNU Make itself seems to interpret raw text as a rule and
+                        # will print a "missing separator" error
+#                        msg = "unexpected non-empty eval result=\"%s\"" % (result, )
+                        raise MissingSeparator(tok.get_pos())
+                else:
+                    # A conditional block's or include's eval returns an array
+                    # of parsed Symbols ready for eval.  
+                    assert isinstance(result,list), type(result)
+#                    for tok in flatten(result):
+#                        assert isinstance(tok,Expression), type(tok)
+                    exit_code = _execute_statement_list(result, curr_rules, rulesdb, symtable)
+                        
+            except MakeError as err:
+                breakpoint()
+                # Catch our own Error exceptions. Report, break out of our execute loop and leave.
+                error_message(tok.get_pos(), err.msg)
+                # check cmdline arg to dump err.description for a more detailed error message
+                if detailed_error_explain:
+                    error_message(tok.get_pos(), err.description)
+                exit_code = 1
+                break
+            except SystemExit:
+                raise
+            except Exception as err:
+                # My code crashed. For shame!
+                logger.exception(err)
+                logger.error("INTERNAL ERROR eval exception during token makefile=\"\"\"\n%s\n\"\"\"", tok.makefile())
+                logger.error("INTERNAL ERROR eval exception during token string=%s", str(tok))
+                filename,pos = tok.get_pos()
+                logger.error("eval failed tok=%r file=%s pos=%s", tok, filename, pos)
+                exit_code = 1
+                break
+    
+        if exit_code:
+            return exit_code
+
+    # bottom of loop
+    return exit_code
+
 def execute(makefile, args):
     # ha ha type checking
     assert isinstance(args, Args)
@@ -213,7 +292,7 @@ def execute(makefile, args):
     symtable = SymbolTable(warn_undefined_variables=args.warn_undefined_variables)
 
     # XXX temp disabled while debugging
-    _add_internal_db(symtable)
+#    _add_internal_db(symtable)
 
     target_list = []
 
@@ -232,7 +311,6 @@ def execute(makefile, args):
             target_list.append(onearg)
 
     rulesdb = rules.RuleDB()
-    exit_code = 0
 
     # To handle the confusing mix of conditional blocks and rules/recipes, we
     # will track the last Rule we've seen. When we find a Recipe in the token
@@ -241,76 +319,11 @@ def execute(makefile, args):
     # target" error.
     # 
     # Basically, we have context sensitive evaluation.
-    last_rules = []
+    curr_rules = []
 
-    for tok in makefile.token_list:
-#        print("tok=",tok)
+    exit_code = _execute_statement_list(makefile.token_list, curr_rules, rulesdb, symtable)
 
-        if isinstance(tok, Recipe):
-            # We're confused. 
-            if not last_rules:
-                raise RecipeCommencesBeforeFirstTarget(pos=tok.get_pos())
-            [rule.add_recipe(tok) for rule in last_rules]
-
-        elif isinstance(tok,RuleExpression):
-            last_rules = []
-            rule_expr = tok
-
-            # Note a RuleExpression.eval() is very different from all other
-            # eval() methods (so far).  A RuleExpression.eval() returns a dict;
-            # everything else returns a string.
-            rule_dict = rule_expr.eval(symtable)
-
-            for target_str, prereq_list in rule_dict.items():
-                rule = rules.Rule(target_str, prereq_list, rule_expr.recipe_list, rule_expr.get_pos())
-                rulesdb.add(rule)
-                last_rules.append(rule)
-        else:
-            try:
-#                breakpoint()
-                result = tok.eval(symtable)
-                logger.info("execute result=\"%s\"", result)
-                # eval can return a string
-                # or
-                # eval can return an array of TODO something I haven't figured out yet
-                if isinstance(result,str):
-                    if result.strip():
-                        # TODO need to parse/reinterpret the result of the expression.
-                        # Functions such as $(eval) and $(call) can generate new
-                        # makefile rules, statements, etc.
-                        # GNU Make itself seems to interpret raw text as a rule and
-                        # will print a "missing separator" error
-#                        msg = "unexpected non-empty eval result=\"%s\"" % (result, )
-                        raise MissingSeparator(tok.get_pos())
-                else:
-                    # TODO eval of ConditionalBlocks can return array of "stuff".
-                    # For example, the eval of include returns TODO "stuff"
-                    # A conditional block's eval returns TODO "stuff"
-                    assert isinstance(result,list), type(result)
-#                    if len(result):
-#                        line_scanner = ScannerIterator(result, "(name TODO)")
-#                        vline_iter = vline.get_vline("(name TODO)", line_scanner)
-#                        statement_list = [tokenize(vline, vline_iter, line_scanner) for vline in vline_iter] 
-                        
-            except MakeError as err:
-                # Catch our own Error exceptions. Report, break out of our execute loop and leave.
-                error_message(tok.get_pos(), err.msg)
-                # check cmdline arg to dump err.description for a more detailed error message
-                if args.detailed_error_explain:
-                    error_message(tok.get_pos(), err.description)
-                exit_code = 1
-                break
-            except SystemExit:
-                raise
-            except Exception as err:
-                # My code crashed. For shame!
-                logger.error("INTERNAL ERROR eval exception during token makefile=\"\"\"\n%s\n\"\"\"", tok.makefile())
-                logger.error("INTERNAL ERROR eval exception during token string=%s", str(tok))
-                filename,pos = tok.get_pos()
-                logger.error("eval failed tok=%r file=%s pos=%s", tok, filename, pos)
-                raise
-
-    if exit_code != 0:
+    if exit_code:
         return exit_code
 
     # write the rules db to graphviz if requested
@@ -326,7 +339,13 @@ def execute(makefile, args):
     # At this point, we start executing the makefile Rules.
     #
     for target in target_list:
-        rule = rulesdb.get(target)
+        try:
+            rule = rulesdb.get(target)
+        except KeyError:
+            error_message(None, "No rule to make target '%s'" % target)
+            exit_code = 1
+            break
+
 #        print("rule=",rule)
 #        print("prereqs=",rule.prereq_list)
 
