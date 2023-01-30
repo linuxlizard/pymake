@@ -10,7 +10,7 @@ ifeq ($a,$b)
     $(info a=b)
     ifeq ($b,$c) 
         $(info b=c)
-        ifeq ($c,$d)
+        ifeq ($c,$d   # missing close paren shouldn't be seen
             $(info c=d)
         else
             $(info I am invalid no closing paren

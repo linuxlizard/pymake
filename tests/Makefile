@@ -1,3 +1,4 @@
+$(error do not run this yet)
 #  Test GNU Make capabilities.
 #  davep 02-Sep-2014
 #
@@ -26,8 +27,10 @@
 CC = gcc
 LD = ld
 
-define FOO=bar
+define FOO
+bar
 endef
+$(info FOO=$(FOO))
 
 BAR=
 
@@ -77,8 +80,8 @@ $(info @ =@${A})
 $(info @ =@$A)
 
 # dollar dollar signs y'all
-$(info = $ =)
-$(info = $( )=$( ))
+$(info $$1 = $ =)
+$(info $$2 = $( )=$( ))
 $(info = $$ =$$ )
 #$(info @ $$ $= $$$)
 $(info = $$$$=$$$$)
@@ -134,7 +137,7 @@ foo$( )bar=fooC
 $(info = fooC  qq   =$(foo$( )bar)  qq   )
 
 # "\[ \t] " seems happy, too
-foo\ bar=foo1
+#foo\ bar=foo1
 $(info = foo1  qq   =$(foo\ bar)  qq   )
 foo\tbar=foo2
 $(info = foo2  qq   =$(foo\tbar)  qq   )
@@ -155,7 +158,7 @@ $(info = comma=$,)
 ;=semicolon
 $(info = semicolon=$(;))
 $(info = semicolon=$;)
-!=bang
+#!=bang
 $(info = bang=$(!))
 $(info = bang=$!)
 rparen=)
@@ -172,16 +175,16 @@ $(info = I disapprove of this message.=$(ಠ_ಠ))
 $(info = ║╳┄=$(┨))
 
 # whitespace is significant in LHS
-foo bar=baz
+#foo bar=baz
 $(info = baz=$(foo bar))
-foo\t bar=baz
+#foo\t bar=baz
 $(info = baz=$(foo\t bar))
-hello there all you rabbits=hello there all you rabbits
+#hello there all you rabbits=hello there all you rabbits
 $(info = hello there all you rabbits=$(hello there all you rabbits))
 # leading/trailing spaces on LHS are trimmed
-    Hello there all you rabbits     =hello there all you rabbits spaces here->      
+#    Hello there all you rabbits     =hello there all you rabbits spaces here->      
 $(info = hello there all you rabbits spaces here->      =$(Hello there all you rabbits))
-    Hello There all you rabbits     $$=hello there all you rabbits spaces here->      
+#    Hello There all you rabbits     $$=hello there all you rabbits spaces here->      
 $(info = hello there all you rabbits spaces here->      =$(Hello There all you rabbits     $$))
 
 # equal signs are valid string chars in RHS
