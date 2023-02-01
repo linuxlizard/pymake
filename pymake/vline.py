@@ -520,7 +520,7 @@ class RecipeVirtualLine(VirtualLine):
 
         # check the end of the line for backslash/newline
         while len(row) >= 2 and row[-1].char in eol and row[-2].char == backslash:
-            print("r pos=%r is backslash/eol" % (row[-1].get_pos(),))
+#            print("r pos=%r is backslash/eol" % (row[-1].get_pos(),))
             # move to next row (allow StopIteration to propagate which
             # would indicate a trailing backslash with no further recipe
             # which would indicate a parse failure)
@@ -529,7 +529,7 @@ class RecipeVirtualLine(VirtualLine):
             # if first char of the next row is a tab (aka recipe_prefix)
             # then hide it
             if row[0].char == recipe_prefix:
-                print("r pos=%r hidden" % (row[0].get_pos(),))
+#                print("r pos=%r hidden" % (row[0].get_pos(),))
                 row[0].hide = True
 
 def get_vline(filename, line_iter): 
