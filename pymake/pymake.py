@@ -291,8 +291,8 @@ def execute(makefile, args):
     logger.info("Starting execute of %s", id(makefile))
     symtable = SymbolTable(warn_undefined_variables=args.warn_undefined_variables)
 
-    # XXX temp disabled while debugging
-#    _add_internal_db(symtable)
+    if not args.no_builtin_rules:
+        _add_internal_db(symtable)
 
     target_list = []
 
@@ -385,6 +385,9 @@ def usage():
     # still grouped together)
     print("""Usage: pymake [options] [target] ...")
 Options:
+    -B
+    --always-make
+                TODO Unconditionally build targets.
     -d          Print extra debugging information.
     -f FILE
     --file FILE
@@ -393,6 +396,9 @@ Options:
     -h
     --help
                 Print this help message and exit.
+    -r
+    --no-builtin-rules
+                Disable reading GNU Make's built-in rules.
     -v
     --version
                 Print the version number and exit.
@@ -424,6 +430,10 @@ class Args:
         # print the parsed makefile as an S-Expression        
         self.s_expr = False
 
+        self.always_make = False
+
+        self.no_builtin_rules = False
+
         # extra arguments on the command line, interpretted either as a target
         # or a GNU Make expression
         self.argslist = []
@@ -436,20 +446,24 @@ def parse_args():
 Copyright (C) 2014-2023 David Poole davep@mbuf.com, testcluster@gmail.com""" % (Version.vstring(),)
 
     args = Args()
-    optlist, arglist = getopt.gnu_getopt(sys.argv[1:], "hvo:dSf:", 
+    optlist, arglist = getopt.gnu_getopt(sys.argv[1:], "Bhvo:drSf:", 
                             [
+                            "always-make",
                             "debug", 
                             "dotfile=",
                             "explain",
                             "file=", 
                             "makefile=", 
                             "output=", 
+                            "no-builtin-rules",
                             "version", 
                             "warn-undefined-variables", 
                             ]
                         )
     for opt in optlist:
-        if opt[0] in ("-f", "--file", "--makefile"):
+        if opt[0] in ("-B", "--always-make"):
+            args.always_make = True
+        elif opt[0] in ("-f", "--file", "--makefile"):
             args.filename = opt[1]                    
         elif opt[0] in ('-o', "--output"):
             args.output = opt[1]
@@ -457,11 +471,13 @@ Copyright (C) 2014-2023 David Poole davep@mbuf.com, testcluster@gmail.com""" % (
             args.s_expr = True
         elif opt[0] == '-d':
             args.debug += 1            
-        elif opt[0] in ("-v", "--version"):
-            print(print_version)
-            sys.exit(0)
         elif opt[0] in ("-h", "--help"):
             usage()
+            sys.exit(0)
+        elif opt[0] in ("-r", "--no-builtin-rules"):
+            args.no_builtin_rules = True
+        elif opt[0] in ("-v", "--version"):
+            print(print_version)
             sys.exit(0)
         elif opt[0] == "--warn-undefined-variables":
             args.warn_undefined_variables = True
