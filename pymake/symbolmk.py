@@ -480,7 +480,7 @@ class Directive(Symbol):
 
     def __init__(self, keyword, expression):
         # ha ha type checking.  keyword needs to be a VCharString which tells
-        # us the file+position of the "export"
+        # us the file+position of the directive
         assert isinstance(keyword, VCharString), type(keyword)
 
         super().__init__(keyword)
@@ -768,10 +768,7 @@ class ConditionalBlock(Symbol):
                 # and it's ugly.  Fix it somehow.
                 block.parse_fn = self.parse_fn
                 result = block.eval(symbol_table)
-                if isinstance(result,list):
-                    statement_list.extend(result)
-                else:
-                    statement_list.append(result)
+                statement_list.extend(result)
             return statement_list
 
         for expr,block in zip(self.cond_exprs,self.cond_blocks):
@@ -817,9 +814,7 @@ class ConditionalDirective(Directive):
         self.vcstring = vcstring
 
     def get_pos(self):
-        if self.expression is not None:
-            return self.expression.get_pos()
-        return self.vcstring.get_pos()
+        return self.string.get_pos()
 
 
 class IfdefDirective(ConditionalDirective):
