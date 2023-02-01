@@ -2,9 +2,13 @@
 
 # Gather GNU Make's internal database by running `make -p` and parsing the
 # results, adding vars, rules, to myself.
+#
 # NOTE! This very likely makes my code under the same license as GNU Make (GPLv3).
 # TODO probably need to update my LICENSE and COPYING and etc.
-
+#
+# TODO before releasing this project to broad distribution, need to figure out how 
+# the licensing will work.
+#
 # As of 20221002, I get the following with the database dump:
 ###### -- snip
 # GNU Make 4.3
@@ -52,10 +56,6 @@ def parse_make_db(s):
     return defaults, automatics
 
 def fetch_database():
-    # TODO don't hardcode 'smallest.mk'
-    return parse_make_db(run_make("make -p -f smallest.mk"))
-
-if __name__ == '__main__':
-    # temporary for testing; move into a pytest module later.
-    parse_make_db(run_make("make -p -f smallest.mk"))
+    # -p won't run a makefile but let's make doubly sure
+    return parse_make_db(run_make("make -p -f /dev/null"))
 
