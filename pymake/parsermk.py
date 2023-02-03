@@ -24,6 +24,11 @@ conditional_directive_lut = {
   "ifneq" : IfneqDirective 
 }
 
+include_directive_lut = {
+    "include" : IncludeDirective,
+    "-include" : MinusIncludeDirective,
+    "sinclude" : SIncludeDirective
+}
 
 def handle_define_directive(define_inst, vline_iter):
 
@@ -382,7 +387,12 @@ def parse_override_directive(expr, directive_vstr, viter, virt_line, vline_iter 
 
 def parse_include_directive(expr, directive_vstr, viter, *ignore):
     # TODO any validity checks I need to do here? (Probably)
-    return IncludeDirective(directive_vstr, expr, parse_vline_stream)
+    dir_str = str(directive_vstr)
+    
+    klass = include_directive_lut[dir_str]
+
+    # note we're passing in the parse function
+    return klass(directive_vstr, expr, parse_vline_stream)
 
 def seek_directive(viter, seek=directive):
     # viter - character iterator
@@ -675,6 +685,8 @@ def parse_directive(expr, directive_vstr, viter, virt_line, vline_iter):
         "undefine" : parse_undefine_directive,
         "override" : parse_override_directive,
         "include" : parse_include_directive,
+        "-include" : parse_include_directive,
+        "sinclude" : parse_include_directive,
     }
 
     return lut[str(directive_vstr)](expr, directive_vstr, viter, virt_line, vline_iter)

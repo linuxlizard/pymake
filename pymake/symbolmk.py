@@ -573,6 +573,12 @@ class MinusIncludeDirective(IncludeDirective):
     # handles -include directives
     name = "-include"
 
+    def eval(self, symbol_table):
+        try:
+            return super().eval(symbol_table)
+        except FileNotFoundError:
+            return []
+
 class SIncludeDirective(MinusIncludeDirective):
     # handles sinclude directives (another name for -include)
     name = "sinclude"
