@@ -386,6 +386,8 @@ class SymbolTable(object):
     def push(self, name):
         # save current value of 'name' in secure, undisclosed location
 
+        logger.debug("push name=%s", name)
+
         # don't use self.fetch() because will eval the var which could lead to
         # side effects
         if name not in self.symbols:
@@ -423,10 +425,10 @@ class SymbolTable(object):
         try:
             entry = self.stack[name].pop()
         except KeyError:
-            # allow KeyError to propagate if the name doesn't exist in the
-            # self.symbols{} because that would be a bug  (this might change in
-            # the future)
-            del self.symbols[name]
+            # if the name doesn't exist in the self.symbols{}, we push/popped a
+            # name but didn't use it between the push/pop (perfectly acceptable)
+            if name in self.symbols:
+                del self.symbols[name]
             return
 
         # TODO future memory optimization would be to delete the dequeue from
