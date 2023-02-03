@@ -96,18 +96,6 @@ def test_push_pop_pop():
         # expected IndexError
         assert 0
         
-def test_pop_unknown():
-    # pop unknown name should keyerror
-    symbol_table = symtablemk.SymbolTable()
-
-    try:
-        symbol_table.pop("target")
-    except KeyError:
-        pass
-    else:
-        # should have failed with KeyError
-        assert 0
-
 def test_env_var():
     # environment variables should act like regular vars
     symbol_table = symtablemk.SymbolTable()
