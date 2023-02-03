@@ -11,7 +11,7 @@ _testing = False
 logger = logging.getLogger("pymake.symbol")
 
 from pymake.printable import printable_char, printable_string
-from pymake.vline import VirtualLine, VChar, VCharString
+from pymake.vline import VirtualLine, VChar, VCharString, get_vline
 from pymake.version import Version
 from pymake.error import *
 import pymake.shell as shell
@@ -540,15 +540,34 @@ class UnExportDirective(ExportDirective):
 class IncludeDirective(Directive):
     name = "include"
 
-    def __init__(self, keyword, expression):
+    def __init__(self, keyword, expression, parse_fn):
         self.source = None
+        # https://en.wikipedia.org/wiki/Dependency_injection
+        self.parse_fn = parse_fn
+
         super().__init__(keyword, expression)
 
+    # "If an included makefile cannot be found in any of these directories, a
+    # warning message is generated, but it is not an immediately fatal error;
+    # processing of the makefile containing the include continues. Once it has
+    # finished reading makefiles, make will try to remake any that are out of
+    # date or don’t exist. See Section 3.5 [How Makefiles Are Remade], page 15.
+    # Only after it has tried to find a way to remake a makefile and failed,
+    # will make diagnose the missing makefile as a fatal error." 
+    # -- GNU Make Version 4.3 Jan 2020
+    # 
+    # TODO So I'll need a way of caching the file include failures. Will need
+    # to retry between execute() and running the Rules.
     def eval(self, symbol_table):
         s = self.expression.eval(symbol_table)
+
         self.source = source.SourceFile(s)
         self.source.load()
-        return self.source.file_lines
+        line_scanner = ScannerIterator(self.source.file_lines, self.source.name)
+        vline_iter = get_vline(self.source.name, line_scanner)
+
+        statement_list = [self.parse_fn(vline, vline_iter) for vline in vline_iter] 
+        return statement_list
 
 class MinusIncludeDirective(IncludeDirective):
     # handles -include directives

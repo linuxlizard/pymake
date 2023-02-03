@@ -382,7 +382,7 @@ def parse_override_directive(expr, directive_vstr, viter, virt_line, vline_iter 
 
 def parse_include_directive(expr, directive_vstr, viter, *ignore):
     # TODO any validity checks I need to do here? (Probably)
-    return IncludeDirective(directive_vstr, expr)
+    return IncludeDirective(directive_vstr, expr, parse_vline_stream)
 
 def seek_directive(viter, seek=directive):
     # viter - character iterator
