@@ -73,6 +73,8 @@ class Symbol(object):
                     raise
             logger.debug("new Symbol vstring=\"%s\"", printable_string(str(vstring)))
             vstring.validate()
+#        else:
+#            logger.warning("create symbol %r with no name", self)
 
         # by default, save the token's VChars
         # (descendent classes could store something different)
@@ -942,29 +944,26 @@ class IfneqDirective(IfeqDirective):
 class DefineDirective(Directive):
     name = "define"
 
-    def __init__(self, macro_name, line_block=None):
-        raise NotImplementedError("define")
-
-        super().__init__()
-        self.string = macro_name
-#        assert isinstance(macro_name, str), type(macro_name)
-
-        self.line_block = line_block if line_block else LineBlock([])
+    def __init__(self, keyword, varname, line_block):
+        super().__init__(keyword, varname)
+        self.varname = varname
+        self.line_block = line_block
 
     def __str__(self):
         return "{0}(\"{1}\", {2})".format(self.__class__.__name__,
                         str(self.string),
                         str(self.line_block))
 
-    def set_block(self, line_block):
-        self.line_block = line_block
+#    def set_block(self, line_block):
+#        self.line_block = line_block
 
     def makefile(self):
         s = str(self.line_block)
         return "define {0}=\n{1}endef".format(
-                        str(self.string),
+                        str(self.varname),
                         self.line_block.makefile() )
         
+    def eval(self, symbol_table):
 
 class UnDefineDirective(Directive):
     name = "undefine"

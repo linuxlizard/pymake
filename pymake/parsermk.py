@@ -30,34 +30,32 @@ include_directive_lut = {
     "sinclude" : SIncludeDirective
 }
 
-def handle_define_directive(define_inst, vline_iter):
+def handle_define_directive(define_vcstr, vline_iter):
 
     # array of VirtualLine
     line_list = []
 
-    # save where this define block begins so we can report errors about 
-    # missing enddef 
-    starting_pos = define_inst.code.starting_pos
+    # need define_vstr so we can report where the block starts on failing to
+    # find our endef
 
     for virt_line in vline_iter : 
 
         # seach for enddef in physical line
         phys_line = str(virt_line).lstrip()
         if phys_line.startswith("endef"):
+            # remove the "endef" and fail on any junk remaining
             phys_line = phys_line[5:].lstrip()
             if not phys_line or phys_line[0]=='#':
                 break
-            errmsg = "extraneous text after 'enddef' directive"
-            raise ParseError(vline=virt_line, pos=virt_line.starting_pos(),
-                        description=errmsg)
+            msg = "extraneous text after 'enddef' directive"
+            warning_message()
 
         line_list.append(virt_line)
     else :
         errmsg = "missing enddef"
-        raise ParseError(pos=starting_pos, description=errmsg)
+        raise ParseError(pos=define_vcstr.get_pos(), description=errmsg)
 
-    define_inst.set_block(LineBlock(line_list))
-    return define_inst
+    return LineBlock(line_list)
 
 def parse_ifeq_conditionals(ifeq_expr, directive_str, viter):
     logger.debug("parse_ifeq_conditionals \"%s\" at %r", directive_str, ifeq_expr.get_pos())
@@ -374,7 +372,9 @@ def parse_ifdef_directive(expr, directive_vstr, viter, virt_line, vline_iter ):
 
 def parse_define_directive(expr, directive_vstr, viter, virt_line, vline_iter ):
     # arguments same as parse_directive
-    raise NotImplementedError(directive_vstr)
+    line_block = handle_define_directive(directive_vstr, vline_iter)
+    define_inst = DefineDirective(directive_vstr, expr, line_block)
+    return define_inst
 
 def parse_undefine_directive(expr, directive_vstr, viter, virt_line, vline_iter ):
     # TODO check for validity of expr (space in literals I suppose?)
