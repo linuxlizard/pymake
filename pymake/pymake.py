@@ -209,7 +209,10 @@ def _execute_statement_list(stmt_list, curr_rules, rulesdb, symtable):
     exit_code = 0
 
     for tok in stmt_list:
-#        print("execute tok=",tok)
+        # sanity check; everything has to have a successful get_pos()
+        _ = tok.get_pos()
+
+        logger.debug("execute %r from %r", tok, tok.get_pos())
 
         if isinstance(tok, Recipe):
             if not curr_rules:
@@ -235,10 +238,11 @@ def _execute_statement_list(stmt_list, curr_rules, rulesdb, symtable):
         else:
             try:
                 result = tok.eval(symtable)
-#                logger.debug("execute result=\"%s\"", result)
-                # eval can return a string
+                logger.debug("execute result=\"%s\"", result)
+                #   - eval can return a string
                 # or
-                # eval can return an array of TODO something I haven't figured out yet
+                #   - eval can return an array of Expression|Rule which needs to be
+                #     executed as well
                 if isinstance(result,str):
                     if result.strip():
                         # TODO need to parse/reinterpret the result of the expression.
@@ -252,17 +256,15 @@ def _execute_statement_list(stmt_list, curr_rules, rulesdb, symtable):
                     # A conditional block's or include's eval returns an array
                     # of parsed Symbols ready for eval.  
                     assert isinstance(result,list), type(result)
-#                    for tok in flatten(result):
-#                        assert isinstance(tok,Expression), type(tok)
                     exit_code = _execute_statement_list(result, curr_rules, rulesdb, symtable)
                         
             except MakeError as err:
-                breakpoint()
                 # Catch our own Error exceptions. Report, break out of our execute loop and leave.
+                logger.exception(err)
                 error_message(tok.get_pos(), err.msg)
                 # check cmdline arg to dump err.description for a more detailed error message
-                if detailed_error_explain:
-                    error_message(tok.get_pos(), err.description)
+#                if detailed_error_explain:
+#                    error_message(tok.get_pos(), err.description)
                 exit_code = 1
                 break
             except SystemExit:
@@ -354,11 +356,13 @@ def execute(makefile, args):
 #            print(rule)
 #            print(rule.recipe_list.makefile())
             for recipe in rule.recipe_list:
-#                print(recipe)
+                # TODO many more automatic variables
                 symtable.push("@")
                 symtable.push("^")
+                symtable.push("<")
                 symtable.add_automatic("@", rule.target, recipe.get_pos())
                 symtable.add_automatic("^", " ".join(rule.prereq_list), rule.get_pos())
+                symtable.add_automatic("<", rule.prereq_list[0], rule.get_pos())
                 s = recipe.eval(symtable)
 #                print("shell execute \"%s\"" % s)
                 if s[0] == '@':
@@ -369,6 +373,7 @@ def execute(makefile, args):
                 ret = shell.execute(s, symtable)
                 symtable.pop("@")
                 symtable.pop("^")
+                symtable.pop("<")
                 exit_code = ret['exit_code']
                 if exit_code != 0:
                     print("make:", ret["stderr"], file=sys.stderr, end="")
