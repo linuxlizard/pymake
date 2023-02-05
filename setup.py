@@ -7,7 +7,7 @@ from setuptools import setup
 if __name__ == "__main__":
     setup(
         name="pymake",
-        version="0.0.0",
+        version="4.1.0",
         extras_require=dict(),
         description="Parse GNU Makefiles with Python",
         long_description=(Path(__file__).parent / "README.md").read_text(),
