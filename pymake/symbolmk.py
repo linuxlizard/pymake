@@ -340,26 +340,19 @@ class RuleExpression(Expression):
         else:
             assert 0, (type(token_list[2]),)
 
+        # If one not provided, start with a default empty recipe list
+        # (so this object will always have a RecipeList instance)
         self.recipe_list = RecipeList([]) 
-#        # If one not provided, start with a default empty recipe list
-#        # (so this object will always have a RecipeList instance)
-#        if len(token_list)==3 : 
-#            self.recipe_list = RecipeList([]) 
-#            token_list.append( self.recipe_list )
-#        elif len(token_list)==4 : 
-#            assert isinstance(token_list[3], RecipeList), (type(token_list[3]),)
-#            self.recipe_list = self.token_list[3]
 
         super().__init__(token_list)
 
         self.targets = self.token_list[0]
+        self.rule_op = self.token_list[1]
         self.prereqs = self.token_list[2]
 
     def makefile(self):
         # rule-targets rule-op prereq-list <CR>
         #     recipes
-        assert len(self.token_list)==4, len(self.token_list)
-
         s = ""
 
         # Embed the filename+pos of the rule in the output makefile.
@@ -367,24 +360,21 @@ class RuleExpression(Expression):
             filename, pos = self.get_pos()
             s += "# %s %s\n" % (filename, pos)
 
-        # davep 03-Dec-2014 ; need spaces between targets, no spaces between
-        # prerequisites
-        # 
+        # need spaces between targets and prerequisites
+
         # first the targets
-        s += " ".join( [ t.makefile() for t in self.token_list[0].token_list ] )
+        s += " ".join( [ t.makefile() for t in self.targets.token_list ] )
 
         # operator
-        s += self.token_list[1].makefile()
+        s += self.rule_op.makefile()
 
         # prerequisite(s)
-        s += self.token_list[2].makefile()
+        s += self.prereqs.makefile()
+
+        s += "\n"
 
         # recipe(s)
-        recipe_list = self.token_list[3].makefile()
-        if recipe_list : 
-            s += "\n"
-            s += recipe_list
-            assert s[-1]=='\n'
+        s += self.recipe_list.makefile()
         return s
 
     def add_recipe( self, recipe ) : 
@@ -409,17 +399,14 @@ class RuleExpression(Expression):
             target_str = t.eval(symbol_table)
             if target_str in rule_dict:
                 warning_message(t.get_pos(), "duplicate target in rule")
-            rule_dict[target_str] = []
 
-            for p in self.prereqs.token_list:
-                prereq_str = p.eval(symbol_table)
-                rule_dict[target_str].append(prereq_str)
+            rule_dict[target_str] = self.prereqs.eval(symbol_table).split(" ")
 
         return rule_dict
 
 class PrerequisiteList(Expression):
-     # davep 03-Dec-2014 ; FIXME prereq list must be an array of expressions,
-     # not an expression itself or wind up with problems with spaces
+     # prereq list must be an array of expressions, not an 
+     # expression itself or wind up with problems with spaces
      #  $()a vs $() a
      # (note the space before 'a')
 
@@ -432,15 +419,15 @@ class PrerequisiteList(Expression):
         # space separated
         return " ".join( [ t.makefile() for t in self.token_list ] )
 
+    def eval(self, symbol_table):
+        # space separated
+        return " ".join([t.eval(symbol_table) for t in self.token_list])
+
 class Recipe(Expression):
     # A single line of a recipe
 
     def __init__(self, token_list):
         super().__init__(token_list)
-#        self.recipe = None
-
-#    def save(self, recipe):
-#        self.recipe = recipe
 
     def eval(self, symbol_table):
         # this method does NOT execute the shell but simply will run the string
