@@ -105,11 +105,9 @@ def tokenize_statement(vchar_scanner):
     logger.debug("tokenize_statement() pos=%s", starting_pos)
 
     # save current position in the token stream
-    vchar_scanner.push_state()
-    lhs = tokenize_statement_LHS(vchar_scanner)
-    assert isinstance(lhs[0],Expression)
-    
-    # should get back a list of stuff in the Symbol class hierarchy
+    lhs, operator = tokenize_statement_LHS(vchar_scanner)
+
+    # lhs should be an array of stuff in the Symbol class hierarchy
     assert len(lhs)>=0, type(lhs)
     for symbol in lhs : 
         assert isinstance(symbol,Symbol),(type(symbol), symbol)
@@ -117,59 +115,44 @@ def tokenize_statement(vchar_scanner):
 
     # decode what kind of statement do we have based on where
     # tokenize_statement_LHS() stopped.
-    last_symbol = lhs[-1]
 
-    logger.debug("last_symbol=%s", last_symbol)
+    logger.debug("operator=%s", operator)
 
-    if isinstance(last_symbol,RuleOp): 
-        statement_type = "rule"
+    if isinstance(operator,RuleOp): 
+        logger.debug( "last_token=%s ∴ statement is Rule", operator)
 
-#        print( u"last_token={0} \u2234 statement is {1}".format(last_symbol,statement_type).encode("utf-8"))
-#        print( "last_token={0} ∴ statement is {1}".format(last_symbol,statement_type).encode("utf-8"))
-        logger.debug( "last_token=%s ∴ statement is %s so re-run as rule", last_symbol, statement_type)
-
-        # FIXME is there a way to avoid re-tokenizing?  Can we parse the LHS
-        # Expression we get from tokenize_statement_LHS() ?
-        #
-        # jump back to starting position
-        vchar_scanner.pop_state()
-        # re-tokenize as a rule (backtrack)
-        lhs = tokenize_statement_LHS(vchar_scanner, whitespace)
-    
         # add rule RHS
         # rule RHS  ::= assignment
         #            | prerequisite_list
         #            | <empty>
-        statement = list(lhs)
-        statement.append( tokenize_rule_prereq_or_assign(vchar_scanner) )
+        statement = [ TargetList(lhs), 
+                      operator, 
+                      tokenize_rule_prereq_or_assign(vchar_scanner)
+                    ]
 
         # don't look for recipe(s) yet
-        return RuleExpression( statement ) 
+        return RuleExpression(statement) 
 
-    elif isinstance(last_symbol,AssignOp): 
-        statement_type = "assignment"
-
+    elif isinstance(operator,AssignOp): 
         # tough parse case:
         # define xyzzy =    <-- opening of a multi-line variable. Can be
         #                       confused with an assignment expression.
         # define =    <-- assignment expression
         # GNU Make y u no have reserved words?
 
-        logger.debug( "last_token=%s ∴ statement is %s", last_symbol, statement_type)
-
-        expr = lhs[0]
+        logger.debug( "last_token=%s ∴ statement is Assign", operator)
 
         # The statement is an assignment. Tokenize rest of line as an assignment.
-        statement = list(lhs)
-        statement.append(tokenize_assign_RHS(vchar_scanner))
+        statement = [ lhs[0] if len(lhs)==1 else Expression(lhs), 
+                      operator, 
+                      tokenize_assign_RHS(vchar_scanner)
+                    ]
+
         return AssignmentExpression(statement)
 
-    elif isinstance(last_symbol,Expression) :
-        statement_type="expression"
-#        print( u"last_token={0} \u2234 statement is {1}".format(last_symbol,statement_type).encode("utf-8"))
-        logger.debug( "last_token=%s ∴ statement is %s", last_symbol, statement_type)
+    elif operator is None:
+        logger.debug( "last_token=%s ∴ statement is Expression", operator)
 
-        # davep 17-Nov-2014 ; the following code makes no sense 
         # Wind up in this case when have a non-rule and non-assignment.
         # Will get here with $(varref) e.g., $(info) $(shell) $(call) 
         # Also get here with an 'export' RHS.
@@ -185,18 +168,14 @@ def tokenize_statement(vchar_scanner):
         # the 2nd pass.
         assert len(lhs)==1,(len(lhs), str(lhs), starting_pos)
 
-        return lhs[0]
+        return lhs[0] if len(lhs)==1 else Expression(lhs)
 
     else:
-        statement_type="????"
-#        print( "last_token={0} \u2234 statement is {1}".format(last_symbol,statement_type).encode("utf-8"))
-#        print( "last_token={0} ∴ statement is {1}".format(last_symbol, statement_type))
-
         # should not get here
         assert 0, last_symbol
 
 
-def tokenize_statement_LHS(vchar_scanner, separators=""):
+def tokenize_statement_LHS(vchar_scanner):
     # Tokenize the LHS of a rule or an assignment statement. A rule uses
     # whitespace as a separator. An assignment statement preserves internal
     # whitespace but leading/trailing whitespace is stripped.
@@ -209,18 +188,20 @@ def tokenize_statement_LHS(vchar_scanner, separators=""):
     state_backslash = 4
     state_colon = 5
     state_colon_colon = 6
+    state_error = 7
 
     state = state_start
     # array of vchar
     token = vline.VCharString()
 
     token_list = []
+    expr_list = []
 
     def pushtoken(t):
         # if we have something to make a literal from,
         if len(t):
             # create the literal, save to the token_list
-            token_list.append(Literal(token))
+            token_list.append(Literal(t))
         # then start new token
         return vline.VCharString()
 
@@ -259,11 +240,10 @@ def tokenize_statement_LHS(vchar_scanner, separators=""):
         c = vchar.char
         logger.debug("s c={} state={} idx={} token=\"{}\" pos={} src={}".format(
             printable_char(c), state, vchar_scanner.idx, str(token), vchar.pos, vchar.filename))
-#        print("s c={} state={} idx={} token=\"{}\" pos={} src={}".format(
-#            printable_char(c), state, vchar_scanner.idx, str(token), vchar.pos, vchar.filename))
 
         if state==state_start:
             # eat whitespace while in the starting state
+            # NOTE: we will NEVER call this function for a Recipe so always ignore RECIPEPREFIX
             if c in whitespace: 
                 # eat whitespace
                 pass
@@ -280,12 +260,15 @@ def tokenize_statement_LHS(vchar_scanner, separators=""):
                 state = state_backslash
                 token += vchar
 
-            # whitespace in LHS of assignment is significant
-            # whitespace in LHS of rule is ignored
-            elif c in separators :
+            elif c in whitespace:
                 # end of word
                 # and start new token
                 token = pushtoken(token)
+
+                # gather all tokens we've seen into a single Expression
+                if token_list:
+                    expr_list.append(Expression(token_list))
+                    token_list = []
 
                 # jump back to start searching for next symbol
                 state = state_start
@@ -297,17 +280,23 @@ def tokenize_statement_LHS(vchar_scanner, separators=""):
                 # capture anything we might have seen 
                 # and start new token
                 token = pushtoken(token)
+                if token_list:
+                    expr_list.append(Expression(token_list))
+                    token_list = []
                 # done with this line
-                # eat the comment 
+                # eat the comment (which lets us cleanly drop out of the loop
+                # as well as sanity check the scanner)
                 vchar_scanner.pushback()
                 comment(vchar_scanner)
 
             elif c==':':
                 # end of LHS (don't know if rule or assignment yet)
-                # strip trailing whitespace
-                token_cleaned = token.rstrip()
                 # start new token
-                token = pushtoken(token_cleaned)
+                token = pushtoken(token)
+                if token_list:
+                    expr_list.append(Expression(token_list))
+                    token_list = []
+                # keep scanning until we know what colon token we've seen
                 token += vchar
                 state = state_colon
 
@@ -317,23 +306,29 @@ def tokenize_statement_LHS(vchar_scanner, separators=""):
                 if vchar_scanner.lookahead().char == '=':
                     eq = vchar_scanner.next()
                     assign = AssignOp(vline.VCharString([vchar, eq]))
-                    token_cleaned = token.rstrip()
-                    token = pushtoken(token_cleaned)
-                    return Expression(token_list), assign
+                    token = pushtoken(token)
+                    if token_list:
+                        expr_list.append(Expression(token_list))
+                        token_list = []
+                    return [Expression(expr_list), assign]
                 else:
                     token += vchar
 
             elif c=='=':
                 # definitely an assignment 
-                # strip trailing whitespace
-                t = token.rstrip()
                 token = pushtoken(token)
-                return Expression(token_list), AssignOp(vline.VCharString([vchar]))
+                if token_list:
+                    expr_list.append(Expression(token_list))
+                    token_list = []
+                return [Expression(expr_list), AssignOp(vline.VCharString([vchar]))]
 
             elif c in eol : 
                 # capture any leftover when the line ended
                 token = pushtoken(token)
-                # end of line; bail out
+                if token_list:
+                    expr_list.append(Expression(token_list))
+                    token_list = []
+                # end of line; bye!
                 break
                 
             else :
@@ -346,10 +341,10 @@ def tokenize_statement_LHS(vchar_scanner, separators=""):
                 # literal $
                 token += vchar 
             else:
-                # save token so far (if any); note no rstrip()!
+                # save token so far (if any)
                 # also starts new token
                 token = pushtoken(token)
-
+                
                 # jump to variable_ref tokenizer
                 # restore "$" + "(" in the scanner
                 vchar_scanner.pushback()
@@ -361,15 +356,8 @@ def tokenize_statement_LHS(vchar_scanner, separators=""):
             state=state_in_word
 
         elif state==state_backslash :
-            if c in eol : 
-                # line continuation
-                # davep 04-Oct-2014 ; XXX   should not see anymore
-#                print("vchar_scanner={0} data={1}".format(type(vchar_scanner), type(vchar_scanner.data)))
-#                print(vchar_scanner.data)
-                assert 0, (vchar_scanner, vchar)
-            else :
-                # literal '\' + somechar
-                token += vchar
+            # literal '\' + somechar
+            token += vchar
             state = state_in_word
 
         elif state==state_colon :
@@ -383,21 +371,26 @@ def tokenize_statement_LHS(vchar_scanner, separators=""):
                 # :=
                 # end of RHS
                 token += vchar
-                return Expression(token_list), AssignOp(token) 
+                assert not token_list
+                return [expr_list, AssignOp(token) ]
             else:
                 # Single ':' followed by something. Whatever it was, put it back!
                 vchar_scanner.pushback()
                 # successfully found LHS 
-                return Expression(token_list), RuleOp(token)
+                assert not token_list
+                return [expr_list, RuleOp(token)]
 
         elif state==state_colon_colon :
             # preceeding chars are "::"
             if c=='=':
                 # ::= 
-                return Expression(token_list), AssignOp("::=") 
+                assert not token_list
+                return [expr_list, AssignOp("::=") ]
+
             vchar_scanner.pushback()
             # successfully found LHS 
-            return Expression(token_list), RuleOp("::") 
+            assert not token_list
+            return [expr_list, RuleOp("::") ]
 
         else:
             # should not get here
@@ -405,6 +398,9 @@ def tokenize_statement_LHS(vchar_scanner, separators=""):
 
     # ran out of string; save anything we might have seen
     token = pushtoken(token)
+    if token_list:
+        expr_list.append(Expression(token_list))
+        token_list = []
 
     logger.debug("end of LHS state=%d", state)
 
@@ -412,14 +408,12 @@ def tokenize_statement_LHS(vchar_scanner, separators=""):
     if state==state_colon:
         # Found a Rule
         # ":"
-        assert len(token_list), starting_pos
-        return Expression(token_list), RuleOp(":") 
+        return [expr_list, RuleOp(":") ]
 
     if state==state_colon_colon:
         # Found a Rule
         # "::"
-        assert len(token_list), starting_pos
-        return Expression(token_list), RuleOp("::") 
+        return [expr_list, RuleOp("::") ]
 
     if state==state_in_word :
         # Found a ????
@@ -431,7 +425,7 @@ def tokenize_statement_LHS(vchar_scanner, separators=""):
         # Return a raw expression that will have to be tokenize/parsed
         # downstream.
 
-        return Expression(token_list), 
+        return [expr_list, None ]
 
     # should not get here
     assert 0, (state, starting_pos)
@@ -459,11 +453,16 @@ def tokenize_rule_prereq_or_assign(vchar_scanner):
         # We have target-specifc assignment. For example:
         # foo : CC=intel-cc
         # retokenize as an assignment statement
-        lhs = tokenize_statement_LHS(vchar_scanner)
-        statement = list(lhs)
+        # FIXME 20230205 I've broken this with the new LHS tokenizer
+        raise NotImplementedError()
+
+        statement = tokenize_statement_LHS(vchar_scanner)
+        assert isinstance(statement, list)
+        assert isinstance(statement[0], Expression)
+#        statement = list(lhs)
 
         # verify the operator parsed correctly 
-        assert str(lhs[-1].string) in assignment_operators
+        assert str(statement[-1].string) in assignment_operators
 
         statement.append( tokenize_assign_RHS(vchar_scanner) )
         rhs = AssignmentExpression( statement )
@@ -501,8 +500,7 @@ def tokenize_rule_RHS(vchar_scanner):
     prereq_list = []
     token_list = []
 
-    # davep 07-Dec-2014 ;  rule prerequisites are a whitespace separated
-    # collection of Expressions. 
+    # rule prerequisites are a whitespace separated collection of Expressions.
     # foo : a$(b)c  <--- one Expression, three terms
     #   vs
     # foo : a $(b) c    <--- three Expressions

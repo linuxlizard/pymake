@@ -29,6 +29,7 @@ __all__ = [ "Symbol",
             "VarRef",
             "AssignmentExpression",
             "RuleExpression",
+            "TargetList",
             "PrerequisiteList",
             "Recipe",
             "RecipeList",
@@ -340,8 +341,8 @@ class RuleExpression(Expression):
         else:
             assert 0, (type(token_list[2]),)
 
-        # If one not provided, start with a default empty recipe list
-        # (so this object will always have a RecipeList instance)
+        # Start with a default empty recipe list (so this object will always
+        # have a RecipeList instance)
         self.recipe_list = RecipeList([]) 
 
         super().__init__(token_list)
@@ -395,25 +396,27 @@ class RuleExpression(Expression):
 
         # Must be super careful to eval() the target and prerequisites only
         # once! There may be side effects so must not re-eval() 
+        # UNLESS:
+        # Make allows the same target in multiple rules. Make will eval each
+        # time.
         for t in self.targets.token_list:
             target_str = t.eval(symbol_table)
             if target_str in rule_dict:
                 warning_message(t.get_pos(), "duplicate target in rule")
 
-            rule_dict[target_str] = self.prereqs.eval(symbol_table).split(" ")
+            # discard empty string(s)
+            rule_dict[target_str] = [ s for s in self.prereqs.eval(symbol_table).split(" ") if s]
 
         return rule_dict
 
-class PrerequisiteList(Expression):
-     # prereq list must be an array of expressions, not an 
+class RuleList(Expression):
+     # A Rule list must be an array of expressions, not an 
      # expression itself or wind up with problems with spaces
      #  $()a vs $() a
      # (note the space before 'a')
-
-    def __init__(self, token_list):
-        for t in token_list :
-            assert isinstance(t, Expression), (type(t,))
-        super().__init__(token_list)
+     #
+     # An Expression is NULL joined.
+     # But a RuleList is space joined.
 
     def makefile(self):
         # space separated
@@ -422,6 +425,23 @@ class PrerequisiteList(Expression):
     def eval(self, symbol_table):
         # space separated
         return " ".join([t.eval(symbol_table) for t in self.token_list])
+
+class TargetList(RuleList):
+    pass
+
+class PrerequisiteList(RuleList):
+    def __init__(self, token_list):
+        for t in token_list :
+            assert isinstance(t, Expression), (type(t,))
+        super().__init__(token_list)
+
+#    def makefile(self):
+#        # space separated
+#        return " ".join( [ t.makefile() for t in self.token_list ] )
+#
+#    def eval(self, symbol_table):
+#        # space separated
+#        return " ".join([t.eval(symbol_table) for t in self.token_list])
 
 class Recipe(Expression):
     # A single line of a recipe

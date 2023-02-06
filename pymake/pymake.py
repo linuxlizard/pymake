@@ -97,15 +97,19 @@ def parse_vline_stream(virt_line, vline_iter):
     if len(remaining_vchars) > 0:
         # truncate at position of first char of whatever is
         # leftover from the rule
-        truncate_pos = remaining_vchars[0].pos
 
-        recipe_str_list = virt_line.truncate(truncate_pos)
+        # XXX tinkering 
+        recipe = parsermk.tokenize_recipe(vchar_scanner)
 
-        # make a new virtual line from the semicolon trailing
-        # recipe (using a virtual line because backslashes)
-        dangling_recipe_vline = vline.RecipeVirtualLine(recipe_str_list, truncate_pos, 
-                                    remaining_vchars[0].filename)
-        recipe = parsermk.tokenize_recipe(iter(dangling_recipe_vline))
+#        truncate_pos = remaining_vchars[0].pos
+#
+#        recipe_str_list = virt_line.truncate(truncate_pos)
+#
+#        # make a new virtual line from the semicolon trailing
+#        # recipe (using a virtual line because backslashes)
+#        dangling_recipe_vline = vline.RecipeVirtualLine(recipe_str_list, truncate_pos, 
+#                                    remaining_vchars[0].filename)
+#        recipe = parsermk.tokenize_recipe(iter(dangling_recipe_vline))
 
         # attach the recipe to the rule
         statement.add_recipe(recipe)
@@ -362,7 +366,7 @@ def execute(makefile, args):
                 symtable.push("<")
                 symtable.add_automatic("@", rule.target, recipe.get_pos())
                 symtable.add_automatic("^", " ".join(rule.prereq_list), rule.get_pos())
-                symtable.add_automatic("<", rule.prereq_list[0], rule.get_pos())
+                symtable.add_automatic("<", rule.prereq_list[0] if len(rule.prereq_list) else "", rule.get_pos())
                 s = recipe.eval(symtable)
 #                print("shell execute \"%s\"" % s)
                 if s[0] == '@':

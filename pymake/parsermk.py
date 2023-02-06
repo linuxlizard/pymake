@@ -421,8 +421,6 @@ def seek_directive(viter, seek=directive):
     if vchar.char == recipe_prefix:
         warn_on_recipe_prefix = vchar.get_pos()
         warn_msg = "recipe prefix means directive %r might be confused as a rule"
-#        # TODO need to mimic how GNU Make handles an ambiguous recipe char
-#        raise NotImplementedError(vchar.get_pos())
 
     state_whitespace = 1  # ignore leading whitespace
     state_char = 2
