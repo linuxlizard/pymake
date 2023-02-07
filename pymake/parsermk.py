@@ -748,6 +748,11 @@ def parse_expression(expr, virt_line, vline_iter):
     # at this point, we definitely have some sort of directive.
 #    breakpoint()
 
+    # delete the whitespace token after the directive which should absolutely
+    # exist
+    assert expr.token_list[1].is_whitespace()
+    del expr.token_list[1]
+        
     dir_str = str(directive_vstr)
 
     if assign_expr:
@@ -762,11 +767,12 @@ def parse_expression(expr, virt_line, vline_iter):
         # I'm growing weary of finding all these corner cases. I need to
         # rewrite my tokenize/parser with these sort of things in mind.
 
-        if dir_str in ("define", "export", "override", "unexport") and viter.remain():
+        remain = viter.remain()
+        if dir_str in ("define", "export", "override", "unexport") and remain:
             # at this point, we have something after the directive so probably
             # an actual factual directive.
-            if viter.remain():
-                assign_expr.token_list[0] = Expression([Literal(vline.VCharString(viter.remain()))])
+            if remain:
+                assign_expr.token_list[0] = Expression([Literal(vline.VCharString(remain))])
                 viter = None
             else:
                 assign_expr.token_list = assign_expr.token_list[1:]

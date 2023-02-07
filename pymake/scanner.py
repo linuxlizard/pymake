@@ -55,3 +55,6 @@ class ScannerIterator(object):
         # Test/debug method. Return what remains of the data.
         return self.data[self.idx:]
 
+    def is_empty(self):
+        return self.idx >= self.max_idx
+

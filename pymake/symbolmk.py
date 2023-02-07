@@ -10,6 +10,7 @@ _testing = False
 
 logger = logging.getLogger("pymake.symbol")
 
+from pymake.constants import whitespace
 from pymake.printable import printable_char, printable_string
 from pymake.vline import VirtualLine, VChar, VCharString, get_vline
 from pymake.version import Version
@@ -115,6 +116,9 @@ class Symbol(object):
 
     def get_pos(self):
         return self.string.get_pos()
+
+    def is_whitespace(self):
+        return self.string is not None and self.string[0].char in whitespace
 
 class Literal(Symbol):
     # A literal found in the token stream. Store as a string.
@@ -410,14 +414,13 @@ class RuleExpression(Expression):
         return rule_dict
 
 class RuleList(Expression):
-     # A Rule list must be an array of expressions, not an 
-     # expression itself or wind up with problems with spaces
+     # RuleList class used for the targets and the prerequisites. Is an array
+     # of expressions, not an expression itself or wind up with problems with
+     # spaces
      #  $()a vs $() a
      # (note the space before 'a')
      #
-     # An Expression is NULL joined.
-     # But a RuleList is space joined.
-
+     # While an Expression is NULL joined, a RuleList is space joined.
     def makefile(self):
         # space separated
         return " ".join( [ t.makefile() for t in self.token_list ] )
@@ -426,22 +429,32 @@ class RuleList(Expression):
         # space separated
         return " ".join([t.eval(symbol_table) for t in self.token_list])
 
+    def __iter__(self):
+        return iter(self.token_list)
+
 class TargetList(RuleList):
-    pass
+    def __init__(self, token_list):
+        expr_list = []
+        new_token_list = []
+        
+        # make a new token_list by creating an Expression of all whitespace
+        # separated tokens
+        for t in token_list:
+            if t.is_whitespace(): 
+                if new_token_list:
+                    expr_list.append(Expression(new_token_list))
+                    new_token_list = []
+            else:
+                new_token_list.append(t)
+        if new_token_list:
+            expr_list.append(Expression(new_token_list))
+            new_token_list = []
+
+        super().__init__(expr_list)
 
 class PrerequisiteList(RuleList):
-    def __init__(self, token_list):
-        for t in token_list :
-            assert isinstance(t, Expression), (type(t,))
-        super().__init__(token_list)
-
-#    def makefile(self):
-#        # space separated
-#        return " ".join( [ t.makefile() for t in self.token_list ] )
-#
-#    def eval(self, symbol_table):
-#        # space separated
-#        return " ".join([t.eval(symbol_table) for t in self.token_list])
+    # prerequisites' scanner already removes whitespace
+    pass
 
 class Recipe(Expression):
     # A single line of a recipe

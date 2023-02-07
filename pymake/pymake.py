@@ -32,6 +32,10 @@ import pymake.shell as shell
 def get_basename( filename ) : 
     return os.path.splitext( os.path.split( filename )[1] )[0]
 
+# test/debug fn for debugger
+def _view(token_list):
+    return "".join([str(t) for t in token_list])
+
 def parse_vline_stream(virt_line, vline_iter): 
     # pull apart a single line into token/symbol(s)
     #
@@ -75,8 +79,8 @@ def parse_vline_stream(virt_line, vline_iter):
     #
     # The rule parser should stop at the semicolon. Will leave the
     # semicolon as the first char of iterator
-    # 
-#    logger.debug("rule=%s", str(token))
+
+#    logger.debug("rule=%s", str(statement))
 
     # truncate the virtual line that precedes the recipe (cut off
     # at a ";" that might be lurking)
@@ -92,25 +96,10 @@ def parse_vline_stream(virt_line, vline_iter):
     #
     # The recipe is "@echo baz\\\nI am more recipe hur hur hur\n"
     # and that's what needs to exec'd.
-    remaining_vchars = vchar_scanner.remain()
-    dangling_recipe_vline = None
-    if len(remaining_vchars) > 0:
+    if not vchar_scanner.is_empty():
         # truncate at position of first char of whatever is
         # leftover from the rule
-
-        # XXX tinkering 
         recipe = parsermk.tokenize_recipe(vchar_scanner)
-
-#        truncate_pos = remaining_vchars[0].pos
-#
-#        recipe_str_list = virt_line.truncate(truncate_pos)
-#
-#        # make a new virtual line from the semicolon trailing
-#        # recipe (using a virtual line because backslashes)
-#        dangling_recipe_vline = vline.RecipeVirtualLine(recipe_str_list, truncate_pos, 
-#                                    remaining_vchars[0].filename)
-#        recipe = parsermk.tokenize_recipe(iter(dangling_recipe_vline))
-
         # attach the recipe to the rule
         statement.add_recipe(recipe)
 
@@ -512,6 +501,9 @@ if __name__=='__main__':
     if len(sys.argv) < 2 : 
         usage()
         sys.exit(1)
+
+#    start of -C option
+#    os.chdir("../make-4.3")
 
     infilename = args.filename
     try : 
