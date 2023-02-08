@@ -2,6 +2,10 @@ ifdef FOO
 a=b
 endif
 
+# empty contents
+ifdef FOO
+endif
+
 # valid name
 FOO)=1
 ifdef FOO)

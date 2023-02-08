@@ -581,6 +581,10 @@ class IncludeDirective(Directive):
     def eval(self, symbol_table):
         s = self.expression.eval(symbol_table)
 
+        # GNU Make ignores an empty include
+        if not s:
+            return []
+
         self.source = source.SourceFile(s)
         self.source.load()
         line_scanner = ScannerIterator(self.source.file_lines, self.source.name)
@@ -731,7 +735,7 @@ class ConditionalBlock(Symbol):
         self.cond_blocks = []
 
     def get_pos(self):
-        return self.cond_blocks[0][0].get_pos()
+        return self.cond_exprs[0].get_pos()
 
     def add_conditional( self, cond_expr ) :
         assert len(self.cond_exprs) == len(self.cond_blocks)
@@ -933,7 +937,7 @@ class IfeqDirective(ConditionalDirective):
         from pymake.tokenizer import tokenize_statement
         from pymake.parsermk import parse_ifeq_conditionals
         expr = tokenize_statement(ScannerIterator(self.vcstring.chars, None))
-        self.expr1, self.expr2 = parse_ifeq_conditionals(expr, self.name, None)
+        self.expr1, self.expr2 = parse_ifeq_conditionals(expr, self.name)
 
     def _exprs_eval(self, symbol_table):
         if self.expr1 is None:

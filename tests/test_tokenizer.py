@@ -42,7 +42,9 @@ def test_assign_plus_comment():
     assert not viter.remain()
 
     symbol_table = symtablemk.SymbolTable()
-    assert lhs.eval(symbol_table)=="foo"
+    assert len(lhs)==2, len(lhs)
+    assert lhs[0].eval(symbol_table)=="foo"
+    assert lhs[1].eval(symbol_table)==" "
     # note trailing whitespace!
     assert rhs.eval(symbol_table)=="bar "
 

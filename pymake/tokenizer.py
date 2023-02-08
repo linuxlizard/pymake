@@ -90,12 +90,13 @@ def tokenize_statement(vchar_scanner):
     # this is a test : foo   -> (this,is,a,test,:,)
     # this is a test = foo   -> (this is a test,=,)
     #
-    # I first tokenize assuming it's an assignment statement. If the final
-    # token is a rule token, then I re-tokenize as a rule.
-    #
     # Only difference between a Rule LHS and an assignment LHS is the
     # whitespace. In a Rule, the whitespace is ignored. In an Assignment, the
     # whitespace is preserved.
+    #
+    # We tokenize the LHS until we find a RuleOperator, and AssignmentOperator,
+    # or end of line. Depending on what operator we receive (or no operator),
+    # we'll create the appropriate statement.
     #
     # Note: This function will never be called with a Recipe
 
@@ -111,7 +112,9 @@ def tokenize_statement(vchar_scanner):
     if lhs[-1].is_whitespace():
         lhs.pop()
 
-    assert not lhs[0].is_whitespace()
+    # remove leading whitespace
+    if lhs[0].is_whitespace():
+        del lhs[0]
 
     # lhs should be an array of stuff in the Symbol class hierarchy so now we
     # need to decode what kind of statement do we have based on where
@@ -157,23 +160,22 @@ def tokenize_statement(vchar_scanner):
 
         # Wind up in this case when have a non-rule and non-assignment.
         # Will get here with $(varref) e.g., $(info) $(shell) $(call) 
-        # Also get here with an 'export' RHS.
+        # Also get here with an 'export' LHS.
         # Will get here when parsing multi-line 'define'.
         # Need to find clean way to return clean Expression and catch parse
         # error
 
         # The statement is a directive or bare words or function call. We
         # better have consumed the whole thing.
-        assert len(vchar_scanner.remain())==0, vchar_scanner.remain()[0].get_pos()
+        assert vchar_scanner.is_empty(), vchar_scanner.remain()[0].get_pos()
         
-        # Should be one big Expression. We'll dig into the Expression during
-        # the 2nd pass.
-#        assert len(lhs)==1,(len(lhs), str(lhs), starting_pos)
+        # LHS should be one an array of Symbol. We'll dig into the Expression
+        # during the 2nd pass.
 
         return Expression(lhs)
 
     # should not get here
-    assert 0, last_symbol
+    assert 0, operator
 
 
 def tokenize_statement_LHS(vchar_scanner):
@@ -247,13 +249,16 @@ def tokenize_statement_LHS(vchar_scanner):
             if c in whitespace: 
                 # save whitespace as its own Literal
                 token += vchar
-                token = pushtoken(token)
             elif c==':':
                 state = state_colon
+                # save the whitespace string we've seen so far
+                token = pushtoken(token)
                 token += vchar
             else :
                 # whatever it is, push it back so can tokenize it
                 vchar_scanner.pushback()
+                # save the whitespace string we've seen so far
+                token = pushtoken(token)
                 state = state_in_word
 
         elif state==state_in_word:
@@ -434,7 +439,6 @@ def tokenize_rule_prereq_or_assign(vchar_scanner):
         statement = tokenize_statement_LHS(vchar_scanner)
         assert isinstance(statement, list)
         assert isinstance(statement[0], Expression)
-#        statement = list(lhs)
 
         # verify the operator parsed correctly 
         assert str(statement[-1].string) in assignment_operators

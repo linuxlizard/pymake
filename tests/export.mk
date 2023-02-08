@@ -2,7 +2,9 @@ a=b c d e f g
 
 export#foofoofoo
 
-export CC=gcc
+# is this valid? what does this do?
+# I think it exports var "FOO CC" value "gcc"
+export FOO CC=gcc
 
 export f#foofoofoo
 export f #foofoofoo

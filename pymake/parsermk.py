@@ -59,7 +59,7 @@ def handle_define_directive(define_inst, vline_iter):
     define_inst.set_block(LineBlock(line_list))
     return define_inst
 
-def parse_ifeq_conditionals(ifeq_expr, directive_str, viter):
+def parse_ifeq_conditionals(ifeq_expr, directive_str):
     logger.debug("parse_ifeq_conditionals \"%s\" at %r", directive_str, ifeq_expr.get_pos())
 
     # ifeq/ifneq 
@@ -90,13 +90,14 @@ def parse_ifeq_conditionals(ifeq_expr, directive_str, viter):
     close_paren = ')'
     comma = ','
 
-    def kill_trailing_ws(token):
-        idx = len(token)-1
-        while idx >= 0 and token[idx].char in whitespace:
-            token[idx].hide = True
-            idx = idx - 1
-        # allow chaining
-        return token
+    # added some extra local debugging printf
+    _my_debug = False
+
+    def kill_trailing_ws(token_list):
+        if _my_debug:
+            print("kill trailing whitespace")
+        if token_list[-1].is_whitespace():
+            token_list.pop()
 
 #    def kill_leading_ws(token):
 #        idx = 0
@@ -132,25 +133,22 @@ def parse_ifeq_conditionals(ifeq_expr, directive_str, viter):
     # sure we only see two quoted expressions.
     qexpr_counter = 0
 
-    # viter is a vchar iterator into the incoming directive. 
-    # If viter is None, we are parsing a conditional which has been stored as a
-    # raw expression. We will need to prime the viter pump.
-    #
-    # Otherwise, we're already parsing a vline ("ifeq ...") in flight (a
-    # toplevel statement)
+    # need to prime the viter pump.
+    if _my_debug:
+        print("idx=%d token_list=%r" % (ifeq_expr_token_idx, ifeq_expr.token_list))
+    tok = ifeq_expr.token_list[ifeq_expr_token_idx]
 
-    if viter is None:
-#        print("idx=%d token_list=%r" % (ifeq_expr_token_idx, ifeq_expr.token_list))
-        tok = ifeq_expr.token_list[ifeq_expr_token_idx]
-        # first token must be a literal open char
-#        print("tok=%r string=%r" % (tok, tok.string))
-        if isinstance(tok,Literal):
-            viter = ScannerIterator(tok.string, tok.string.get_pos()[0])
-        else:
-            raise ParseError(
-                    pos = ifeq_expr.get_pos(),
-                    description = "invalid syntax in conditional; %s missing opening ( or ' or \"" % directive_str
-                )
+    if _my_debug:
+        print("tok=%r string=%r" % (tok, tok.string))
+
+    # first token must be a literal (one of the open chars)
+    if isinstance(tok,Literal):
+        viter = ScannerIterator(tok.string, tok.string.get_pos()[0])
+    else:
+        raise ParseError(
+                pos = ifeq_expr.get_pos(),
+                msg = "invalid syntax in conditional; %s missing opening ( or ' or \"" % directive_str
+            )
 
     while True:
         try:
@@ -160,23 +158,34 @@ def parse_ifeq_conditionals(ifeq_expr, directive_str, viter):
         except StopIteration:
             vchar = None
 
+        if _my_debug and vchar:
+            print("top vchar=>>%s<< at %r" %  (vchar.char, vchar.get_pos()))
+
         # In this giant first if block, we've run out of literal characters to
         # parse. We need to find the next Literal in the ifeq_expr so we can
         # parse for the internal expressions.
         if vchar is None:
-#            print("vchar is None state=%d" % state)
+            if _my_debug:
+                print("vchar is None state=%d" % state)
+
             # we have run out literal chars so let's look for another one
 
             if vchar_list:
                 # save any chars we've seen so far
+                if _my_debug:
+                    print("vchar_list=>>%s<<" % " ".join([str(v) for v in vchar_list]))
+                    print("save to curr_expr")
+
                 if curr_expr is None:
                     # we're not in a state where we should be saving characters
                     # so we've been saving garbage
                     # TODO error message
+                    breakpoint()
                     raise ParseError()
 
-#                print("save to curr_expr")
                 curr_expr.append(Literal(vline.VCharString(vchar_list)))
+                if _my_debug:
+                    print("curr_expr=>>%s<<" % "".join([t.makefile() for t in curr_expr]))
                 vchar_list = []
 
             # Dig into the token_list to find the next Literal.
@@ -186,9 +195,14 @@ def parse_ifeq_conditionals(ifeq_expr, directive_str, viter):
                 if ifeq_expr_token_idx >= len(ifeq_expr.token_list):
                     # we're done parsing
                     break
+
                 tok = ifeq_expr.token_list[ifeq_expr_token_idx]
-#                print("tok=", tok.makefile())
+
+                if _my_debug:
+                    print("tok=%s %s" % (tok, tok.makefile()))
+
                 if isinstance(tok,Literal):
+                    # we'll start scanning inside this Literal string
                     viter = ScannerIterator(tok.string, tok.string.get_pos()[0])
                     vchar = next(viter)
                 else:
@@ -196,20 +210,22 @@ def parse_ifeq_conditionals(ifeq_expr, directive_str, viter):
                     # Go back to token_list looking for another token
                     if curr_expr is None:
                         raise ParseError( pos=ifeq_expr.get_pos(),
-                                    description="invalid syntax in conditional; missing opening (")
+                                    msg="invalid syntax in conditional; missing opening (")
                     curr_expr.append(tok)
 
             if vchar is None:
                 # we're done parsing
                 break
 
-#        print("parse %s c=\"%s\" at pos=%r state=%d" % (directive_str, vchar.char, vchar.get_pos(), state))
+        if _my_debug:
+            print("parse %s c=\"%s\" at pos=%r state=%d" % (directive_str, vchar.char, vchar.get_pos(), state))
 
         if state == state_start:
             assert curr_expr is None
             # seeking Open, ignore whitespace
             if vchar.char in quotes:
-#                print("found open quote")
+                if _my_debug:
+                    print("found open quote")
                 open_vchar = vchar
                 state = state_quote_expr
                 qexpr_counter = qexpr_counter + 1
@@ -218,20 +234,25 @@ def parse_ifeq_conditionals(ifeq_expr, directive_str, viter):
                 elif qexpr_counter == 2:
                     curr_expr = expr2
                 else:
+                    breakpoint()
                     # should not get here
                     assert 0
                     # too many expressions in our ifeq
                     # ifeq "expr1" "expr2" "expr3" <-- bad bad!
+                    # TODO better error message
                     raise ParseError()
 
             elif vchar.char == open_paren:
-#                print("found open paren")
+                if _my_debug:
+                    print("found open paren")
                 open_vchar = vchar
                 state = state_paren_expr1
                 curr_expr = expr1
                 if qexpr_counter:
+                    breakpoint()
                     # started as a quoted expr but now we find a '('
                     # (we're re-using the quoted expression state)
+                    # TODO better error message
                     raise ParseError()
 
             elif vchar.char not in whitespace:
@@ -241,14 +262,19 @@ def parse_ifeq_conditionals(ifeq_expr, directive_str, viter):
 
         elif state == state_paren_expr1:
             if vchar.char == comma:
+                if _my_debug:
+                    print("found comma at pos=%r ∴ end of expr1" % (vchar.get_pos(),))
                 # end of expr1
                 # clean it up, make a new Literal
                 # move to next state.
+
                 if vchar_list:
                     #  leading spaces on 1st arg are preserved
                     # trailing spaces on 1st arg are discarded
-                    expr1.append(Literal(vline.VCharString(kill_trailing_ws(vchar_list))))
+                    expr1.append(Literal(vline.VCharString(vchar_list)))
                     vchar_list = []
+                # trailing ws on 1st arg are discarded
+                kill_trailing_ws(expr1)
                 curr_expr = expr2
                 state = state_paren_expr2_start
             else:
@@ -285,7 +311,8 @@ def parse_ifeq_conditionals(ifeq_expr, directive_str, viter):
         elif state == state_quote_expr:
             if vchar.char in quotes:
                 # found a close quote
-#                print("found close quote")
+                if _my_debug:
+                    print("found close quote")
                 verify_close(open_vchar, vchar)
                 if vchar_list:
                     curr_expr.append(Literal(vline.VCharString(vchar_list)))
@@ -314,6 +341,7 @@ def parse_ifeq_conditionals(ifeq_expr, directive_str, viter):
             # wtf???
             assert 0, state
 
+        # save the last char we looked at so we can report errors
         prev_vchar = vchar
     # end of while True around the state machine
 
@@ -329,12 +357,14 @@ def parse_ifeq_conditionals(ifeq_expr, directive_str, viter):
             raise ParseError( pos=prev_vchar.get_pos(),
                         msg="invalid syntax in conditional")
 
-#    print("expr1=",expr1)
-#    print("expr2=",expr2)
+    if _my_debug:
+        print("expr1=",Expression(expr1))
+        print("expr2=",Expression(expr2))
+
     return (Expression(expr1), Expression(expr2))
 
 
-def parse_ifeq_directive(expr, directive_vstr, viter, virt_line, vline_iter):
+def parse_ifeq_directive(expr, directive_vstr, virt_line, vline_iter):
     logger.debug("parse_ifeq_directive() \"%s\" at pos=%r",
             directive_vstr, virt_line.starting_pos)
 
@@ -342,7 +372,7 @@ def parse_ifeq_directive(expr, directive_vstr, viter, virt_line, vline_iter):
     directive_vstr.chars
     dir_str = str(directive_vstr)
 
-    expr1,expr2 = parse_ifeq_conditionals(expr, dir_str, viter)
+    expr1,expr2 = parse_ifeq_conditionals(expr, dir_str)
 
     if dir_str == "ifeq":
         dir_ = IfeqDirective(directive_vstr, expr1, expr2)
@@ -355,7 +385,7 @@ def parse_ifeq_directive(expr, directive_vstr, viter, virt_line, vline_iter):
     return cond_block
 
 
-def parse_ifdef_directive(expr, directive_vstr, viter, virt_line, vline_iter ):
+def parse_ifdef_directive(expr, directive_vstr, virt_line, vline_iter ):
     logger.debug("parse_ifdef_directive() \"%s\" at pos=%r",
             directive_vstr, virt_line.starting_pos)
 
@@ -372,20 +402,20 @@ def parse_ifdef_directive(expr, directive_vstr, viter, virt_line, vline_iter ):
     return cond_block
 
 
-def parse_define_directive(expr, directive_vstr, viter, virt_line, vline_iter ):
+def parse_define_directive(expr, directive_vstr, virt_line, vline_iter ):
     # arguments same as parse_directive
     raise NotImplementedError(directive_vstr)
 
-def parse_undefine_directive(expr, directive_vstr, viter, virt_line, vline_iter ):
+def parse_undefine_directive(expr, directive_vstr, virt_line, vline_iter ):
     # TODO check for validity of expr (space in literals I suppose?)
     return UnDefineDirective(directive_vstr, expr)
 
-def parse_override_directive(expr, directive_vstr, viter, virt_line, vline_iter ):
+def parse_override_directive(expr, directive_vstr, virt_line, vline_iter ):
     # TODO any validity checks I need to do here? (Probably)
     raise NotImplementedError(directive_vstr)
     return OverrideDirective()
 
-def parse_include_directive(expr, directive_vstr, viter, *ignore):
+def parse_include_directive(expr, directive_vstr, *ignore):
     # TODO any validity checks I need to do here? (Probably)
     dir_str = str(directive_vstr)
     
@@ -400,7 +430,7 @@ def seek_directive(viter, seek=directive):
 
     logger.debug("seek_directive")
 
-    if not len(viter.remain()):
+    if viter.is_empty():
         # nothing to parse so nothing to find
         logger.debug("seek_directive False")
         return None
@@ -600,8 +630,8 @@ def handle_conditional_directive(directive_inst, vline_iter):
 
                 if dir_str in ("ifeq", "ifneq"):
                     # parse the conditional Expression, making two new Expressions
-                    assert len(viter.remain()) == 0, viter.remain()[0].get_pos()
-                    expr1,expr2 = parse_ifeq_conditionals(expression, dir_str, None)
+                    assert viter.is_empty(), viter.remain()[0].get_pos()
+                    expr1,expr2 = parse_ifeq_conditionals(expression, dir_str)
                     dir_ = make_conditional(dir_str, directive_vstr, expr1, expr2)
                 else:
                     dir_ = make_conditional(dir_str, directive_vstr, expression)
@@ -633,11 +663,6 @@ def handle_conditional_directive(directive_inst, vline_iter):
     return cond_block
 
 def parse_export_directive(expr, directive_vstr, *ignore):
-    # don't need, don't want, let's not break.
-#    del vline_iter
-#    del virt_line
-#    del viter
-
     dir_str = str(directive_vstr)
     if dir_str == "export":
         klass = ExportDirective
@@ -658,12 +683,11 @@ def error_extraneous(expr, directive_str, viter, virt_line, vline_iter):
     errmsg = "extraneous '%s'" % directive_str
     raise ParseError(pos=starting_pos, description=errmsg)
 
-def parse_directive(expr, directive_vstr, viter, virt_line, vline_iter):
+def parse_directive(expr, directive_vstr, virt_line, vline_iter):
     # expr - Expression instance
     #       We've started to consume token_list[0] which is a Literal containing the name of the directive 
     #       (ifdef, ifeq, etc). The directive_str and viter come from token_list[0]
     # directive_str - python string indicating which directive we found at the start of the Expression token_list[0]
-    # viter - scanneriterator across the rest of the Literal that started the Expression's token_list[0]
     # virt_line - the entire directive as a virtual line (XXX do I need this? probably not)
     # vline_iter - virtualline iterator across the input; need this to make
     #              LineBlock et al for contents of the ifdef/ifeq directives
@@ -687,7 +711,7 @@ def parse_directive(expr, directive_vstr, viter, virt_line, vline_iter):
         "sinclude" : parse_include_directive,
     }
 
-    return lut[str(directive_vstr)](expr, directive_vstr, viter, virt_line, vline_iter)
+    return lut[str(directive_vstr)](expr, directive_vstr, virt_line, vline_iter)
 
 def parse_expression(expr, virt_line, vline_iter):
     # This is a second pass through an Expression.
@@ -738,6 +762,7 @@ def parse_expression(expr, virt_line, vline_iter):
     # peek at the first character of the line. If it's a <tab> aka recipeprefix then 
     # WOW does our life get complicated.  GNU Make allows directives (with a
     # couple exceptions) to be recipeprefix'd. 
+    # TODO not handling recipeprefix yet
     first_vchar = viter.lookahead()
 
     directive_vstr = seek_directive(viter)
@@ -746,12 +771,11 @@ def parse_expression(expr, virt_line, vline_iter):
         return assign_expr if assign_expr else expr
 
     # at this point, we definitely have some sort of directive.
-#    breakpoint()
+    assert viter.is_empty()
 
-    # delete the whitespace token after the directive which should absolutely
-    # exist
-    assert expr.token_list[1].is_whitespace()
-    del expr.token_list[1]
+    # delete the whitespace token after the directive if it exists
+    if len(expr.token_list) > 1 and expr.token_list[1].is_whitespace():
+        del expr.token_list[1]
         
     dir_str = str(directive_vstr)
 
@@ -760,47 +784,37 @@ def parse_expression(expr, virt_line, vline_iter):
         # directive name as an assign, throw a warning about using directive
         # name in a weird context.
         #
-        # yet another corner case:
-        # define = foo        <-- totally legit
-        # define = <nothing>  <-- totally legit
-        # export CC=gcc <-- totally legit
-        # I'm growing weary of finding all these corner cases. I need to
-        # rewrite my tokenize/parser with these sort of things in mind.
+        # yet another corner case of totally legit directive syntax:
+        # define = foo
+        # define = <nothing>
+        # export CC=gcc
+        # override CC=xcc
+        # override define foo=
 
-        remain = viter.remain()
-        if dir_str in ("define", "export", "override", "unexport") and remain:
-            # at this point, we have something after the directive so probably
-            # an actual factual directive.
-            if remain:
-                assign_expr.token_list[0] = Expression([Literal(vline.VCharString(remain))])
-                viter = None
-            else:
-                assign_expr.token_list = assign_expr.token_list[1:]
-            dir_ = parse_directive(assign_expr, directive_vstr, viter, virt_line, vline_iter)
+        if dir_str in ("define", "export", "override") and len(expr.token_list) > 1:
+            # These directives can validly be an assignment so parse them as
+            # a directive.  The len() above checks that there's multiple
+            # symbols on the LHS before the assignment operator.
+
+            # extract the directive from the expression
+            # We want to throw away the first Literal containing the directive
+            # expr is a ref into assign_expr.token_list[0]
+            # so I should be able to delete expr.token_list[0] and kill the directive literal
+            assert assign_expr.token_list[0].token_list[0] is expr.token_list[0]
+
+            del expr.token_list[0]
+
+            dir_ = parse_directive(assign_expr, directive_vstr, virt_line, vline_iter)
         else:
             # GNU Make doesn't warn like this (pats self on back).
             logger.warning("re-using a directive name \"%s\" in an assignment at %r", dir_str, assign_expr.get_pos())
             return assign_expr
     else:
         # extract the directive from the expression
-        if viter.remain():
-            # replace the first token with a new Literal that doesn't contain the directive string
-            # e.g., ifdef foo
-            #       ^^^^^^^^^-- original Literal at token_list[0]
-            # becomes:
-            #       ifdef foo
-            #             ^^^-- new Literal at token_list[0]
-            expr.token_list[0] = Literal(vline.VCharString(viter.remain()))
-            viter = None
-        else:
-            # we have an Expression with a token_list that looks like e.g.,
-            # ifdef $(FOO)  
-            # ^^^^^--------- Literal token_list[0]
-            #       ^^^^^^-- VarRef token_list[1]
-            # We want to throw away the first Literal containing the directive
-            expr.token_list = expr.token_list[1:]
+        # We want to throw away the first Literal containing the directive
+        del expr.token_list[0] 
 
-        dir_ = parse_directive(expr, directive_vstr, viter, virt_line, vline_iter)
+        dir_ = parse_directive(expr, directive_vstr, virt_line, vline_iter)
 
 #    print("parse directive=%s" % dir_.makefile())
     return dir_
