@@ -7,6 +7,14 @@ I want to debug my GNU Makefiles.
 
 Ultimate long-term goal is a GNU Make visual debugger. I want breakpoints on variables changing. I want to single step through the rules. I want to put a breakpoint on a rule.
 
+## Update 20230208. The Covid Update.
+
+Away from work sick with Covid. Not sick enough to not be bored watching TV. 
+* include directives work (need more testing)
+* starting multi-line 'define' variables
+* revamped the tokenizer to better handle rules vs expressions
+* because of the improved tokenizer, much improved conditional block handling
+
 ## Update 20230122. More Pythonic.
 
 Thanks to a PR, the code is in a much cleaner, more Pythonic state. All the test code and test makefiles are now in tests/ directory. 
