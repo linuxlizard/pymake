@@ -199,16 +199,6 @@ class VCharString(object):
     def __getitem__(self, idx):
         return self.chars[idx]
 
-    def rstrip(self):
-        # 
-        # !! WARNING !! Modifies the "string" in-place! Regular strings return a copy.
-        # 
-        # FIXME I hate that this modifies string in-place. Smells bad.
-        while len(self.chars) and self.chars[-1].char in whitespace:
-            self.chars.pop()
-        # allow chaining
-        return self
-
     @classmethod
     def from_string(cls, python_string):
         # make a VCharString from a regular python string (mostly used with
@@ -414,54 +404,6 @@ class VirtualLine(object):
         # contiguous array
         virt_iterator = ScannerIterator([vchar for vchar in itertools.chain(*self.virt_chars) if not vchar.hide], self.filename)
         return virt_iterator
-
-    def truncate(self, truncate_pos):
-        # Created to allow the parser to cut off a block at a token boundary.
-        # Need to parse something like:
-        # foo : bar ; baz
-        # into a rule and a recipe but we won't know where the rule ends and
-        # the (maybe) recipes begin until we fully tokenize the rule.
-        # foo : bar ; baz
-        #           ^-----truncate here
-        # (Only need this rarely)
-
-        def split_2d_array( splitme, row_to_split, col_to_split ):
-            # split a 2-D array (array of strings to be exact) into two
-            # arrays. The character at the split point belows to 'below'.
-            above = splitme[:row_to_split]
-            below = splitme[row_to_split+1:]
-            line_to_split = splitme[row_to_split]
-            left = line_to_split[:col_to_split]
-            right = line_to_split[col_to_split:]
-
-            if left :
-                above.extend([left])
-            below = [right] + below
-
-            return (above, below)
-
-        # split the recipe from the rule
-        first_line_pos = self.virt_chars[0][0].pos
-        row_to_split = truncate_pos[VCHAR_ROW] - first_line_pos[VCHAR_ROW]
-
-        above, below = split_2d_array(self.virt_chars, row_to_split, truncate_pos[VCHAR_COL] )
-#        print("above=", "".join([c.char for c in itertools.chain(*above) if not c.hide]))
-#        print("below=", "".join([c.char for c in itertools.chain(*below) if not c.hide]))
-
-        self.virt_chars = above
-
-        above, below = split_2d_array(self.phys_lines, row_to_split, truncate_pos[VCHAR_COL] )
-#        print("above=", above)
-#        print("below=", below)
-
-        # recipe lines are what we found after the rule was parsed
-        recipe_lines = below
-        self.phys_lines = above
-
-        # stupid human check
-        assert recipe_lines[0][0]==';'
-
-        return recipe_lines
 
     def get_pos(self):
         return (self.filename,

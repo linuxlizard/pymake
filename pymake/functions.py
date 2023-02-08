@@ -350,15 +350,21 @@ def make_function(arglist):
     fname, rest = results
     logger.debug("make_function fname=\"%s\" rest=\"%s\"", fname, rest)
     # convert from array to python string for lookup
-    fname = str(fname)
+    str_fname = str(fname)
 
     # allow KeyError to propagate to indicate this is not a function
-    fcls = _classes[fname]
+    fcls = _classes[str_fname]
 
-    logger.debug("make_function fname=\"%s\" rest=\"%s\" fcls=%s", fname, rest, fcls)
+    logger.debug("make_function fname=\"%s\" rest=\"%s\" fcls=%s", str_fname, rest, fcls)
 
     if rest: 
-        return fcls([Literal(rest)] + arglist[1:])
+        fn = fcls([Literal(rest)] + arglist[1:])
+    else:
+        fn = fcls(arglist[1:])
 
-    return fcls(arglist[1:])
+    # XXX temp hack to save the function's vstring name so we can get_pos()
+    # (I should be passing this into the constructor but that would mean
+    # changing a lot of code right now)
+    fn.string = fname
+    return fn
 

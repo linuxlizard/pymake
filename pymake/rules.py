@@ -24,7 +24,7 @@ class Rule:
         self.pos = pos
 
     def __str__(self):
-        return "%s: %s" % (self.target, ",".join(self.prereq_list))
+        return "%s <- %s" % (self.target, ",".join(self.prereq_list))
 
     def get_pos(self):
         return self.pos
@@ -45,8 +45,13 @@ class RuleDB:
 
     def add(self, rule):
         # ha ha type checking
+        logger.debug("add rule=%s at %r", rule, rule.get_pos())
         assert isinstance(rule,Rule), type(rule)
-        assert rule.target
+
+        if not rule.target:
+            # TODO
+            breakpoint()
+            assert rule.target
 
         if rule.target == ".PHONY":
             # TODO
@@ -77,7 +82,7 @@ class RuleDB:
         # TODO: how do I want to handle parallel builds someday?
         # TODO: loops in the digraph are possible?
 
-        logger.debug("make target=\"%s\"", target)
+        logger.debug("find target=\"%s\"", target)
         if os.path.exists(target):
             logger.debug("target=\"%s\" exists", target)
             return

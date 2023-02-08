@@ -11,7 +11,7 @@ from pymake.error import warning_message, MakeError
 
 logger = logging.getLogger("pymake.symtable")
 
-#logger.setLevel(level=logging.DEBUG)
+logger.setLevel(level=logging.INFO)
 
 #_fail_on_undefined = True
 _fail_on_undefined = False

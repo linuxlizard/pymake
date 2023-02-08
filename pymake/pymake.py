@@ -32,6 +32,10 @@ import pymake.shell as shell
 def get_basename( filename ) : 
     return os.path.splitext( os.path.split( filename )[1] )[0]
 
+# test/debug fn for debugger
+def _view(token_list):
+    return "".join([str(t) for t in token_list])
+
 def parse_vline_stream(virt_line, vline_iter): 
     # pull apart a single line into token/symbol(s)
     #
@@ -75,8 +79,8 @@ def parse_vline_stream(virt_line, vline_iter):
     #
     # The rule parser should stop at the semicolon. Will leave the
     # semicolon as the first char of iterator
-    # 
-#    logger.debug("rule=%s", str(token))
+
+#    logger.debug("rule=%s", str(statement))
 
     # truncate the virtual line that precedes the recipe (cut off
     # at a ";" that might be lurking)
@@ -92,21 +96,10 @@ def parse_vline_stream(virt_line, vline_iter):
     #
     # The recipe is "@echo baz\\\nI am more recipe hur hur hur\n"
     # and that's what needs to exec'd.
-    remaining_vchars = vchar_scanner.remain()
-    dangling_recipe_vline = None
-    if len(remaining_vchars) > 0:
+    if not vchar_scanner.is_empty():
         # truncate at position of first char of whatever is
         # leftover from the rule
-        truncate_pos = remaining_vchars[0].pos
-
-        recipe_str_list = virt_line.truncate(truncate_pos)
-
-        # make a new virtual line from the semicolon trailing
-        # recipe (using a virtual line because backslashes)
-        dangling_recipe_vline = vline.RecipeVirtualLine(recipe_str_list, truncate_pos, 
-                                    remaining_vchars[0].filename)
-        recipe = parsermk.tokenize_recipe(iter(dangling_recipe_vline))
-
+        recipe = parsermk.tokenize_recipe(vchar_scanner)
         # attach the recipe to the rule
         statement.add_recipe(recipe)
 
@@ -209,7 +202,10 @@ def _execute_statement_list(stmt_list, curr_rules, rulesdb, symtable):
     exit_code = 0
 
     for tok in stmt_list:
-#        print("execute tok=",tok)
+        # sanity check; everything has to have a successful get_pos()
+        _ = tok.get_pos()
+
+        logger.debug("execute %r from %r", tok, tok.get_pos())
 
         if isinstance(tok, Recipe):
             if not curr_rules:
@@ -235,10 +231,11 @@ def _execute_statement_list(stmt_list, curr_rules, rulesdb, symtable):
         else:
             try:
                 result = tok.eval(symtable)
-#                logger.debug("execute result=\"%s\"", result)
-                # eval can return a string
+                logger.debug("execute result=\"%s\"", result)
+                #   - eval can return a string
                 # or
-                # eval can return an array of TODO something I haven't figured out yet
+                #   - eval can return an array of Expression|Rule which needs to be
+                #     executed as well
                 if isinstance(result,str):
                     if result.strip():
                         # TODO need to parse/reinterpret the result of the expression.
@@ -252,17 +249,15 @@ def _execute_statement_list(stmt_list, curr_rules, rulesdb, symtable):
                     # A conditional block's or include's eval returns an array
                     # of parsed Symbols ready for eval.  
                     assert isinstance(result,list), type(result)
-#                    for tok in flatten(result):
-#                        assert isinstance(tok,Expression), type(tok)
                     exit_code = _execute_statement_list(result, curr_rules, rulesdb, symtable)
                         
             except MakeError as err:
-                breakpoint()
                 # Catch our own Error exceptions. Report, break out of our execute loop and leave.
+                logger.exception(err)
                 error_message(tok.get_pos(), err.msg)
                 # check cmdline arg to dump err.description for a more detailed error message
-                if detailed_error_explain:
-                    error_message(tok.get_pos(), err.description)
+#                if detailed_error_explain:
+#                    error_message(tok.get_pos(), err.description)
                 exit_code = 1
                 break
             except SystemExit:
@@ -354,11 +349,13 @@ def execute(makefile, args):
 #            print(rule)
 #            print(rule.recipe_list.makefile())
             for recipe in rule.recipe_list:
-#                print(recipe)
+                # TODO many more automatic variables
                 symtable.push("@")
                 symtable.push("^")
+                symtable.push("<")
                 symtable.add_automatic("@", rule.target, recipe.get_pos())
                 symtable.add_automatic("^", " ".join(rule.prereq_list), rule.get_pos())
+                symtable.add_automatic("<", rule.prereq_list[0] if len(rule.prereq_list) else "", rule.get_pos())
                 s = recipe.eval(symtable)
 #                print("shell execute \"%s\"" % s)
                 if s[0] == '@':
@@ -369,6 +366,7 @@ def execute(makefile, args):
                 ret = shell.execute(s, symtable)
                 symtable.pop("@")
                 symtable.pop("^")
+                symtable.pop("<")
                 exit_code = ret['exit_code']
                 if exit_code != 0:
                     print("make:", ret["stderr"], file=sys.stderr, end="")
@@ -503,6 +501,9 @@ if __name__=='__main__':
     if len(sys.argv) < 2 : 
         usage()
         sys.exit(1)
+
+#    start of -C option
+#    os.chdir("../make-4.3")
 
     infilename = args.filename
     try : 

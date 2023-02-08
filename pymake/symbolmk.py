@@ -10,6 +10,7 @@ _testing = False
 
 logger = logging.getLogger("pymake.symbol")
 
+from pymake.constants import whitespace
 from pymake.printable import printable_char, printable_string
 from pymake.vline import VirtualLine, VChar, VCharString, get_vline
 from pymake.version import Version
@@ -29,6 +30,7 @@ __all__ = [ "Symbol",
             "VarRef",
             "AssignmentExpression",
             "RuleExpression",
+            "TargetList",
             "PrerequisiteList",
             "Recipe",
             "RecipeList",
@@ -114,6 +116,9 @@ class Symbol(object):
 
     def get_pos(self):
         return self.string.get_pos()
+
+    def is_whitespace(self):
+        return self.string is not None and self.string[0].char in whitespace
 
 class Literal(Symbol):
     # A literal found in the token stream. Store as a string.
@@ -340,26 +345,19 @@ class RuleExpression(Expression):
         else:
             assert 0, (type(token_list[2]),)
 
+        # Start with a default empty recipe list (so this object will always
+        # have a RecipeList instance)
         self.recipe_list = RecipeList([]) 
-#        # If one not provided, start with a default empty recipe list
-#        # (so this object will always have a RecipeList instance)
-#        if len(token_list)==3 : 
-#            self.recipe_list = RecipeList([]) 
-#            token_list.append( self.recipe_list )
-#        elif len(token_list)==4 : 
-#            assert isinstance(token_list[3], RecipeList), (type(token_list[3]),)
-#            self.recipe_list = self.token_list[3]
 
         super().__init__(token_list)
 
         self.targets = self.token_list[0]
+        self.rule_op = self.token_list[1]
         self.prereqs = self.token_list[2]
 
     def makefile(self):
         # rule-targets rule-op prereq-list <CR>
         #     recipes
-        assert len(self.token_list)==4, len(self.token_list)
-
         s = ""
 
         # Embed the filename+pos of the rule in the output makefile.
@@ -367,24 +365,21 @@ class RuleExpression(Expression):
             filename, pos = self.get_pos()
             s += "# %s %s\n" % (filename, pos)
 
-        # davep 03-Dec-2014 ; need spaces between targets, no spaces between
-        # prerequisites
-        # 
+        # need spaces between targets and prerequisites
+
         # first the targets
-        s += " ".join( [ t.makefile() for t in self.token_list[0].token_list ] )
+        s += " ".join( [ t.makefile() for t in self.targets.token_list ] )
 
         # operator
-        s += self.token_list[1].makefile()
+        s += self.rule_op.makefile()
 
         # prerequisite(s)
-        s += self.token_list[2].makefile()
+        s += self.prereqs.makefile()
+
+        s += "\n"
 
         # recipe(s)
-        recipe_list = self.token_list[3].makefile()
-        if recipe_list : 
-            s += "\n"
-            s += recipe_list
-            assert s[-1]=='\n'
+        s += self.recipe_list.makefile()
         return s
 
     def add_recipe( self, recipe ) : 
@@ -405,42 +400,67 @@ class RuleExpression(Expression):
 
         # Must be super careful to eval() the target and prerequisites only
         # once! There may be side effects so must not re-eval() 
+        # UNLESS:
+        # Make allows the same target in multiple rules. Make will eval each
+        # time.
         for t in self.targets.token_list:
             target_str = t.eval(symbol_table)
             if target_str in rule_dict:
                 warning_message(t.get_pos(), "duplicate target in rule")
-            rule_dict[target_str] = []
 
-            for p in self.prereqs.token_list:
-                prereq_str = p.eval(symbol_table)
-                rule_dict[target_str].append(prereq_str)
+            # discard empty string(s)
+            rule_dict[target_str] = [ s for s in self.prereqs.eval(symbol_table).split(" ") if s]
 
         return rule_dict
 
-class PrerequisiteList(Expression):
-     # davep 03-Dec-2014 ; FIXME prereq list must be an array of expressions,
-     # not an expression itself or wind up with problems with spaces
+class RuleList(Expression):
+     # RuleList class used for the targets and the prerequisites. Is an array
+     # of expressions, not an expression itself or wind up with problems with
+     # spaces
      #  $()a vs $() a
      # (note the space before 'a')
-
-    def __init__(self, token_list):
-        for t in token_list :
-            assert isinstance(t, Expression), (type(t,))
-        super().__init__(token_list)
-
+     #
+     # While an Expression is NULL joined, a RuleList is space joined.
     def makefile(self):
         # space separated
         return " ".join( [ t.makefile() for t in self.token_list ] )
+
+    def eval(self, symbol_table):
+        # space separated
+        return " ".join([t.eval(symbol_table) for t in self.token_list])
+
+    def __iter__(self):
+        return iter(self.token_list)
+
+class TargetList(RuleList):
+    def __init__(self, token_list):
+        expr_list = []
+        new_token_list = []
+        
+        # make a new token_list by creating an Expression of all whitespace
+        # separated tokens
+        for t in token_list:
+            if t.is_whitespace(): 
+                if new_token_list:
+                    expr_list.append(Expression(new_token_list))
+                    new_token_list = []
+            else:
+                new_token_list.append(t)
+        if new_token_list:
+            expr_list.append(Expression(new_token_list))
+            new_token_list = []
+
+        super().__init__(expr_list)
+
+class PrerequisiteList(RuleList):
+    # prerequisites' scanner already removes whitespace
+    pass
 
 class Recipe(Expression):
     # A single line of a recipe
 
     def __init__(self, token_list):
         super().__init__(token_list)
-#        self.recipe = None
-
-#    def save(self, recipe):
-#        self.recipe = recipe
 
     def eval(self, symbol_table):
         # this method does NOT execute the shell but simply will run the string
@@ -560,6 +580,10 @@ class IncludeDirective(Directive):
     # to retry between execute() and running the Rules.
     def eval(self, symbol_table):
         s = self.expression.eval(symbol_table)
+
+        # GNU Make ignores an empty include
+        if not s:
+            return []
 
         self.source = source.SourceFile(s)
         self.source.load()
@@ -711,7 +735,7 @@ class ConditionalBlock(Symbol):
         self.cond_blocks = []
 
     def get_pos(self):
-        return self.cond_blocks[0][0].get_pos()
+        return self.cond_exprs[0].get_pos()
 
     def add_conditional( self, cond_expr ) :
         assert len(self.cond_exprs) == len(self.cond_blocks)
@@ -913,7 +937,7 @@ class IfeqDirective(ConditionalDirective):
         from pymake.tokenizer import tokenize_statement
         from pymake.parsermk import parse_ifeq_conditionals
         expr = tokenize_statement(ScannerIterator(self.vcstring.chars, None))
-        self.expr1, self.expr2 = parse_ifeq_conditionals(expr, self.name, None)
+        self.expr1, self.expr2 = parse_ifeq_conditionals(expr, self.name)
 
     def _exprs_eval(self, symbol_table):
         if self.expr1 is None:

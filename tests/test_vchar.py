@@ -39,41 +39,12 @@ def test3():
     for char, col in zip(string.ascii_letters, counter):
         vs += vline.VChar(char, (0, col), infilename)
         logger.debug("char=%s col=%d len=%d vs=%s", char, col, len(vs), str(vs))
-
-def test4():
-    # rstrip
-    infilename = "/dev/null"
-    vs = vline.VCharString()
-    counter = itertools.count()
-
-    for char, col in zip("hello, world    ", counter):
-        vs += vline.VChar(char, (0, col), infilename)
-        logger.debug("char=%s col=%d len=%d vs=%s", char, col, len(vs), str(vs))
-
-    vs.rstrip()
-    assert str(vs)=="hello, world", "\"%s\""%str(vs)
     
-def test5():
-    # make a VCharString from a plain array of VChar
-    # (act like str())
-    infilename = "/dev/null"
-    counter = itertools.count()
-
-    vchar_list = [vline.VChar(char, (0,col), infilename) for char, col in zip("hello, world    ", counter)]
-    logger.info(vchar_list)
-
-    vs = vline.VCharString(vchar_list)
-    logger.info("vs=\"%s\"", vs)
-
-    vs.rstrip()
-    assert str(vs)=="hello, world", "\"%s\""%str(vs)
 
 def main():
     test1()
     test2()
     test3()
-    test4()
-    test5()
 
 if __name__=='__main__':
     logging.basicConfig(level=logging.DEBUG)
