@@ -5,6 +5,9 @@ endif
 # For reference: GNU Make 4.3 
 # conditional_line() - read.c
 
+a=a
+b=b
+
 a,b = 42
 $(info a,b=$(a,b))
 
@@ -80,13 +83,14 @@ ifeq ($a,b,a,b)
 $(info ($$a,b,a,b))
 endif
 
-# extraneous text after 'ifeq' directive
+# warning: extraneous text after 'ifeq' directive
 #ifeq (a,a),
 #endif
 
 
 # "Invalid syntax in conditional."
-# try to match "(" == "(" which
+# try to match "(" == "(" which looks legal but I think tickles GNU Make's
+# parenthesis balancing code.
 #ifeq ((,()
 #endif
 
@@ -103,6 +107,40 @@ endif
 # "invalid syntax in conditional"
 #ifeq ((1,1))
 #endif
+
+# FIXME my balanced parenthesis needs work
+# well ok then
+#ifeq ((1),(1))
+#$(info (1) (1))
+#endif
+#ifeq (( 1 ),( 1 ))
+#$(info ( 1 ) ( 1 ))
+#endif
+
+ifeq 'a' 'a'
+$(info 'a' 'a')
+endif
+
+ifeq "a" "a"
+$(info "a" "a")
+endif
+
+ifeq 'a' "a"
+$(info 'a' "a")
+endif
+
+ifeq "a" 'a'
+$(info "a" 'a')
+endif
+
+ifeq '$a' '$a'
+$(info '$$a' '$$a')
+endif
+
+# extraneous text after 'ifeq' directive
+ifeq "a" "a" "a"
+$(info "a" "a")
+endif
 
 @:;@:
 

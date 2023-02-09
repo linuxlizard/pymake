@@ -7,6 +7,7 @@ __all__ = [ "ParseError",
             "RecipeCommencesBeforeFirstTarget",
             "MissingSeparator",
             "InvalidFunctionArguments",
+            "InvalidSyntaxInConditional",
 
             "warning_message",
             "error_message",
@@ -27,6 +28,8 @@ class MakeError(Exception):
         self.pos = kwargs.get("pos", ("missing",(-1,-1)))
         self.filename = self.pos[0]
         self.msg = kwargs.get("msg") or self.default_msg
+        if "moremsg" in kwargs:
+            self.msg += "; %s" % kwargs["moremsg"]
 
     def get_pos(self):
         return self.pos
@@ -68,6 +71,9 @@ TODO add better+more description here
 
 class InvalidFunctionArguments(ParseError):
     description = """Arguments to a function are incorrect."""
+
+class InvalidSyntaxInConditional(ParseError):
+    default_msg = "invalid syntax in conditional"
 
 #class VersionError(MakeError):
 #    """Feature not in this version"""

@@ -4,6 +4,8 @@
 #
 # XXX work in progress!
 
+import pytest
+
 from pymake.scanner import ScannerIterator
 import pymake.source as source
 from pymake.tokenizer import tokenize_statement
@@ -33,5 +35,6 @@ def test_circular_dependency():
 foo: foo
 	@echo foo
 """
+    # TODO check for:
     # warning: Circular foo <- foo dependency dropped
 

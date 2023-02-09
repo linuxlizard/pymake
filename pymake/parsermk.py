@@ -5,7 +5,7 @@ from pymake.error import *
 from pymake.symbolmk import *
 from pymake.printable import printable_char
 from pymake.scanner import ScannerIterator
-from pymake.tokenizer import tokenize_recipe, tokenize_assign_RHS
+from pymake.tokenizer import tokenize_recipe, tokenize_assign_RHS, comment
 import pymake.vline as vline
 
 _debug = True
@@ -59,8 +59,12 @@ def handle_define_directive(define_inst, vline_iter):
     define_inst.set_block(LineBlock(line_list))
     return define_inst
 
-def parse_ifeq_conditionals(ifeq_expr, directive_str):
-    logger.debug("parse_ifeq_conditionals \"%s\" at %r", directive_str, ifeq_expr.get_pos())
+def parse_ifeq_conditionals(ifeq_expr, directive_vstr):
+    if not ifeq_expr.token_list:
+        raise InvalidSyntaxInConditional(pos=directive_vstr.get_pos(), 
+            moremsg="missing conditional expression")
+
+    logger.debug("parse_ifeq_conditionals \"%s\" at %r", directive_vstr, ifeq_expr.get_pos())
 
     # ifeq/ifneq 
     # Open => ( ' "
@@ -114,8 +118,8 @@ def parse_ifeq_conditionals(ifeq_expr, directive_str):
         if not ((oc == '(' and cc == ')')\
             or (oc == '"' and cc == '"') \
             or (oc == "'" and cc == "'")):
-            raise ParseError(pos=open_vchar.get_pos(), 
-                    msg="invalid syntax in conditional; unbalanced open/close chars in %s" % directive_str)
+            raise InvalidSyntaxInConditional(pos=open_vchar.get_pos(), 
+                    moremsg="unbalanced open/close chars in %s" % directive_vstr)
 
     state = state_start
     expr1 = []
@@ -145,9 +149,9 @@ def parse_ifeq_conditionals(ifeq_expr, directive_str):
     if isinstance(tok,Literal):
         viter = ScannerIterator(tok.string, tok.string.get_pos()[0])
     else:
-        raise ParseError(
+        raise InvalidSyntaxInConditional(
                 pos = ifeq_expr.get_pos(),
-                msg = "invalid syntax in conditional; %s missing opening ( or ' or \"" % directive_str
+                moremsg = "%s missing opening ( or ' or \"" % directive_vstr
             )
 
     while True:
@@ -209,8 +213,8 @@ def parse_ifeq_conditionals(ifeq_expr, directive_str):
                     # Not a literal so just something for the new expression.
                     # Go back to token_list looking for another token
                     if curr_expr is None:
-                        raise ParseError( pos=ifeq_expr.get_pos(),
-                                    msg="invalid syntax in conditional; missing opening (")
+                        raise InvalidSyntaxInConditional( pos=ifeq_expr.get_pos(),
+                                    moremsg="missing opening (")
                     curr_expr.append(tok)
 
             if vchar is None:
@@ -258,7 +262,8 @@ def parse_ifeq_conditionals(ifeq_expr, directive_str):
             elif vchar.char not in whitespace:
                 # Ignore whitespace but anything else is invalid.  
                 # TODO need a nice error message
-                raise ParseError(pos=vchar.get_pos(), msg="invalid character")
+                raise InvalidSyntaxInConditional(pos=vchar.get_pos(), 
+                        moremsg="invalid character %r at %r" % (vchar.char, vchar.get_pos()))
 
         elif state == state_paren_expr1:
             if vchar.char == comma:
@@ -333,7 +338,7 @@ def parse_ifeq_conditionals(ifeq_expr, directive_str):
                 # GNU Make prints a warning then ignores the rest of the line.
                 warning_message(
                         pos = vchar.get_pos(),
-                        msg="extraneous text after '%s' directive" % directive_str)
+                        msg="extraneous text after '%s' directive" % directive_vstr)
                 # leave the state machine, ignoring rest of line
                 break
 
@@ -347,15 +352,15 @@ def parse_ifeq_conditionals(ifeq_expr, directive_str):
 
     if state != state_closed:
         if state == state_paren_expr2_start:
-            raise ParseError( pos=prev_vchar.get_pos(),
-                        msg="invalid syntax in conditional; missing closing )")
+            raise InvalidSyntaxInConditional( pos=prev_vchar.get_pos(),
+                        moremsg="missing closing )")
         elif state == state_quote_expr:
-            raise ParseError( pos=prev_vchar.get_pos(),
-                        msg="invalid syntax in conditional; missing closing quote")
+            raise InvalidSyntaxInConditional( pos=prev_vchar.get_pos(),
+                        moremsg="missing closing quote")
         else:
             # TODO can we find good error messages for other closing conditions?
-            raise ParseError( pos=prev_vchar.get_pos(),
-                        msg="invalid syntax in conditional")
+            raise InvalidSyntaxInConditional( pos=prev_vchar.get_pos(), 
+                    moremsg="???")
 
     if _my_debug:
         print("expr1=",Expression(expr1))
@@ -368,12 +373,9 @@ def parse_ifeq_directive(expr, directive_vstr, virt_line, vline_iter):
     logger.debug("parse_ifeq_directive() \"%s\" at pos=%r",
             directive_vstr, virt_line.starting_pos)
 
-    # ha ha type checking ; quack like vline.VCharString
-    directive_vstr.chars
+    expr1,expr2 = parse_ifeq_conditionals(expr, directive_vstr)
+
     dir_str = str(directive_vstr)
-
-    expr1,expr2 = parse_ifeq_conditionals(expr, dir_str)
-
     if dir_str == "ifeq":
         dir_ = IfeqDirective(directive_vstr, expr1, expr2)
     elif dir_str == "ifneq":
@@ -406,14 +408,13 @@ def parse_define_directive(expr, directive_vstr, virt_line, vline_iter ):
     # arguments same as parse_directive
     raise NotImplementedError(directive_vstr)
 
-def parse_undefine_directive(expr, directive_vstr, virt_line, vline_iter ):
+def parse_undefine_directive(expr, directive_vstr, *ignore):
     # TODO check for validity of expr (space in literals I suppose?)
     return UnDefineDirective(directive_vstr, expr)
 
 def parse_override_directive(expr, directive_vstr, virt_line, vline_iter ):
     # TODO any validity checks I need to do here? (Probably)
     raise NotImplementedError(directive_vstr)
-    return OverrideDirective()
 
 def parse_include_directive(expr, directive_vstr, *ignore):
     # TODO any validity checks I need to do here? (Probably)
@@ -477,6 +478,9 @@ def seek_directive(viter, seek=directive):
                 state = state_trailing_whitespace
             elif vchar.char in eol:
                 state = state_trailing_whitespace
+            elif vchar.char == '#':
+                viter.pushback()
+                comment(viter)                
             else:
                 vcstr += vchar
 
@@ -579,10 +583,7 @@ def handle_conditional_directive(directive_inst, vline_iter):
 #        print("h state={0}".format(state))
 #        print("={0}".format(str(virt_line)), end="")
 
-        # search for nested directive in the physical line (consolidates the
-        # line continuations)
-        # directive is the first substring surrounded by whitespace
-        # or None if substring is not a directive
+        # search for nested directive 
 
         viter = iter(virt_line)
         directive_vstr = seek_directive(viter)
@@ -601,7 +602,6 @@ def handle_conditional_directive(directive_inst, vline_iter):
             line_list = save_block(line_list)
 
             # recursive function is recursive
-#            breakpoint()
             dir_ = make_conditional(dir_str, directive_vstr)
             dir_.partial_init( vline.VCharString(viter.remain()) )
             sub_block = handle_conditional_directive(dir_, vline_iter)
@@ -631,7 +631,7 @@ def handle_conditional_directive(directive_inst, vline_iter):
                 if dir_str in ("ifeq", "ifneq"):
                     # parse the conditional Expression, making two new Expressions
                     assert viter.is_empty(), viter.remain()[0].get_pos()
-                    expr1,expr2 = parse_ifeq_conditionals(expression, dir_str)
+                    expr1,expr2 = parse_ifeq_conditionals(expression, directive_vstr)
                     dir_ = make_conditional(dir_str, directive_vstr, expr1, expr2)
                 else:
                     dir_ = make_conditional(dir_str, directive_vstr, expression)
@@ -678,10 +678,10 @@ def parse_export_directive(expr, directive_vstr, *ignore):
 
     return klass(directive_vstr, expr)
 
-def error_extraneous(expr, directive_str, viter, virt_line, vline_iter):
-    starting_pos = expr.get_pos()
+def error_extraneous(expr, directive_str, virt_line, vline_iter):
+    starting_pos = virt_line.get_pos()
     errmsg = "extraneous '%s'" % directive_str
-    raise ParseError(pos=starting_pos, description=errmsg)
+    raise ParseError(pos=starting_pos, msg=errmsg)
 
 def parse_directive(expr, directive_vstr, virt_line, vline_iter):
     # expr - Expression instance

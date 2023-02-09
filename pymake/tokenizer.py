@@ -172,6 +172,7 @@ def tokenize_statement(vchar_scanner):
         # LHS should be one an array of Symbol. We'll dig into the Expression
         # during the 2nd pass.
 
+#        breakpoint()
         return Expression(lhs)
 
     # should not get here
@@ -395,20 +396,16 @@ def tokenize_statement_LHS(vchar_scanner):
         # "::"
         return [token_list, RuleOp("::") ]
 
-    if state==state_in_word :
-        # Found a ????
-        # likely word(s) or a $() call. For example:
-        # a b c d
-        # $(info hello world)
-        # davep 17-Nov-2014 ; using this function to tokenize 'export' RHS
-        # which could be just a list of variables e.g., export CC LD RM 
-        # Return a raw expression that will have to be tokenize/parsed
-        # downstream.
+    # Found a plain expression of some sort.
+    # likely word(s) or a $() call. For example:
+    # a b c d
+    # $(info hello world)
+    # davep 17-Nov-2014 ; using this function to tokenize 'export' RHS
+    # which could be just a list of variables e.g., export CC LD RM 
+    # Return a raw expression that will have to be tokenize/parsed
+    # downstream.
 
-        return [token_list, None ]
-
-    # should not get here
-    assert 0, (state, starting_pos)
+    return [token_list, None ]
 
 
 def tokenize_rule_prereq_or_assign(vchar_scanner):
@@ -793,10 +790,8 @@ def tokenize_variable_ref(vchar_scanner):
                 # done tokenizing the var ref
             else:
                 # Can I hit a case of $<whitespace> ?
-                # Yes. GNU Make 4.3 is ignoring it.
-                breakpoint()
-                assert 0, "TODO"
-                return VarRef([])
+                # Yes. GNU Make 4.3 is ignoring it, depending on the context.
+                raise ParseError(msg="unclosed variable ref", pos=vchar.get_pos())
 
         elif state==state_in_var_ref:
             assert close_char is not None
