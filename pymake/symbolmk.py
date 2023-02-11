@@ -54,6 +54,10 @@ __all__ = [ "Symbol",
             "Makefile",
 ]
 
+# test/debug fn for debugger
+def _view(token_list):
+    return "".join([str(t) for t in token_list])
+
 #
 #  Class Hierarchy for Tokens
 #
@@ -966,28 +970,31 @@ class IfneqDirective(IfeqDirective):
 class DefineDirective(Directive):
     name = "define"
 
-    def __init__(self, macro_name, line_block=None):
-        raise NotImplementedError("define")
+    def __init__(self, keyword, name, assign_op_str, line_block):
+        # ha ha type checking
+        assert isinstance(name, Expression)
+        assert isinstance(assign_op_str, str)
 
-        super().__init__()
-        self.string = macro_name
-#        assert isinstance(macro_name, str), type(macro_name)
+        super().__init__(keyword, name)
 
-        self.line_block = line_block if line_block else LineBlock([])
+        self.assign_op_str = assign_op_str
+        self.line_block = line_block
 
     def __str__(self):
-        return "{0}(\"{1}\", {2})".format(self.__class__.__name__,
-                        str(self.string),
+        return "{0}(\"{1}\", {2})".format(self.name,
+                        str(self.expression),
                         str(self.line_block))
-
-    def set_block(self, line_block):
-        self.line_block = line_block
 
     def makefile(self):
         s = str(self.line_block)
-        return "define {0}=\n{1}endef".format(
+        return "{0} {1} {2}\n{1}\nendef".format(
                         str(self.string),
+                        self.expression.makefile(),
+                        self.assign_op_str,
                         self.line_block.makefile() )
+
+    def eval(self, symbol_table):
+        raise NotImplementedError()
         
 
 class UnDefineDirective(Directive):
