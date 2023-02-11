@@ -12,8 +12,6 @@ _debug = True
 
 logger = logging.getLogger("pymake.parser")
 
-#logger.setLevel(level=logging.DEBUG)
-
 parse_vline_stream = None
 
 # used by the tokenzparser to match a directive name with its class
@@ -30,34 +28,9 @@ include_directive_lut = {
     "sinclude" : SIncludeDirective
 }
 
-def handle_define_directive(define_inst, vline_iter):
-
-    # array of VirtualLine
-    line_list = []
-
-    # save where this define block begins so we can report errors about 
-    # missing enddef 
-    starting_pos = define_inst.code.starting_pos
-
-    for virt_line in vline_iter : 
-
-        # seach for enddef in physical line
-        phys_line = str(virt_line).lstrip()
-        if phys_line.startswith("endef"):
-            phys_line = phys_line[5:].lstrip()
-            if not phys_line or phys_line[0]=='#':
-                break
-            errmsg = "extraneous text after 'enddef' directive"
-            raise ParseError(vline=virt_line, pos=virt_line.starting_pos(),
-                        description=errmsg)
-
-        line_list.append(virt_line)
-    else :
-        errmsg = "missing enddef"
-        raise ParseError(pos=starting_pos, description=errmsg)
-
-    define_inst.set_block(LineBlock(line_list))
-    return define_inst
+# test/debug fn for debugger
+def _view(token_list):
+    return "".join([str(t) for t in token_list])
 
 def parse_ifeq_conditionals(ifeq_expr, directive_vstr):
     if not ifeq_expr.token_list:
@@ -403,10 +376,73 @@ def parse_ifdef_directive(expr, directive_vstr, virt_line, vline_iter ):
     cond_block = handle_conditional_directive(dir_, vline_iter)
     return cond_block
 
+def parse_define_declaration(expr):
+    # we should see:
+    # token_list[0] is varname
+    # token_list[1] is operator
+    # token_list[2:] is junk that generators a warning
+    #
+    # BNF is sorta:
+    # varname ::= Expression
+    # operator ::= Operator | None
+
+    if len(expr.token_list) > 2:
+        warning_message(
+            pos = expr.token_list[2].get_pos(),
+            msg = "extraneous text after 'define' directive")
+
+    # default) is plain assign
+    # "You may omit the variable assignment operator if you prefer. If omitted,
+    # make assumes it to be ‘=’ and creates a recursively-expanded variable"
+    # -- GNU Make 4.3 Jan 2020
+    operator_str = "=" 
+
+    if len(expr.token_list) >= 1:
+        # last arg should be an operator or we've got more junk
+        if isinstance(expr.token_list[1], AssignOp):
+            operator_str = expr.token_list[1].makefile()
+        else:
+            warning_message(
+                pos = expr.token_list[1].get_pos(),
+                msg = "extraneous text after 'define' directive")
+
+    assert isinstance(expr.token_list[0], Expression)
+
+    return expr.token_list[0], operator_str
 
 def parse_define_directive(expr, directive_vstr, virt_line, vline_iter ):
-    # arguments same as parse_directive
-    raise NotImplementedError(directive_vstr)
+    # save where this define block begins so we can report errors about 
+    # missing enddef 
+    starting_pos = directive_vstr.get_pos()
+
+    # array of VirtualLine
+    line_list = []
+
+    if not len(expr.token_list):
+        raise EmptyVariableName(pos=directive_vstr.get_pos())
+
+    # pull apart the expression to find the name and optional equal sign
+    varname_expr, operator_str = parse_define_declaration(expr) 
+
+    for virt_line in vline_iter : 
+        # seach for enddef in physical line
+        phys_line = str(virt_line).lstrip()
+        if phys_line.startswith("endef"):
+            phys_line = phys_line[5:].lstrip()
+            if not phys_line or phys_line[0]=='#':
+                break
+            errmsg = "extraneous text after 'enddef' directive"
+            raise ParseError(vline=virt_line, pos=virt_line.starting_pos(),
+                        description=errmsg)
+
+        line_list.append(virt_line)
+    else :
+        errmsg = "missing enddef"
+        raise ParseError(pos=starting_pos, description=errmsg)
+
+    def_ = DefineDirective(directive_vstr, varname_expr, operator_str, LineBlock(line_list))
+    return def_
+
 
 def parse_undefine_directive(expr, directive_vstr, *ignore):
     # TODO check for validity of expr (space in literals I suppose?)

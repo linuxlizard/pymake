@@ -8,6 +8,7 @@ __all__ = [ "ParseError",
             "MissingSeparator",
             "InvalidFunctionArguments",
             "InvalidSyntaxInConditional",
+            "EmptyVariableName",
 
             "warning_message",
             "error_message",
@@ -74,6 +75,9 @@ class InvalidFunctionArguments(ParseError):
 
 class InvalidSyntaxInConditional(ParseError):
     default_msg = "invalid syntax in conditional"
+
+class EmptyVariableName(ParseError):
+    default_msg = "empty variable name"
 
 #class VersionError(MakeError):
 #    """Feature not in this version"""
