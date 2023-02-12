@@ -40,7 +40,7 @@ endef
 # not valid (again whitespace)
 #define : ; @echo $@
 
-# valid
+# valid (a rule)
 #define: ; @echo $@
 
 # $(info) will display multi-line variables
@@ -91,7 +91,35 @@ endif
 #        endef  # foo foo foo
 #endef #foofoofoofoo
 
-#$(info $(.FEATURES))
+# unterminated variable ref but only if eval'd
+define invalid
+$(
+endef
+
+# "unterminated variable ref" immediately because
+# simply expanded variable (contents parsed before use)
+#define also-invalid :=
+#$(
+#endef
+
+define alphabet
+a:=a
+b:=b
+c:=c
+endef
+
+# error "empty variable name"
+#$(alphabet)
+
+# but this will exec the contents
+#$(eval $(alphabet))
+
+# but this will exec the contents
+#$(eval $(alphabet))
+$(info a=$a b=$b c=$c)
+
+# bare define is an error
+#define
 
 define car
 $(firstword $(1))
@@ -120,16 +148,6 @@ a := $(call cdr,1 2 3 4 5 6)
 $(info cdr=$a)
 a := $(call cdr,$(call cdr,1 2 3 4 5 6))
 $(info cdr=$a)
-
-a=$(foreach pyname,$(shell ls *.mk),\
-              $(patsubst %.mk,%.py,$(1)),\
-              $(shell touch tests/$(pyname))\
-   )
-#$(info a=$a)
-
-$(info makefiles=$(shell ls *.mk))
-a=$(call mk2py,$(shell ls *.mk))
-#$(info $a)
 
 bar=qux
 
