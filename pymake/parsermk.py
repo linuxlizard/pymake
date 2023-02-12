@@ -12,6 +12,7 @@ _debug = True
 
 logger = logging.getLogger("pymake.parser")
 
+# hack dependency injection
 parse_vline_stream = None
 
 # used by the tokenzparser to match a directive name with its class
@@ -387,17 +388,21 @@ def parse_define_declaration(expr):
     # operator ::= Operator | None
 
     if len(expr.token_list) > 2:
-        warning_message(
-            pos = expr.token_list[2].get_pos(),
-            msg = "extraneous text after 'define' directive")
+        # the last expression might exist but can be empty because we first
+        # tokenize the statement into an assignment with an empty RHS
+        if expr.token_list[2].token_list:
+            warning_message(
+                pos = expr.token_list[2].get_pos(),
+                msg = "extraneous text after 'define' directive")
 
-    # default) is plain assign
     # "You may omit the variable assignment operator if you prefer. If omitted,
     # make assumes it to be ‘=’ and creates a recursively-expanded variable"
     # -- GNU Make 4.3 Jan 2020
+    # We have to use a string as the operator because it is optional. We can't
+    # manufacture a token where one doesn't exist. (Might revisit this later.)
     operator_str = "=" 
 
-    if len(expr.token_list) >= 1:
+    if len(expr.token_list) == 2:
         # last arg should be an operator or we've got more junk
         if isinstance(expr.token_list[1], AssignOp):
             operator_str = expr.token_list[1].makefile()
@@ -405,8 +410,6 @@ def parse_define_declaration(expr):
             warning_message(
                 pos = expr.token_list[1].get_pos(),
                 msg = "extraneous text after 'define' directive")
-
-    assert isinstance(expr.token_list[0], Expression)
 
     return expr.token_list[0], operator_str
 
@@ -440,7 +443,7 @@ def parse_define_directive(expr, directive_vstr, virt_line, vline_iter ):
         errmsg = "missing enddef"
         raise ParseError(pos=starting_pos, description=errmsg)
 
-    def_ = DefineDirective(directive_vstr, varname_expr, operator_str, LineBlock(line_list))
+    def_ = DefineDirective(directive_vstr, varname_expr, operator_str, DefineBlock(line_list))
     return def_
 
 

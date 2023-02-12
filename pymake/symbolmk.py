@@ -49,10 +49,14 @@ __all__ = [ "Symbol",
             "IfndefDirective",
             "IfeqDirective",
             "IfneqDirective",
+            "DefineBlock",
             "DefineDirective",
             "UnDefineDirective",
             "Makefile",
 ]
+
+# hack dependency injection
+tokenize_statement = None
 
 # test/debug fn for debugger
 def _view(token_list):
@@ -299,7 +303,7 @@ class AssignmentExpression(Expression):
         pos = self.token_list[0].get_pos()
         assert pos is not None
 
-        key = "".join(lhs)
+        key = lhs
         if op == "?=":
             symbol_table.maybe_add(key, rhs, pos)
         elif op == "+=":
@@ -678,7 +682,7 @@ class LineBlock(Symbol):
         # This class contains an array of VirtualLine instances. Need to
         # recreate the appropriate Python code.
         s = ", ".join( [v.python() for v in self.vline_list] )
-        return "LineBlock([{0}])".format(s)
+        return "{0}([{1}])".format( self.__class__.__name__, s)
 
     def eval(self, symbol_table):
         vline_iter = iter(self.vline_list)
@@ -967,34 +971,73 @@ class IfneqDirective(IfeqDirective):
         logger.debug("ifneq compare \"%s\"==\"%s\"", s1, s2)
         return s1 != s2
 
+class DefineBlock(LineBlock):
+    # Defining Multi-Line Variables.
+    # "However, note that using two separate lines means make will invoke the
+    # shell twice, running an independent sub-shell for each line. See Section
+    # 5.3 [Recipe Execution], page 46." GNU Make 4.2 2020 
+    def eval(self, symbol_table):
+        # TODO make this one list comprehension statement 
+        s_list = []
+        for v in self.vline_list:
+            # TODO cache the tokenization
+            stmt = tokenize_statement(iter(v))
+            s = stmt.eval(symbol_table)
+            s_list.append(s)
+
+        return "\n".join(s_list)
+
 class DefineDirective(Directive):
     name = "define"
 
-    def __init__(self, keyword, name, assign_op_str, line_block):
+    def __init__(self, keyword, varname, assign_op_str, block):
         # ha ha type checking
-        assert isinstance(name, Expression)
         assert isinstance(assign_op_str, str)
 
-        super().__init__(keyword, name)
+        super().__init__(keyword, varname)
+
+        # self.string will be 'define' vcstr
+        # self.expression is the varname (lhs)
 
         self.assign_op_str = assign_op_str
-        self.line_block = line_block
+        self.block = block
 
     def __str__(self):
         return "{0}(\"{1}\", {2})".format(self.name,
                         str(self.expression),
-                        str(self.line_block))
+                        str(self.block))
 
     def makefile(self):
-        s = str(self.line_block)
+        s = str(self.block)
         return "{0} {1} {2}\n{1}\nendef".format(
                         str(self.string),
                         self.expression.makefile(),
                         self.assign_op_str,
-                        self.line_block.makefile() )
+                        self.block.makefile() )
 
+    # "The final newline before the endef is not included in the value; if you
+    # want your value to contain a trailing newline you must include a blank
+    # line." -- GNU Make 4.3 Jan 2020
     def eval(self, symbol_table):
-        raise NotImplementedError()
+        # self.expression contains the directive's name
+        key = self.expression.eval(symbol_table)
+
+        # decide what to store in the symbol table
+        rhs = None
+        op = self.assign_op_str
+        if op == "=":
+            rhs = self.block
+        elif op == ":=":
+            # we need to tokenize and eval our contents
+            rhs = self.block.eval(symbol_table)
+        else:
+            raise NotImplementedError()
+
+        # TODO merge this fn with AssignmentExpression's eval() so all the
+        # special cases can be kept in one place
+
+        symbol_table.add(key, rhs, self.string.get_pos())
+        return ""
         
 
 class UnDefineDirective(Directive):

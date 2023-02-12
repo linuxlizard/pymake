@@ -18,6 +18,7 @@ logger = logging.getLogger("pymake")
 from pymake.scanner import ScannerIterator
 from pymake.version import Version
 import pymake.vline as vline
+import pymake.symbolmk as symbolmk
 from pymake.symbolmk import *
 from pymake.constants import *
 from pymake.error import *
@@ -106,7 +107,6 @@ def parse_vline_stream(virt_line, vline_iter):
     logger.debug("statement=%s", str(statement))
     return statement
 
-
 def parse_makefile_from_src(src):
     # file_lines is an array of Python strings.
     # The newlines must be preserved.
@@ -123,9 +123,6 @@ def parse_makefile_from_src(src):
     # get_vline() returns a Python <generator> that walks across makefile
     # lines, joining backslashed lines into VirtualLine instances.
     vline_iter = vline.get_vline(src.name, line_scanner)
-
-    # XXX temp hack dependency injection
-    parsermk.parse_vline_stream = parse_vline_stream 
 
     statement_list = [parse_vline_stream(vline, vline_iter) for vline in vline_iter] 
 
@@ -281,6 +278,71 @@ def _execute_statement_list(stmt_list, curr_rules, rulesdb, symtable):
     # bottom of loop
     return exit_code
 
+def execute_recipe(rule, recipe, symtable):
+    cmd_s = recipe.eval(symtable)
+
+    # Defining Multi-Line Variables.
+    # "However, note that using two separate lines means make will invoke the shell twice, running
+    # an independent sub-shell for each line. See Section 5.3 [Recipe Execution], page 46."
+    # GNU Make 4.2 2020 
+    #
+    # XXX always splitting on \n feels very dangerous and I'm going to test it
+    # heavily eval() needs to return a single string in order to plug into the
+    # functional structure of GNU Make.  However, multi-line variables are
+    # treated as multiple lines given to the shell individually.
+    # DefineBlock.eval() will eval its individual lines then return a \n joined
+    # string.
+    # XXX where are the cases this split() could trip on a non-Define string?
+    cmd_list = cmd_s.split("\n")
+
+    exit_code = 0
+
+    for s in cmd_list:
+#        print("shell execute \"%s\"" % s)
+
+        # TODO many more automatic variables
+        symtable.push("@")
+        symtable.push("^")
+        symtable.push("<")
+        symtable.add_automatic("@", rule.target, recipe.get_pos())
+        symtable.add_automatic("^", " ".join(rule.prereq_list), rule.get_pos())
+        symtable.add_automatic("<", rule.prereq_list[0] if len(rule.prereq_list) else "", rule.get_pos())
+
+        if s[0] == '@':
+            # silent command
+            s = s[1:]
+        else:
+            print(s)
+
+        # "To ignore errors in a recipe line, write a ‘-’ at the beginning of the line’s text (after the
+        # initial tab). The ‘-’ is discarded before the line is passed to the shell for execution"
+        # GNU Make 4.2 Jan 2020
+        ignore_failure = False
+        if s[0] == '-':
+            # ignore failure
+            s = s[1:]
+            ignore_failure = True
+
+        exit_code = 0
+        ret = shell.execute(s, symtable)
+
+        symtable.pop("@")
+        symtable.pop("^")
+        symtable.pop("<")
+        
+        exit_code = ret['exit_code']
+        if exit_code == 0:
+            print(ret['stdout'],end="")
+        else:
+            print("make:", ret["stderr"], file=sys.stderr, end="")
+            print("make: *** [%r: %s] Error %d %s" % (recipe.get_pos(), rule.target, exit_code, "(ignored)" if ignore_failure else ""))
+
+            if not ignore_failure:
+                break
+            exit_code = 0
+
+    return exit_code
+
 def execute(makefile, args):
     # ha ha type checking
     assert isinstance(args, Args)
@@ -349,34 +411,13 @@ def execute(makefile, args):
 
         # walk a dependency tree
         for rule in rulesdb.walk_tree(target):
-#            print(rule)
-#            print(rule.recipe_list.makefile())
             for recipe in rule.recipe_list:
-                # TODO many more automatic variables
-                symtable.push("@")
-                symtable.push("^")
-                symtable.push("<")
-                symtable.add_automatic("@", rule.target, recipe.get_pos())
-                symtable.add_automatic("^", " ".join(rule.prereq_list), rule.get_pos())
-                symtable.add_automatic("<", rule.prereq_list[0] if len(rule.prereq_list) else "", rule.get_pos())
-                s = recipe.eval(symtable)
-#                print("shell execute \"%s\"" % s)
-                if s[0] == '@':
-                    # silent command
-                    s = s[1:]
-                else:
-                    print(s)
-                ret = shell.execute(s, symtable)
-                symtable.pop("@")
-                symtable.pop("^")
-                symtable.pop("<")
-                exit_code = ret['exit_code']
+                exit_code = execute_recipe(rule, recipe, symtable)
                 if exit_code != 0:
-                    print("make:", ret["stderr"], file=sys.stderr, end="")
-                    print("make: *** [%r] Error %d" % (rule.get_pos(), exit_code))
-                    print("make: *** [%r]: %s Error %d" % (recipe.get_pos(), rule.target, exit_code))
-                    return exit_code
-                print(ret['stdout'],end="")
+                    break
+
+            if exit_code != 0:
+                break
 
     return exit_code
     
@@ -492,6 +533,10 @@ Copyright (C) 2014-2023 David Poole davep@mbuf.com, testcluster@gmail.com""" % (
             
     args.argslist = arglist
     return args
+
+# FIXME ugly hack dependency injection to solve problems with circular imports
+parsermk.parse_vline_stream = parse_vline_stream 
+symbolmk.tokenize_statement = tokenize_statement
 
 if __name__=='__main__':
     args = parse_args()
