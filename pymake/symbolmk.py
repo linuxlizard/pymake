@@ -69,7 +69,7 @@ class Symbol(object):
                 # if seeing an AttributeError then trying to pass in a non-VCharString
                 if _testing:
                     # if we're running test code, allow array of VChars to sneak in
-                    vstring = VCharString([VChar(c,(0,0),"/dev/null") for c in vstring])
+                    vstring = VCharString([VChar(c,(0,0),"...testing") for c in vstring])
                 else:
                     logger.error(type(vstring))
                     raise

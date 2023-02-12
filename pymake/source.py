@@ -19,7 +19,7 @@ class SourceFile(Source):
 
 class SourceString(Source):
     def __init__(self, input_str):
-        super().__init__("/dev/null")
+        super().__init__("...string")
         self.infile = io.StringIO(input_str)       
 
     def load(self):

@@ -4,6 +4,7 @@ import logging
 import os
 
 logger = logging.getLogger("pymake.rules")
+#logger.setLevel(level=logging.DEBUG)
 
 from pymake.error import *
 
@@ -15,6 +16,10 @@ class Rule:
     # pull symbol.py in here (to keep pymake.py a little more clean).
     def __init__(self, target, prereq_list, recipe_list, pos):
         # target is string and prereq_list[] is array of strings
+        assert ' ' not in target
+        assert '\t' not in target
+        assert target
+        logger.debug("create rule target=%r", target)
         self.target = target
         self.prereq_list = prereq_list
         self.recipe_list = recipe_list
@@ -61,7 +66,7 @@ class RuleDB:
             self.default = rule.target
     
         # GNU Make doesn't warn on this sort of thing but I want to see it.
-        if rule.target in self.rules:
+        if rule.target in self.rules and rule.prereq_list:
             warning_message(rule.get_pos(), "overriding rule \"%s\"" % (rule.target, ))
 
         self.rules[rule.target] = rule

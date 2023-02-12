@@ -14,7 +14,7 @@ import logging
 
 logger = logging.getLogger("pymake.vline")
 
-_debug = True
+_debug = False
 
 import pymake.hexdump as hexdump
 from pymake.scanner import ScannerIterator
@@ -57,8 +57,10 @@ def validate_vchars(vchar_list):
     for vchar in vchar_list:
 #        logger.debug("validating \"%s\" @ %d,%d %s %r", vchar.printable(), vchar.row, vchar.col, vchar.filename, vchar.hide)
 
-        if vchar.filename == "/dev/null":
-            # test/debug code ; ignore
+        if vchar.filename == "/dev/null" or vchar.filename.startswith("..."):
+            # test/debug code uses /dev/null
+            # variables from internal sources start with ...
+            # e.g., ...commandline
             continue
 
         if infilename is None:

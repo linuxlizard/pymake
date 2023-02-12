@@ -193,7 +193,7 @@ def _add_internal_db(symtable):
     # now have a list of strings containing Make syntax.
     for oneline in defaults:
         # TODO mark these variables 'default'
-        v = vline.VirtualLine([oneline], (0,0), "/dev/null")
+        v = vline.VirtualLine([oneline], (0,0), "...defaults")
         stmt = tokenize_statement(iter(v))
         stmt.eval(symtable)
 
@@ -224,10 +224,13 @@ def _execute_statement_list(stmt_list, curr_rules, rulesdb, symtable):
             # everything else returns a string.
             rule_dict = rule_expr.eval(symtable)
 
-            for target_str, prereq_list in rule_dict.items():
-                rule = rules.Rule(target_str, prereq_list, rule_expr.recipe_list, rule_expr.get_pos())
-                rulesdb.add(rule)
-                curr_rules.append(rule)
+            for targets_str, prereq_list in rule_dict.items():
+                for t in targets_str.strip().split(" "):
+                    if not t:
+                        breakpoint()
+                    rule = rules.Rule(t, prereq_list, rule_expr.recipe_list, rule_expr.get_pos())
+                    rulesdb.add(rule)
+                    curr_rules.append(rule)
         else:
             try:
                 result = tok.eval(symtable)
@@ -296,7 +299,7 @@ def execute(makefile, args):
     # so the arglist must be parsed and assignment statements saved. Anything
     # not an Assignment is likely a target.
     for onearg in args.argslist:
-        v = vline.VirtualLine([onearg], (0,0), "/dev/null")
+        v = vline.VirtualLine([onearg], (0,0), "...commandline")
         stmt = tokenize_statement(iter(v))
         if isinstance(stmt,AssignmentExpression):
             symtable.command_line_start()
