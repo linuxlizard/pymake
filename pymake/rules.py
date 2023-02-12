@@ -77,7 +77,9 @@ class RuleDB:
         return self.rules[target]
 
     def get_default_target(self):
-        assert self.default
+        if not self.default:
+            raise IndexError
+
         return self.default
 
     def walk_tree(self, target):

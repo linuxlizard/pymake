@@ -1,20 +1,48 @@
+# immediate
 a:=10
-ifdef DEFER
-b=$a  # delayed assignment ("b=20" below)
-else
-b:=$a  # immediate assignment  ("b=10" below)
-endif
-a:=20
+$(info a=$a)
 
-$(info a=$(a) b=$(b))
+# recursively expanded variable
+b=20
+c=30
+$(info b=$b c=$c)
 
-# no output until a is eval'd
-a=$(shell date)
-$(info $(value a))
-#$(if $a,$(error fail!),$(info a all good, man))
+d1=$a $b $c
+d2:=$a $b $c
+$(info d1=$(d1) d2=$(d2))
 
-$(info a=**$(a)**)
-a:=$(shell date)
-$(if "$a",$(error fail!),$(info a all good, man))
+# change the value of b, c
+b=40
+c=50
+$(info d1=$(d1) d2=$(d2))
+
+# from the GNU Make 4.2 manual Jan 2020
+foo = $(bar)
+bar = $(ugh)
+ugh = Huh?
+$(info $(foo) $(bar) $(ugh))
+
+FOO ?= bar
+$(info FOO=$(FOO))
+
+BAR:=bar
+BAR ?= baz
+$(info BAR=$(BAR))
+
+# error "Recursive variable 'CFLAGS' references itself (eventually)"
+#CFLAGS=-Wall -g
+#CFLAGS=$(CFLAGS) -O
+#$(info CFLAGS=$(CFLAGS))
+
+# shell assign
+uname!=uname -a
+$(info uname=$(uname))
+
+# POSIX make syntax of simply expanded assign
+q::=q
+r::=r
+s::=s
+$(info $q $r $s)
+
 
 @:;@:

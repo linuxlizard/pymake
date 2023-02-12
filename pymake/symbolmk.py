@@ -250,17 +250,9 @@ class AssignmentExpression(Expression):
     def __init__(self, token_list):
         super().__init__(token_list)
         self.sanity()
-
-    def eval(self, symbol_table):
-        self.sanity()
-        lhs = self.token_list[0].eval(symbol_table)
-        op = self.token_list[1]
-        logger.debug("assignment lhs=%s op=%s", lhs, op)
-
-        # FIXME I have a sneaking suspicion the rhs can be token_list[3:]
-        # pyfiles := $(wildcard foo*.py) $(wildcard bar*.py) $(wildcard baz*.py)
-        assert len(self.token_list) == 3
-
+            
+    @staticmethod
+    def assign(lhs, op, rhs, symbol_table):
         # from the gnu make pdf:
         # immediate = deferred
         # immediate ?= deferred
@@ -269,41 +261,43 @@ class AssignmentExpression(Expression):
         # immediate += deferred or immediate
         # immediate != immediate
 
+        logger.debug("assignment lhs=%s op='%s'", lhs, op)
+        key = lhs.eval(symbol_table)
+
         # handle different styles of assignment
         if op == ":=" or op == "::=":
             # simply expanded
-            rhs = self.token_list[2].eval(symbol_table)
+            rhs = rhs.eval(symbol_table)
         elif op == "=":
             # recursively expanded
             # store the expression in the symbol table without evaluating
-            rhs = self.token_list[2]
+            pass
         elif op == "!=":
             # != seems to be a > 3.81 feature so add a version check here
             if Version.major < 4:
                 raise VersionError("!= not in this version of make")
 
             # execute RHS as shell
-            rhs = shell.execute_tokens(list(self.token_list[2]), symbol_table )
+            rhs = shell.execute_tokens(rhs, symbol_table )
         elif op == "?=":
             # deferred expand
             # store the expression in the symbol table w/o eval
-            rhs = self.token_list[2]
+            pass 
         elif op == "+=":
             # Append is a little tricky because we have to treat recursively vs
             # simply expanded variables differently (making the expression
             # sensitive to what's in the LHS). Pass the Expression to the
             # symbol table to figure out.
-            rhs = self.token_list[2]
+            pass
         else:
             # TODO
             raise NotImplementedError("op=%s"%op)
 
         logger.debug("assignment rhs=%s", rhs)
 
-        pos = self.token_list[0].get_pos()
+        pos = lhs.get_pos()
         assert pos is not None
 
-        key = lhs
         if op == "?=":
             symbol_table.maybe_add(key, rhs, pos)
         elif op == "+=":
@@ -311,6 +305,20 @@ class AssignmentExpression(Expression):
         else:
             symbol_table.add(key, rhs, pos)
         return ""
+
+
+    def eval(self, symbol_table):
+        self.sanity()
+
+        # FIXME I have a sneaking suspicion the rhs can be token_list[3:]
+        # pyfiles := $(wildcard foo*.py) $(wildcard bar*.py) $(wildcard baz*.py)
+        assert len(self.token_list) == 3
+
+        lhs = self.token_list[0]
+        op = self.token_list[1]
+        rhs = self.token_list[2]
+
+        return self.assign(lhs, op, rhs, symbol_table)
 
     def sanity(self):
         # AssignmentExpression :=  Expression AssignOp Expression
@@ -973,18 +981,32 @@ class IfneqDirective(IfeqDirective):
 
 class DefineBlock(LineBlock):
     # Defining Multi-Line Variables.
-    # "However, note that using two separate lines means make will invoke the
-    # shell twice, running an independent sub-shell for each line. See Section
-    # 5.3 [Recipe Execution], page 46." GNU Make 4.2 2020 
+    # In a LineBlock the contents are Make statements that will be executed.
+    # In a DefineBlock the contents are strings that will only have varref
+    # substitutions.
+    def __init__(self, vline_list):
+        super().__init__(vline_list)
+
+        # eval() will tokenize the contents of this block. We'll cache the
+        # tokenized values here.
+        self.statement_list = None
+
     def eval(self, symbol_table):
+        if self.statement_list is None:
+            self.statement_list = [tokenize_statement(iter(v)) for v in self.vline_list]
+
         # TODO make this one list comprehension statement 
         s_list = []
-        for v in self.vline_list:
-            # TODO cache the tokenization
-            stmt = tokenize_statement(iter(v))
+        for stmt in self.statement_list:
             s = stmt.eval(symbol_table)
             s_list.append(s)
 
+        # "However, note that using two separate lines means make will invoke
+        # the shell twice, running an independent sub-shell for each line. See
+        # Section 5.3 [Recipe Execution], page 46." GNU Make 4.2 2020 
+        #
+        # Join the results together with \n and hope for the best. (See also
+        # execute_rule() in pymake.py)
         return "\n".join(s_list)
 
 class DefineDirective(Directive):
@@ -994,10 +1016,9 @@ class DefineDirective(Directive):
         # ha ha type checking
         assert isinstance(assign_op_str, str)
 
-        super().__init__(keyword, varname)
-
         # self.string will be 'define' vcstr
         # self.expression is the varname (lhs)
+        super().__init__(keyword, varname)
 
         self.assign_op_str = assign_op_str
         self.block = block
@@ -1020,25 +1041,12 @@ class DefineDirective(Directive):
     # line." -- GNU Make 4.3 Jan 2020
     def eval(self, symbol_table):
         # self.expression contains the directive's name
-        key = self.expression.eval(symbol_table)
-
-        # decide what to store in the symbol table
-        rhs = None
-        op = self.assign_op_str
-        if op == "=":
-            rhs = self.block
-        elif op == ":=":
-            # we need to tokenize and eval our contents
-            rhs = self.block.eval(symbol_table)
-        else:
-            raise NotImplementedError()
-
-        # TODO merge this fn with AssignmentExpression's eval() so all the
-        # special cases can be kept in one place
-
-        symbol_table.add(key, rhs, self.string.get_pos())
-        return ""
         
+        # use AssignmentExpression so all the variable type and assignment type
+        # special cases are in one place
+        return AssignmentExpression.assign(self.expression, self.assign_op_str, 
+                    self.block, symbol_table)
+
 
 class UnDefineDirective(Directive):
     name = "undefine"

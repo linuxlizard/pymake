@@ -10,6 +10,7 @@
 import sys
 import logging
 import os
+import os.path
 import getopt
 
 logger = logging.getLogger("pymake")
@@ -341,7 +342,7 @@ def execute_recipe(rule, recipe, symtable):
                 break
             exit_code = 0
 
-    return exit_code
+    return exit_status["error"] if exit_code else exit_status["success"] 
 
 def execute(makefile, args):
     # ha ha type checking
@@ -392,8 +393,12 @@ def execute(makefile, args):
         rulesdb.graph(title + "_makefile", args.dotfile)
         print("wrote %s for graphviz" % args.dotfile)
 
-    if not target_list:
-        target_list = [ rulesdb.get_default_target() ]
+    try:
+        if not target_list:
+            target_list = [ rulesdb.get_default_target() ]
+    except IndexError:
+        error_message(makefile.get_pos(), "No targets" )
+        return exit_status["error"]
 
     #
     # At this point, we start executing the makefile Rules.
@@ -403,7 +408,7 @@ def execute(makefile, args):
             rule = rulesdb.get(target)
         except KeyError:
             error_message(None, "No rule to make target '%s'" % target)
-            exit_code = 1
+            exit_code = exit_status["error"]
             break
 
 #        print("rule=",rule)
@@ -419,7 +424,7 @@ def execute(makefile, args):
             if exit_code != 0:
                 break
 
-    return exit_code
+    return exit_status["error"] if exit_code else exit_status["success"] 
     
 def usage():
     # options are designed to be 100% compatible with GNU Make
@@ -430,6 +435,9 @@ Options:
     -B
     --always-make
                 TODO Unconditionally build targets.
+    -C dir
+    --directory dir
+                change to directory before reading makefiles or doing anything else 
     -d          Print extra debugging information.
     -f FILE
     --file FILE
@@ -480,6 +488,9 @@ class Args:
         # or a GNU Make expression
         self.argslist = []
 
+        # -C aka --directory option
+        self.directory = None
+
         self.warn_undefined_variables = False
         self.detailed_error_explain = False
 
@@ -488,7 +499,7 @@ def parse_args():
 Copyright (C) 2014-2023 David Poole davep@mbuf.com, testcluster@gmail.com""" % (Version.vstring(),)
 
     args = Args()
-    optlist, arglist = getopt.gnu_getopt(sys.argv[1:], "Bhvo:drSf:", 
+    optlist, arglist = getopt.gnu_getopt(sys.argv[1:], "Bhvo:drSf:C:", 
                             [
                             "always-make",
                             "debug", 
@@ -500,6 +511,7 @@ Copyright (C) 2014-2023 David Poole davep@mbuf.com, testcluster@gmail.com""" % (
                             "no-builtin-rules",
                             "version", 
                             "warn-undefined-variables", 
+                            "directory=",
                             ]
                         )
     for opt in optlist:
@@ -527,6 +539,11 @@ Copyright (C) 2014-2023 David Poole davep@mbuf.com, testcluster@gmail.com""" % (
             args.detailed_error_explain = True
         elif opt[0] == "--dotfile":
             args.dotfile = opt[1]
+        elif opt[0] in ("-C", "--directory"):
+            # multiple -C options are supported for reasons I don't understand
+            if args.directory is None:
+                args.directory = []
+            args.directory.append(opt[1])
         else:
             # wtf?
             assert 0, opt
@@ -550,8 +567,9 @@ if __name__=='__main__':
         usage()
         sys.exit(1)
 
-#    start of -C option
-#    os.chdir("../make-4.3")
+    # -C option
+    if args.directory:
+        os.chdir(os.path.join(*args.directory))
 
     infilename = args.filename
     try : 

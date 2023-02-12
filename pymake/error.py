@@ -12,7 +12,16 @@ __all__ = [ "ParseError",
 
             "warning_message",
             "error_message",
+
+            "exit_status",
           ]
+
+# from "EXIT STATUS" of make(1)
+exit_status = {
+    "success" : 0,
+    "rebuild-required" : 1,
+    "error" : 2,   # "errors were encountered"
+}
 
 # test/debug flags
 # assert() in ParseError() constructor TODO make this a command line arg

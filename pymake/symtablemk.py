@@ -71,7 +71,7 @@ class Entry:
             logger.debug("recursive eval %r name=%s at pos=%r", self, self.name, self.get_pos())
             if self.loop > 0:
                 msg = "Recursive variable %r references itself (eventually)" % self.name
-                raise MakeError(description=msg, pos=self.get_pos())
+                raise MakeError(msg=msg, pos=self.get_pos())
             self.loop += 1
             step1 = [ self._value.eval(symbol_table) ]
             step1.extend( [t.eval(symbol_table) for t in self._appends] )

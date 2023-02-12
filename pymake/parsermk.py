@@ -378,40 +378,39 @@ def parse_ifdef_directive(expr, directive_vstr, virt_line, vline_iter ):
     return cond_block
 
 def parse_define_declaration(expr):
+    # "You may omit the variable assignment operator if you prefer. If omitted,
+    # make assumes it to be ‘=’ and creates a recursively-expanded variable"
+    # -- GNU Make 4.3 Jan 2020
+    # We have to use a string as the operator because it is optional. We can't
+    # manufacture a token where one doesn't exist. (Might revisit this later.)
+
     # we should see:
-    # token_list[0] is varname
-    # token_list[1] is operator
-    # token_list[2:] is junk that generators a warning
+    # 1  varname (required)
+    # 2  operator (optional)
+    # 3+ anything past the operator is junk that generators a warning
     #
     # BNF is sorta:
+    # declaration ::= "define" varname operator
     # varname ::= Expression
     # operator ::= Operator | None
 
-    if len(expr.token_list) > 2:
+    if isinstance(expr,AssignmentExpression):
+        # we have an expression with the optional operator
+        name_expr = expr.token_list[0]
+        op_str = expr.token_list[1].makefile()
+
         # the last expression might exist but can be empty because we first
         # tokenize the statement into an assignment with an empty RHS
         if expr.token_list[2].token_list:
             warning_message(
                 pos = expr.token_list[2].get_pos(),
                 msg = "extraneous text after 'define' directive")
+    else:
+        # plain expression
+        name_expr = expr
+        op_str = "=" 
 
-    # "You may omit the variable assignment operator if you prefer. If omitted,
-    # make assumes it to be ‘=’ and creates a recursively-expanded variable"
-    # -- GNU Make 4.3 Jan 2020
-    # We have to use a string as the operator because it is optional. We can't
-    # manufacture a token where one doesn't exist. (Might revisit this later.)
-    operator_str = "=" 
-
-    if len(expr.token_list) == 2:
-        # last arg should be an operator or we've got more junk
-        if isinstance(expr.token_list[1], AssignOp):
-            operator_str = expr.token_list[1].makefile()
-        else:
-            warning_message(
-                pos = expr.token_list[1].get_pos(),
-                msg = "extraneous text after 'define' directive")
-
-    return expr.token_list[0], operator_str
+    return name_expr, op_str
 
 def parse_define_directive(expr, directive_vstr, virt_line, vline_iter ):
     # save where this define block begins so we can report errors about 

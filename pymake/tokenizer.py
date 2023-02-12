@@ -370,7 +370,8 @@ def tokenize_statement_LHS(vchar_scanner):
             # preceeding chars are "::"
             if c=='=':
                 # ::= 
-                return [token_list, AssignOp("::=") ]
+                token += vchar
+                return [token_list, AssignOp(token) ]
 
             vchar_scanner.pushback()
             # successfully found LHS 

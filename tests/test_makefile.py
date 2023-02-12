@@ -86,6 +86,7 @@ infilename_list = (
     "ifeq-nested.mk",
 
     "recursive.mk",
+    "assign.mk",
 )
 
 @pytest.mark.parametrize("infilename", infilename_list)
