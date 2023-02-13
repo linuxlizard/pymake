@@ -78,6 +78,7 @@ infilename_list = (
     # "shell.mk",
     # "variables.mk",
     "filepatsubst.mk",
+    # "define.mk",
     "undefine.mk",
 
     "info.mk",
@@ -85,8 +86,9 @@ infilename_list = (
     "ifdef.mk",
     "ifeq-nested.mk",
 
-    "recursive.mk",
+    "recursive.mk",  # FIXME this is a bad filename (does not test recursive make)
     "assign.mk",
+    # "automatic.mk",
 )
 
 @pytest.mark.parametrize("infilename", infilename_list)

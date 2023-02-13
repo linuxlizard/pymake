@@ -280,15 +280,38 @@ def _execute_statement_list(stmt_list, curr_rules, rulesdb, symtable):
     return exit_code
 
 def execute_recipe(rule, recipe, symtable):
+    def remove_duplicates(s_list):
+        # the $^ variable removes duplicates but must must must preserve order
+        seen_list = []
+        for s in s_list:
+            if s not in seen_list:
+                seen_list.append(s)
+        return seen_list
+
+    # TODO many more automatic variables
+    symtable.push("@")
+    symtable.push("^")
+    symtable.push("+")
+    symtable.push("<")
+    symtable.add_automatic("@", rule.target, recipe.get_pos())
+    symtable.add_automatic("^", " ".join(remove_duplicates(rule.prereq_list)), rule.get_pos())
+    symtable.add_automatic("+", " ".join(rule.prereq_list), rule.get_pos())
+    symtable.add_automatic("<", rule.prereq_list[0] if len(rule.prereq_list) else "", rule.get_pos())
+
     cmd_s = recipe.eval(symtable)
 
+    symtable.pop("@")
+    symtable.pop("^")
+    symtable.pop("+")
+    symtable.pop("<")
+        
     # Defining Multi-Line Variables.
     # "However, note that using two separate lines means make will invoke the shell twice, running
     # an independent sub-shell for each line. See Section 5.3 [Recipe Execution], page 46."
     # GNU Make 4.2 2020 
     #
     # XXX always splitting on \n feels very dangerous and I'm going to test it
-    # heavily eval() needs to return a single string in order to plug into the
+    # heavily. The eval() needs to return a single string in order to plug into the
     # functional structure of GNU Make.  However, multi-line variables are
     # treated as multiple lines given to the shell individually.
     # DefineBlock.eval() will eval its individual lines then return a \n joined
@@ -300,14 +323,6 @@ def execute_recipe(rule, recipe, symtable):
 
     for s in cmd_list:
 #        print("shell execute \"%s\"" % s)
-
-        # TODO many more automatic variables
-        symtable.push("@")
-        symtable.push("^")
-        symtable.push("<")
-        symtable.add_automatic("@", rule.target, recipe.get_pos())
-        symtable.add_automatic("^", " ".join(rule.prereq_list), rule.get_pos())
-        symtable.add_automatic("<", rule.prereq_list[0] if len(rule.prereq_list) else "", rule.get_pos())
 
         if s[0] == '@':
             # silent command
@@ -327,10 +342,6 @@ def execute_recipe(rule, recipe, symtable):
         exit_code = 0
         ret = shell.execute(s, symtable)
 
-        symtable.pop("@")
-        symtable.pop("^")
-        symtable.pop("<")
-        
         exit_code = ret['exit_code']
         if exit_code == 0:
             print(ret['stdout'],end="")

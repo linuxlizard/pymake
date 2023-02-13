@@ -23,16 +23,17 @@ frob-step-1 $< -o $@-step-1
 frob-step-2 $@-step-1 -o $@
 endef
 
-override define two-lines =
-@echo foo
-@echo bar=$(bar)
-endef
+# TODO override not implemented yet
+#override define two-lines =
+#@echo foo
+#@echo bar=$(bar)
+#endef
 # end of GNU Make copy/paste
 
 # well this makes things more difficult
 # valid
-#define=define
-#$(info $$define=$(define))
+define=not really define
+$(info $$define=$(define))
 
 # not valid (whitespace triggers make's parser?)
 #define = define
@@ -40,16 +41,11 @@ endef
 # not valid (again whitespace)
 #define : ; @echo $@
 
-# valid (a rule)
-#define: ; @echo $@
-
 # $(info) will display multi-line variables
 $(info two-lines=$(two-lines))
 #$(info $$frobnicate=em$(frobnicate)pty)
 
-#empty=
-a=$(if $(two-lines), $(info not empty), $(info empty))
-#$(info a=$a)
+$(info $(words $(value two-lines)))
 
 define crap = 
 this is
@@ -132,14 +128,13 @@ endef
 define mk2py
     $(foreach pyname,\
               $(patsubst %.mk,%.py,$(1)),\
-              $(shell python tests/$(pyname))\
+              $(shell echo python tests/$(pyname))\
      )
 endef
 
-#car = $(1)
-a=$(firstword $(shell ls *.mk))
-$(info $a)
-a = $(shell ls *.mk)
+$(info $(call mk2py,a.mk b.mk c.mk d.mk))
+$(info $(words $(value mk2py)))
+
 a := $(call car,$(call car,1,2,3,4,5,6))
 $(info car=$a)
 
@@ -149,6 +144,7 @@ $(info cdr=$a)
 a := $(call cdr,$(call cdr,1 2 3 4 5 6))
 $(info cdr=$a)
 
+# override previous bar so two-lines should now have qux
 bar=qux
 
 .PHONY: all
@@ -157,4 +153,7 @@ all :
 #	@echo $@
 #	@echo $(two-lines)
 #	$(run-yacc)
+
+# valid (a rule)
+define: ; @echo running rule $@
 
