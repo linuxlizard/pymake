@@ -218,17 +218,16 @@ def _execute_statement_list(stmt_list, curr_rules, rulesdb, symtable):
             rule_expr = tok
 
             # Note a RuleExpression.eval() is very different from all other
-            # eval() methods (so far).  A RuleExpression.eval() returns a dict;
-            # everything else returns a string.
-            rule_dict = rule_expr.eval(symtable)
+            # eval() methods (so far).  A RuleExpression.eval() returns two
+            # arrays of strings: targets, prereqs
+            # All other eval() returns a string.
+            target_list, prereq_list = rule_expr.eval(symtable)
+               
+            for t in target_list:
+                rule = rules.Rule(t, prereq_list, rule_expr.recipe_list, rule_expr.get_pos())
+                rulesdb.add(rule)
+                curr_rules.append(rule)
 
-            for targets_str, prereq_list in rule_dict.items():
-                for t in targets_str.strip().split(" "):
-                    if not t:
-                        breakpoint()
-                    rule = rules.Rule(t, prereq_list, rule_expr.recipe_list, rule_expr.get_pos())
-                    rulesdb.add(rule)
-                    curr_rules.append(rule)
         else:
             try:
                 result = tok.eval(symtable)

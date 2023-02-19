@@ -405,29 +405,28 @@ class RuleExpression(Expression):
         self.recipe_list.append(recipe)
 
     def eval(self, symbol_table):
-        # Return a dict:
-        #   key: target (string)
-        #   value: array of prerequisites (strings)
+        # Return two arrays:
+        #   [0] : target(s) (string)
+        #   [1] : prerequisite(s) (strings)
         #
         # BIG FAT NOTE: This eval() is different than the other Symbol stack
-        # eval() methods which all return string.
+        # eval() methods which all return a single string.
         # 
-        rule_dict = {}
 
         # Must be super careful to eval() the target and prerequisites only
         # once! There may be side effects so must not re-eval() 
         # UNLESS:
         # Make allows the same target in multiple rules. Make will eval each
         # time.
-        for t in self.targets.token_list:
-            target_str = t.eval(symbol_table)
-            if target_str in rule_dict:
-                warning_message(t.get_pos(), "duplicate target in rule")
 
-            # discard empty string(s)
-            rule_dict[target_str] = [ s for s in self.prereqs.eval(symbol_table).split(" ") if s]
+        targets = self.targets.eval(symbol_table).split()
+        prereqs = self.prereqs.eval(symbol_table).split()
 
-        return rule_dict
+        # throw away empty strings
+        targets = [t for t in targets if t]
+        prereqs = [p for p in prereqs if p]
+
+        return targets, prereqs
 
 class RuleList(Expression):
      # RuleList class used for the targets and the prerequisites. Is an array

@@ -112,8 +112,8 @@ def tokenize_statement(vchar_scanner):
     if lhs[-1].is_whitespace():
         lhs.pop()
 
-    # remove leading whitespace
-    if lhs[0].is_whitespace():
+    # remove leading whitespace (if any)
+    if lhs and lhs[0].is_whitespace():
         del lhs[0]
 
     # lhs should be an array of stuff in the Symbol class hierarchy so now we
@@ -375,7 +375,7 @@ def tokenize_statement_LHS(vchar_scanner):
 
             vchar_scanner.pushback()
             # successfully found LHS 
-            return [token_list, RuleOp("::") ]
+            return [token_list, RuleOp(token) ]
 
         else:
             # should not get here
