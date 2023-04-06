@@ -165,3 +165,6 @@ def test_too_many_expressions():
     s = "ifeq (1,1,1)"
     _should_succeed(s,("1", "1,1"))
 
+def test_empty_first_arg():
+    s = "ifeq (,1)"
+    _should_succeed(s, ("", "1"))
