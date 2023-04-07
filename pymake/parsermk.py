@@ -74,7 +74,7 @@ def parse_ifeq_conditionals(ifeq_expr, directive_vstr):
     def kill_trailing_ws(token_list):
         if _my_debug:
             print("kill trailing whitespace")
-        if token_list[-1].is_whitespace():
+        if token_list and token_list[-1].is_whitespace():
             token_list.pop()
 
 #    def kill_leading_ws(token):
