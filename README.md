@@ -7,6 +7,11 @@ I want to debug my GNU Makefiles.
 
 Ultimate long-term goal is a GNU Make visual debugger. I want breakpoints on variables changing. I want to single step through the rules. I want to put a breakpoint on a rule.
 
+## Update 20230412. The "What am I Doing" Update.
+
+Had a bit of a break due to my finding [remake](https://remake.readthedocs.io/en/latest). The remake tool is a fork of GNU Make which adds interactive command line debugging to Make.  Sound familiar?  Remake did not exist when I started on my little PyMake adventure.  I started wondering if I should continue my little project.  I took a few weeks to play with Rust (really cool language).  Then I decided I want to finish this project. I love working with programming languages. My thesis was a mini-Ada compiler. So, anyway, let's get this thing working.
+
+
 ## Update 20230208. The Covid Update.
 
 Away from work sick with Covid. Not sick enough to not be bored watching TV. 
