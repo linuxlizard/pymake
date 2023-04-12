@@ -17,6 +17,7 @@ from pymake.functions_fs import *
 from pymake.functions_cond import *
 from pymake.functions_str import *
 from pymake.todo import TODOMixIn
+from pymake import cli
 
 import pymake.shell as shell
 
@@ -24,6 +25,7 @@ __all__ = [ "Info",
             "WarningClass",
             "Error",
             "Shell", 
+            "Breakpoint",
 
             "make_function",
           ]
@@ -264,6 +266,12 @@ class ValueClass(Function):
 
         return symbol_table.value(var)
 
+class Breakpoint(Function):
+    name = "breakpoint"
+
+    def eval(self, symbol_table):
+        cli.run()
+
 _classes = {
     # please keep in alphabetical order
     "abspath" : AbsPath,
@@ -271,6 +279,7 @@ _classes = {
     "addsuffix" : AddSuffix,
     "and" : AndClass,
     "basename" : BasenameClass,
+#    "breakpoint" : Breakpoint,   # not in GNU Make
     "call" : Call,
     "dir" : DirClass,
     "error" : Error,
