@@ -6,8 +6,10 @@ import logging
 import os.path
 import errno
 import subprocess
+import asyncio
 
 from pymake.error import *
+from pymake.printable import printable_string
 
 logger = logging.getLogger("pymake.shell")
 
@@ -27,17 +29,20 @@ shellstatus = ".SHELLSTATUS"
 #    return False
         
 
-def execute(cmd_str, symbol_table):
+class ShellReturn:
+    def __init__(self):
+        self.stdout = None
+        self.stderr = None
+        self.exit_code = None
+        self.errmsg = None
+
+async def execute(cmd_str, symbol_table):
     """execute a string with the shell, returning a bunch of useful info"""
 
-    logger.debug("execute %s", cmd_str)
+    logger.debug("execute %s", printable_string(cmd_str))
+#    print("execute %s" % printable_string(cmd_str))
 
-    return_status = {
-        "stdout" : None,
-        "stderr" : None,
-        "exit_code" : None,
-        "errmsg" : None,
-    }
+    return_status = ShellReturn()
 
     # TODO launch this shell (or verify python subprocess uses env $SHELL)
     shell = symbol_table.fetch("SHELL")
@@ -68,6 +73,8 @@ def execute(cmd_str, symbol_table):
 #        return_status["errmsg"] = "make: {0}: {1}".format(cmd_list[0], os.strerror(errno.ENOENT))
 #        return return_status
         
+    # tinkering with sub-make
+
     # Exit value depends on which shell we're using.
     #
     # "If a command is not found, the child process created to execute it
@@ -75,54 +82,79 @@ def execute(cmd_str, symbol_table):
     # the return status is 126."
     # man page: GNU Bash 5.1 2020 October 29
 
+    p = await asyncio.create_subprocess_shell(cmd_str, 
+            stdout=subprocess.PIPE, 
+            stderr=subprocess.PIPE,
+            env=env)
+    stdout, stderr = await p.communicate()
+
+#    p = subprocess.run(cmd_str, 
+#            shell=True,
+#            stdout=subprocess.PIPE, 
+#            stderr=subprocess.PIPE,
+#            universal_newlines=True,
+#            check=False # we'll check returncode ourselves
+#            
+#            ,env=env
+#        )
+
+    logger.debug("shell exit status=%r", p.returncode)
+    return_status.exit_code = p.returncode
+
+    return_status.stdout = stdout.decode("utf8")
+    return_status.stderr = stderr.decode("utf8")
+#    return_status["stdout"] = p.stdout
+#    return_status["stderr"] = p.stderr
+
+    return return_status
+
+#def execute_tokens(token_list, symbol_table):
+#    step1 = [t.eval(symbol_table) for t in token_list]
+#    cmd_str = "".join(step1)
+#
+#    coro = execute(cmd_str, symbol_table)
+#    loop = asyncio.get_event_loop()
+#    loop.run_until_complete(coro)
+
+
+def execute_tokens(token_list, symbol_table):
+    # TODO condense these steps
+    step1 = [t.eval(symbol_table) for t in token_list]
+    cmd_str = "".join(step1)
+
+    # TODO var SHELL (see also the async execute() above)
+
+    env = symbol_table.get_exports()
+
+    # run sub-process blocking
     p = subprocess.run(cmd_str, 
             shell=True,
             stdout=subprocess.PIPE, 
             stderr=subprocess.PIPE,
             universal_newlines=True,
-            check=False # we'll check returncode ourselves
-            
-            ,env=env
+            check=False, # we'll check returncode ourselves
+            env=env
         )
-
-    logger.debug("shell exit status=%r", p.returncode)
-    return_status["exit_code"] = p.returncode
-
-    return_status["stdout"] = p.stdout
-    return_status["stderr"] = p.stderr
-
-    return return_status
-
-def execute_tokens(token_list, symbol_table):
-    # TODO condense these steps
-    step1 = [t.eval(symbol_table) for t in token_list]
-    step2 = "".join(step1)
-
-    exe_result = execute(step2, symbol_table)
 
     # GNU Make returns one whitespace separated string, no CR/LF
     # "all other newlines are replaced by spaces." gnu_make.pdf
-    exe_result["stdout"] = exe_result["stdout"].strip().replace("\n", " ")
-    exe_result["stderr"] = exe_result["stdout"].strip().replace("\n", " ")
+    my_stdout = p.stdout.strip().replace("\n", " ")
+    my_stderr = p.stderr.strip().replace("\n", " ")
 
     # save shell status
     pos = token_list[0].get_pos()
     assert pos
-    symbol_table.add(shellstatus, str(exe_result["exit_code"]), pos)
+    symbol_table.add(shellstatus, str(p.returncode), pos)
 
-    if exe_result["exit_code"] == 0:
+    if p.returncode == 0:
         # success!
-        return exe_result["stdout"]
+        return my_stdout
 
     # "If we don't succeed, we run the chance of failure." -- D. Quayle 
 
     # if we have a specific internal error message, report it here
     # (e.g., "No such file or directory")
-    if exe_result["errmsg"]:
-        error_message(exe_result["errmsg"])
-    else:
-        # otherwise report stderr
-        error_message(exe_result["stderr"])
+    error_message(my_stderr)
 
     return ""
 

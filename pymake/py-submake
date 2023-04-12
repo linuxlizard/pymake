@@ -1,0 +1,39 @@
+#!/usr/bin/env python3
+
+# We will let the shell interpret the command line. Pass all the arguments back
+# to the main pymake process. Everything runs in the same process.
+#
+# Work in progress. 
+# TODO Need to switch to file descriptors like GNU Make uses. (As soon as I
+# figure out asyncio)
+
+import os
+import os.path
+import sys
+import socket
+import time
+
+def get_sock_path():
+    tmp = os.environ.get('TMP') or os.environ.get('TEMP') or "/tmp"
+    return os.path.join(tmp, "submake-sock")
+
+sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)  
+foo = sock.connect(get_sock_path())
+
+# Use a simple text HTTP-ish style protocol.
+# Each command line arg on its own line, with a blank line
+# indicating end.
+for f in sys.argv[1:]:
+    msg = f + "\n"
+    len_ = sock.send(msg.encode("utf8"))
+
+msg = "\n\n"
+len_ = sock.send(msg.encode("utf8"))
+
+while 1:
+    msg = sock.recv(1024)
+    print("msg=",msg)
+    s = msg.decode("utf8")
+    if s.startswith("OK"):
+        break
+print("internal-submake says bye!")

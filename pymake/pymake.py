@@ -9,9 +9,10 @@
 
 import sys
 import logging
+import getopt
 import os
 import os.path
-import getopt
+import asyncio
 
 logger = logging.getLogger("pymake")
 #logging.basicConfig(level=logging.DEBUG)
@@ -195,7 +196,7 @@ def _add_internal_db(symtable):
         stmt = tokenize_statement(iter(v))
         stmt.eval(symtable)
 
-def _execute_statement_list(stmt_list, curr_rules, rulesdb, symtable):
+def _eval_statement_list(stmt_list, curr_rules, rulesdb, symtable):
 
     exit_code = 0
 
@@ -249,7 +250,7 @@ def _execute_statement_list(stmt_list, curr_rules, rulesdb, symtable):
                     # A conditional block's or include's eval returns an array
                     # of parsed Symbols ready for eval.  
                     assert isinstance(result,list), type(result)
-                    exit_code = _execute_statement_list(result, curr_rules, rulesdb, symtable)
+                    exit_code = _eval_statement_list(result, curr_rules, rulesdb, symtable)
                         
             except MakeError as err:
                 # Catch our own Error exceptions. Report, break out of our execute loop and leave.
@@ -278,7 +279,7 @@ def _execute_statement_list(stmt_list, curr_rules, rulesdb, symtable):
     # bottom of loop
     return exit_code
 
-def execute_recipe(rule, recipe, symtable):
+def _eval_recipe(rule, recipe, symtable):
     def remove_duplicates(s_list):
         # the $^ variable removes duplicates but must must must preserve order
         seen_list = []
@@ -304,6 +305,12 @@ def execute_recipe(rule, recipe, symtable):
     symtable.pop("+")
     symtable.pop("<")
         
+    return cmd_s
+
+async def execute_recipe(rule, recipe, symtable):
+
+    cmd_s = _eval_recipe(rule, recipe, symtable)
+
     # Defining Multi-Line Variables.
     # "However, note that using two separate lines means make will invoke the shell twice, running
     # an independent sub-shell for each line. See Section 5.3 [Recipe Execution], page 46."
@@ -321,7 +328,6 @@ def execute_recipe(rule, recipe, symtable):
     exit_code = 0
 
     for s in cmd_list:
-#        print("shell execute \"%s\"" % s)
 
         if s[0] == '@':
             # silent command
@@ -339,13 +345,13 @@ def execute_recipe(rule, recipe, symtable):
             ignore_failure = True
 
         exit_code = 0
-        ret = shell.execute(s, symtable)
+        ret = await shell.execute(s, symtable)
 
-        exit_code = ret['exit_code']
+        exit_code = ret.exit_code
         if exit_code == 0:
-            print(ret['stdout'],end="")
+            print(ret.stdout,end="")
         else:
-            print("make:", ret["stderr"], file=sys.stderr, end="")
+            print("make:", ret.stderr, file=sys.stderr, end="")
             print("make: *** [%r: %s] Error %d %s" % (recipe.get_pos(), rule.target, exit_code, "(ignored)" if ignore_failure else ""))
 
             if not ignore_failure:
@@ -354,7 +360,7 @@ def execute_recipe(rule, recipe, symtable):
 
     return exit_status["error"] if exit_code else exit_status["success"] 
 
-def execute(makefile, args):
+async def execute(makefile, args):
     # ha ha type checking
     assert isinstance(args, Args)
 
@@ -364,6 +370,10 @@ def execute(makefile, args):
 
     if not args.no_builtin_rules:
         _add_internal_db(symtable)
+
+    # add my own MAKE variable so I can interept sub-makes
+    # XXX work in progress
+    symtable.add("MAKE", "py-submake")
 
     target_list = []
 
@@ -392,7 +402,7 @@ def execute(makefile, args):
     # Basically, we have context sensitive evaluation.
     curr_rules = []
 
-    exit_code = _execute_statement_list(makefile.token_list, curr_rules, rulesdb, symtable)
+    exit_code = _eval_statement_list(makefile.token_list, curr_rules, rulesdb, symtable)
 
     if exit_code:
         return exit_code
@@ -409,6 +419,8 @@ def execute(makefile, args):
     except IndexError:
         error_message(makefile.get_pos(), "No targets" )
         return exit_status["error"]
+
+#    rulesdb.dump()
 
     #
     # At this point, we start executing the makefile Rules.
@@ -427,7 +439,7 @@ def execute(makefile, args):
         # walk a dependency tree
         for rule in rulesdb.walk_tree(target):
             for recipe in rule.recipe_list:
-                exit_code = execute_recipe(rule, recipe, symtable)
+                exit_code = await execute_recipe(rule, recipe, symtable)
                 if exit_code != 0:
                     break
 
@@ -504,12 +516,12 @@ class Args:
         self.warn_undefined_variables = False
         self.detailed_error_explain = False
 
-def parse_args():
+def parse_args(arglist):
     print_version ="""PY Make %s. Work in Progress.
 Copyright (C) 2014-2023 David Poole davep@mbuf.com, testcluster@gmail.com""" % (Version.vstring(),)
 
     args = Args()
-    optlist, arglist = getopt.gnu_getopt(sys.argv[1:], "Bhvo:drSf:C:", 
+    optlist, arglist = getopt.gnu_getopt(arglist, "Bhvo:drSf:C:", 
                             [
                             "always-make",
                             "debug", 
@@ -565,8 +577,8 @@ Copyright (C) 2014-2023 David Poole davep@mbuf.com, testcluster@gmail.com""" % (
 parsermk.parse_vline_stream = parse_vline_stream 
 symbolmk.tokenize_statement = tokenize_statement
 
-if __name__=='__main__':
-    args = parse_args()
+async def run():
+    args = parse_args(sys.argv[1:])
 
     if args.debug:
         logging.basicConfig(level=logging.DEBUG)
@@ -605,6 +617,17 @@ if __name__=='__main__':
             print(makefile.makefile(), file=outfile)
         print("# end makefile %s" % args.output)
 
-    exit_code = execute(makefile, args)
+    return await execute(makefile, args)
+
+async def async_main():
+    loop = asyncio.get_event_loop()
+
+#    server = await asyncio.start_unix_server(submake_callback, "qqpymake")
+    await run()
+
+def main():
+    exit_code = asyncio.run( async_main() )
     sys.exit(exit_code)
 
+if __name__=='__main__':
+    main()
