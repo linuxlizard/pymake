@@ -2,5 +2,4 @@ pytest >= 3.6.0
 pytest-xdist
 pytest-timeout
 pytest-cov
-codecov
 coverage
