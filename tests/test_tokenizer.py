@@ -178,8 +178,8 @@ space
     recipe_str = r.eval(symbol_table)
     print("recipe=\n%r" % recipe_str)
     p = shell.execute(recipe_str, symbol_table)
-    assert p['exit_code']==0
-    assert p['stdout'] == "nospace\n"
+    assert p.exit_code==0
+    assert p.stdout == "nospace\n"
 
 def test_rules_backslash_one_space_1():
     # from the GNU Make manual
@@ -192,8 +192,8 @@ def test_rules_backslash_one_space_1():
     recipe_str = r.eval(symbol_table)
     print("recipe=\n%r" % recipe_str)
     p = shell.execute(recipe_str, symbol_table)
-    assert p['exit_code']==0
-    assert p['stdout'] == "one space\n"
+    assert p.exit_code==0
+    assert p.stdout == "one space\n"
 
 def test_rules_backslash_one_space_2():
     # from the GNU Make manual
@@ -206,8 +206,8 @@ def test_rules_backslash_one_space_2():
     recipe_str = r.eval(symbol_table)
     print("recipe=\n%r" % recipe_str)
     p = shell.execute(recipe_str, symbol_table)
-    assert p['exit_code']==0
-    assert p['stdout'] == "one space\n"
+    assert p.exit_code==0
+    assert p.stdout == "one space\n"
 
 def test_rules_backslashes_linux_kernel_makefile():
     # from the linux kernel makefile, a nice complicated recipe with backslashes

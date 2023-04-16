@@ -110,7 +110,7 @@ def execute_tokens(token_list, symbol_table):
     # save shell status
     pos = token_list[0].get_pos()
     assert pos
-    symbol_table.add(shellstatus, str(exe_result["exit_code"]), pos)
+    symbol_table.add(shellstatus, str(exe_result.exit_code), pos)
 
     if exe_result.exit_code == 0:
         # success!
