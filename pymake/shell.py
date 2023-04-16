@@ -26,18 +26,20 @@ shellstatus = ".SHELLSTATUS"
 #            return True
 #    return False
         
+class ShellReturn:
+    def __init__(self):
+        self.stdout = None
+        self.stderr = None
+        self.exit_code = None
+        self.errmsg = None
+
 
 def execute(cmd_str, symbol_table):
     """execute a string with the shell, returning a bunch of useful info"""
 
-    logger.debug("execute %s", cmd_str)
+    logger.debug("execute \"%s\"", cmd_str)
 
-    return_status = {
-        "stdout" : None,
-        "stderr" : None,
-        "exit_code" : None,
-        "errmsg" : None,
-    }
+    return_status = ShellReturn()
 
     # TODO launch this shell (or verify python subprocess uses env $SHELL)
     shell = symbol_table.fetch("SHELL")
@@ -86,10 +88,10 @@ def execute(cmd_str, symbol_table):
         )
 
     logger.debug("shell exit status=%r", p.returncode)
-    return_status["exit_code"] = p.returncode
+    return_status.exit_code = p.returncode
 
-    return_status["stdout"] = p.stdout
-    return_status["stderr"] = p.stderr
+    return_status.stdout = p.stdout
+    return_status.stderr = p.stderr
 
     return return_status
 
@@ -102,27 +104,27 @@ def execute_tokens(token_list, symbol_table):
 
     # GNU Make returns one whitespace separated string, no CR/LF
     # "all other newlines are replaced by spaces." gnu_make.pdf
-    exe_result["stdout"] = exe_result["stdout"].strip().replace("\n", " ")
-    exe_result["stderr"] = exe_result["stdout"].strip().replace("\n", " ")
+    exe_result.stdout = exe_result.stdout.strip().replace("\n", " ")
+    exe_result.stderr = exe_result.stdout.strip().replace("\n", " ")
 
     # save shell status
     pos = token_list[0].get_pos()
     assert pos
     symbol_table.add(shellstatus, str(exe_result["exit_code"]), pos)
 
-    if exe_result["exit_code"] == 0:
+    if exe_result.exit_code == 0:
         # success!
-        return exe_result["stdout"]
+        return exe_result.stdout
 
     # "If we don't succeed, we run the chance of failure." -- D. Quayle 
 
     # if we have a specific internal error message, report it here
     # (e.g., "No such file or directory")
-    if exe_result["errmsg"]:
-        error_message(exe_result["errmsg"])
+    if exe_result.errmsg:
+        error_message(exe_result.errmsg)
     else:
         # otherwise report stderr
-        error_message(exe_result["stderr"])
+        error_message(exe_result.stderr)
 
     return ""
 

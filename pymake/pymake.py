@@ -287,6 +287,9 @@ def execute_recipe(rule, recipe, symtable):
                 seen_list.append(s)
         return seen_list
 
+    # aim sub-makes at my helper script
+#    symtable.add("MAKE", "py-submake")
+
     # TODO many more automatic variables
     symtable.push("@")
     symtable.push("^")
@@ -341,11 +344,11 @@ def execute_recipe(rule, recipe, symtable):
         exit_code = 0
         ret = shell.execute(s, symtable)
 
-        exit_code = ret['exit_code']
+        exit_code = ret.exit_code
         if exit_code == 0:
-            print(ret['stdout'],end="")
+            print(ret.stdout,end="")
         else:
-            print("make:", ret["stderr"], file=sys.stderr, end="")
+            print("make:", ret.stderr, file=sys.stderr, end="")
             print("make: *** [%r: %s] Error %d %s" % (recipe.get_pos(), rule.target, exit_code, "(ignored)" if ignore_failure else ""))
 
             if not ignore_failure:
@@ -565,7 +568,7 @@ Copyright (C) 2014-2023 David Poole davep@mbuf.com, testcluster@gmail.com""" % (
 parsermk.parse_vline_stream = parse_vline_stream 
 symbolmk.tokenize_statement = tokenize_statement
 
-if __name__=='__main__':
+def main():
     args = parse_args()
 
     if args.debug:
@@ -608,3 +611,5 @@ if __name__=='__main__':
     exit_code = execute(makefile, args)
     sys.exit(exit_code)
 
+if __name__=='__main__':
+    main()
