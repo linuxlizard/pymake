@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
 
+# I want to run the shell to trigger the submake. The shell can interpret the
+# args then call the $(MAKE).
+#
+# How do I communicate the
+
 import sys
 
 for s in sys.argv:

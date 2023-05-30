@@ -9,6 +9,7 @@ __all__ = [ "ParseError",
             "InvalidFunctionArguments",
             "InvalidSyntaxInConditional",
             "EmptyVariableName",
+            "NoMakefileFound",
 
             "warning_message",
             "error_message",
@@ -87,6 +88,9 @@ class InvalidSyntaxInConditional(ParseError):
 
 class EmptyVariableName(ParseError):
     default_msg = "empty variable name"
+
+class NoMakefileFound(MakeError):
+    default_msg = "No targets specified and no makefile found."
 
 #class VersionError(MakeError):
 #    """Feature not in this version"""

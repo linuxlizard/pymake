@@ -30,6 +30,7 @@ from pymake.symtablemk import SymbolTable
 import pymake.makedb as makedb
 import pymake.rules as rules
 import pymake.shell as shell
+import pymake.submake as submake
 
 def get_basename( filename ) : 
     return os.path.splitext( os.path.split( filename )[1] )[0]
@@ -287,9 +288,6 @@ def execute_recipe(rule, recipe, symtable):
                 seen_list.append(s)
         return seen_list
 
-    # aim sub-makes at my helper script
-#    symtable.add("MAKE", "py-submake")
-
     # TODO many more automatic variables
     symtable.push("@")
     symtable.push("^")
@@ -320,6 +318,7 @@ def execute_recipe(rule, recipe, symtable):
     # string.
     # XXX where are the cases this split() could trip on a non-Define string?
     cmd_list = cmd_s.split("\n")
+    breakpoint()
 
     exit_code = 0
 
@@ -344,6 +343,14 @@ def execute_recipe(rule, recipe, symtable):
         exit_code = 0
         ret = shell.execute(s, symtable)
 
+        if ret.is_submake:
+            submake.mailbox = ret.stdout.strip().split("\n")
+            args = parse_args(submake.mailbox[1:])
+#            breakpoint()
+            currwd = os.getcwd()
+            exit_code = _run_it(args)
+            os.chdir(currwd)
+
         exit_code = ret.exit_code
         if exit_code == 0:
             print(ret.stdout,end="")
@@ -367,6 +374,9 @@ def execute(makefile, args):
 
     if not args.no_builtin_rules:
         _add_internal_db(symtable)
+
+    # aim sub-makes at my helper script
+    symtable.add("MAKE", "py-submake")
 
     target_list = []
 
@@ -439,6 +449,38 @@ def execute(makefile, args):
 
     return exit_status["error"] if exit_code else exit_status["success"] 
     
+def _run_it(args):
+    # -C option
+    if args.directory:
+        os.chdir(os.path.join(*args.directory))
+
+    infilename = args.filename
+    try : 
+        makefile = parse_makefile(infilename)
+    except MakeError as err:
+        # TODO dump lots of lovely useful information about the failure.
+        print("%s"%err, file=sys.stderr)
+        if args.detailed_error_explain:
+            print("%s"%err.description, file=sys.stderr)
+
+        sys.exit(1)
+
+    # print the S Expression
+    if args.s_expr:
+        print("# start S-expression")
+        print("makefile={0}".format(makefile))
+        print("# end S-expression")
+
+    # regenerate the makefile
+    if args.output:
+        print("# start makefile %s" % args.output)
+        with open(args.output,"w") as outfile:
+            print(makefile.makefile(), file=outfile)
+        print("# end makefile %s" % args.output)
+
+    exit_code = execute(makefile, args)
+    return exit_code
+
 def usage():
     # options are designed to be 100% compatible with GNU Make
     # please keep this list in alphabetical order (but with identical commands
@@ -507,12 +549,12 @@ class Args:
         self.warn_undefined_variables = False
         self.detailed_error_explain = False
 
-def parse_args():
+def parse_args(argv):
     print_version ="""PY Make %s. Work in Progress.
 Copyright (C) 2014-2023 David Poole davep@mbuf.com, testcluster@gmail.com""" % (Version.vstring(),)
 
     args = Args()
-    optlist, arglist = getopt.gnu_getopt(sys.argv[1:], "Bhvo:drSf:C:", 
+    optlist, arglist = getopt.gnu_getopt(argv, "Bhvo:drSf:C:", 
                             [
                             "always-make",
                             "debug", 
@@ -569,7 +611,7 @@ parsermk.parse_vline_stream = parse_vline_stream
 symbolmk.tokenize_statement = tokenize_statement
 
 def main():
-    args = parse_args()
+    args = parse_args(sys.argv[1:])
 
     if args.debug:
         logging.basicConfig(level=logging.DEBUG)
@@ -580,36 +622,7 @@ def main():
         usage()
         sys.exit(1)
 
-    # -C option
-    if args.directory:
-        os.chdir(os.path.join(*args.directory))
-
-    infilename = args.filename
-    try : 
-        makefile = parse_makefile(infilename)
-    except MakeError as err:
-        # TODO dump lots of lovely useful information about the failure.
-        print("%s"%err, file=sys.stderr)
-        if args.detailed_error_explain:
-            print("%s"%err.description, file=sys.stderr)
-
-        sys.exit(1)
-
-    # print the S Expression
-    if args.s_expr:
-        print("# start S-expression")
-        print("makefile={0}".format(makefile))
-        print("# end S-expression")
-
-    # regenerate the makefile
-    if args.output:
-        print("# start makefile %s" % args.output)
-        with open(args.output,"w") as outfile:
-            print(makefile.makefile(), file=outfile)
-        print("# end makefile %s" % args.output)
-
-    exit_code = execute(makefile, args)
-    sys.exit(exit_code)
+    sys.exit(_run_it(args))
 
 if __name__=='__main__':
     main()
