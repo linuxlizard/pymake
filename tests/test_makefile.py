@@ -88,6 +88,7 @@ infilename_list = (
 
     "recursive.mk",  # FIXME this is a bad filename (does not test recursive make)
     "assign.mk",
+    "multiline.mk",
     # "automatic.mk",
 )
 

@@ -287,6 +287,18 @@ def execute_recipe(rule, recipe, symtable):
                 seen_list.append(s)
         return seen_list
 
+    def resolve_backslashes(s):
+        str_list = cmd_s.split("\n")
+        cmd_list = []
+
+        for s in str_list:
+            cmd_list.append(s)
+            if s.endswith(backslash):
+                continue
+
+            yield "\n".join(cmd_list)
+            cmd_list.clear()
+
     # aim sub-makes at my helper script
 #    symtable.add("MAKE", "py-submake")
 
@@ -301,6 +313,7 @@ def execute_recipe(rule, recipe, symtable):
     symtable.add_automatic("<", rule.prereq_list[0] if len(rule.prereq_list) else "", rule.get_pos())
 
     cmd_s = recipe.eval(symtable)
+#    print("execute_recipe \"%r\"" % cmd_s)
 
     symtable.pop("@")
     symtable.pop("^")
@@ -312,14 +325,15 @@ def execute_recipe(rule, recipe, symtable):
     # an independent sub-shell for each line. See Section 5.3 [Recipe Execution], page 46."
     # GNU Make 4.2 2020 
     #
-    # XXX always splitting on \n feels very dangerous and I'm going to test it
-    # heavily. The eval() needs to return a single string in order to plug into the
-    # functional structure of GNU Make.  However, multi-line variables are
-    # treated as multiple lines given to the shell individually.
+    # The recipe.eval() returns a single string.  However, multi-line variables
+    # are treated as multiple lines given to the shell individually.
     # DefineBlock.eval() will eval its individual lines then return a \n joined
     # string.
-    # XXX where are the cases this split() could trip on a non-Define string?
-    cmd_list = cmd_s.split("\n")
+    #
+    # But can't just blindly split on \n because the recipe could actually be a
+    # shell line with continuations.  
+    #
+    cmd_list = resolve_backslashes(cmd_s)
 
     exit_code = 0
 
@@ -450,7 +464,7 @@ Options:
                 TODO Unconditionally build targets.
     -C dir
     --directory dir
-                change to directory before reading makefiles or doing anything else 
+                change to directory before reading makefiles or doing anything else.
     -d          Print extra debugging information.
     -f FILE
     --file FILE
@@ -514,6 +528,7 @@ Copyright (C) 2014-2023 David Poole davep@mbuf.com, testcluster@gmail.com""" % (
     args = Args()
     optlist, arglist = getopt.gnu_getopt(sys.argv[1:], "Bhvo:drSf:C:", 
                             [
+                            "help",
                             "always-make",
                             "debug", 
                             "dotfile=",
