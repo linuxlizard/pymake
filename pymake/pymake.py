@@ -591,10 +591,6 @@ def main():
     else:
         logging.basicConfig(level=logging.INFO)
 
-    if len(sys.argv) < 2 : 
-        usage()
-        sys.exit(1)
-
     # -C option
     if args.directory:
         os.chdir(os.path.join(*args.directory))
