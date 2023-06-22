@@ -399,10 +399,7 @@ def execute_recipe(rule, recipe, symtable):
 
         exit_code = ret.exit_code
         print(ret.stdout,end="")
-        if exit_code == 0:
-            pass
-#            print(ret.stdout,end="")
-        else:
+        if exit_code != 0:
             print("make:", ret.stderr, file=sys.stderr, end="")
             print("make: *** [%r: %s] Error %d %s" % (recipe.get_pos(), rule.target, exit_code, "(ignored)" if ignore_failure else ""), file=sys.stderr)
 
@@ -425,6 +422,13 @@ def execute(makefile, args):
 
     # aim sub-makes at my helper script
     symtable.add("MAKE", "py-submake")
+
+    # "For your convenience, when GNU make starts (after it has processed any -C options)
+    # it sets the variable CURDIR to the pathname of the current working directory. This value
+    # is never touched by make again:"
+    # GNU Make 4.3 2020 
+    # The -C option will be handled before this function is called.
+    symtable.add("CURDIR", os.getcwd())
 
     target_list = []
 
