@@ -4,6 +4,7 @@
 import os
 import subprocess
 import sys
+import re
 
 import pytest
 #import pymake
@@ -20,16 +21,24 @@ def _run_makefile(infilename):
     filepath = os.path.join(example_dir, infilename)
     assert os.path.exists(filepath)
 
-    m = subprocess.run(("make", "-f", filepath), shell=False, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    print(m.stdout)
+    m = subprocess.run(("make", "-f", filepath), 
+                        shell=False, 
+                        check=True, 
+                        stdout=subprocess.PIPE, 
+                        stderr=subprocess.PIPE)
+#    print(m.stdout)
     return m.stdout
 
 def _run_pymake(infilename):
     filepath = os.path.join(example_dir, infilename)
     assert os.path.exists(filepath)
 
-    m = subprocess.run((sys.executable, "-m", "pymake.pymake", "-f", filepath), shell=False, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    print(m.stdout)
+    m = subprocess.run((sys.executable, "-m", "pymake.pymake", "-f", filepath), 
+                        shell=False, 
+                        check=True, 
+                        stdout=subprocess.PIPE, 
+                        stderr=subprocess.PIPE)
+#    print(m.stdout)
     return m.stdout
 
 
@@ -89,6 +98,7 @@ infilename_list = (
     "recursive.mk",  # FIXME this is a bad filename (does not test recursive make)
     "assign.mk",
     "multiline.mk",
+    "ignoreandsilent.mk",
     # "automatic.mk",
 )
 
@@ -112,4 +122,32 @@ def test_value():
     # I like having my output with explicit varref even for single char names.
     # I just need to create a test that will work around this $(P) problem.
     pass
+
+def test_submake():
+    # My sub-make output doesn't exactly match GNU-Make's output so need to run
+    # the sub-make test separately.
+    infilename = "submake.mk"
+    ground_truth = _run_makefile(infilename)
+#    print("output=",ground_truth)
+    # 20230621 as of this writing, I don't announce the depth or directory
+    truth_strlist = [s for s in ground_truth.decode('utf8').split("\n") if not s.startswith("make[1]")]
+
+    test_output = _run_pymake(infilename)
+#    print("output=",test_output)
+    test_strlist = test_output.decode('utf8').split("\n")
+
+    # clean up some of the variable parts 
+    pid_re = re.compile("pid=[0-9]+")
+
+    def clean(s):
+        s = re.sub(pid_re,"pid=",s)
+        s = s.replace("py-submake","make")
+        return s
+
+    for result in zip(truth_strlist,test_strlist):
+        print("%r" % (result,))
+        truth,test = [clean(s) for s in result]
+#        print(truth,test)
+        assert truth==test
+        
 

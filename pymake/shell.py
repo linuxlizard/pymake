@@ -10,6 +10,7 @@ import subprocess
 from pymake.error import *
 
 logger = logging.getLogger("pymake.shell")
+logger.setLevel(level=logging.DEBUG)
 
 default_shell="/bin/sh"
 shellstatus = ".SHELLSTATUS"
@@ -32,12 +33,13 @@ class ShellReturn:
         self.stderr = None
         self.exit_code = None
         self.errmsg = None
+        self.is_submake = False
 
 
 def execute(cmd_str, symbol_table):
     """execute a string with the shell, returning a bunch of useful info"""
 
-    logger.debug("execute \"%s\"", cmd_str)
+    logger.debug("execute \"%r\"", cmd_str)
 
     return_status = ShellReturn()
 
@@ -93,7 +95,12 @@ def execute(cmd_str, symbol_table):
     return_status.stdout = p.stdout
     return_status.stderr = p.stderr
 
+    if cmd_str.startswith("py-submake"):
+        return_status.is_submake = True
+
     return return_status
+
+
 
 def execute_tokens(token_list, symbol_table):
     # TODO condense these steps
