@@ -7,6 +7,7 @@ logger = logging.getLogger("pymake.rules")
 #logger.setLevel(level=logging.DEBUG)
 
 from pymake.error import *
+from pymake.html import save_rules
 
 _debug = True
 
@@ -102,7 +103,10 @@ class RuleDB:
     def __str__(self):
         return ",".join(self.rules.keys())
 
-    def graph(self, title, dotfilename):
+    def html_graph(self, title, outfilename):
+        save_rules(outfilename, self.rules)
+            
+    def graphviz_graph(self, title, dotfilename):
         # Build a graphviz dot file. This is the 2nd biggest reason I made this
         # whole silly program.
 
