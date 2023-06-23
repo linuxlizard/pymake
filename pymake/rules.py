@@ -103,10 +103,10 @@ class RuleDB:
     def __str__(self):
         return ",".join(self.rules.keys())
 
-    def graph(self, title, outfilename):
+    def html_graph(self, title, outfilename):
         save_rules(outfilename, self.rules)
             
-    def old_graph(self, title, dotfilename):
+    def graphviz_graph(self, title, dotfilename):
         # Build a graphviz dot file. This is the 2nd biggest reason I made this
         # whole silly program.
 

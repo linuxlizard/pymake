@@ -1,4 +1,5 @@
 # https://perfectmotherfuckingwebsite.com/
+# copyrighted https://creativecommons.org/publicdomain/zero/1.0/
 #
 css = """
 body{max-width:650px;margin:40px auto;padding:0 10px;font:18px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";color:#444}h1,h2,h3{line-height:1.2}@media (prefers-color-scheme: dark){body{color:#c9d1d9;background:#0d1117}a:link{color:#58a6ff}a:visited{color:#8e96f0}}

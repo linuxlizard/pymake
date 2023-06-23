@@ -465,8 +465,13 @@ def execute(makefile, args):
     # write the rules db to graphviz if requested
     if args.dotfile:
         title = get_basename(makefile.get_pos()[0])
-        rulesdb.graph(title + "_makefile", args.dotfile)
+        rulesdb.graphiz_graph(title + "_makefile", args.dotfile)
         print("wrote %s for graphviz" % args.dotfile)
+
+    if args.htmlfile:
+        title = get_basename(makefile.get_pos()[0])
+        rulesdb.html_graph(title + "_makefile", args.htmlfile)
+        print("wrote %s for html" % args.htmlfile)
 
     try:
         if not target_list:
@@ -565,6 +570,8 @@ Options:
 Options not in GNU Make:
     --dotfile FILE  
                 Write the Rules' dependency graph as a GraphViz dot file. (Work in progress.)
+    --html FILE  
+                Write the Rules' dependency graph as an HTML file. (Work in progress.)
     --explain   Give a verbose error message for common GNU Make errors.
     --output FILE
                 Rewrite the parsed makefile to FILE.
@@ -577,6 +584,9 @@ class Args:
 
         # write rules' dependencies to graphviz .dot file
         self.dotfile = None
+
+        # write rules' dependencies to HTML .html file
+        self.htmlfile = None
 
         # input filename to parse
         self.filename = None
@@ -612,6 +622,7 @@ Copyright (C) 2014-2023 David Poole davep@mbuf.com, testcluster@gmail.com""" % (
                             "always-make",
                             "debug", 
                             "dotfile=",
+                            "html=",
                             "explain",
                             "file=", 
                             "makefile=", 
@@ -647,6 +658,8 @@ Copyright (C) 2014-2023 David Poole davep@mbuf.com, testcluster@gmail.com""" % (
             args.detailed_error_explain = True
         elif opt[0] == "--dotfile":
             args.dotfile = opt[1]
+        elif opt[0] == "--html":
+            args.htmlfile = opt[1]
         elif opt[0] in ("-C", "--directory"):
             # multiple -C options are supported for reasons I don't understand
             if args.directory is None:
