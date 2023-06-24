@@ -1,6 +1,9 @@
 SRC=hello.c  there.c  all.c  you.c  rabbits.c
 OBJ=$(patsubst %.c,%.o,$(SRC))
-
+$(info OBJ=$(OBJ))
+OBJ=$(SRC:.c=.o)
+$(info OBJ=$(OBJ))
+OBJ=$(SRC:.rs=.o)
 $(info OBJ=$(OBJ))
 
 $(info emptyc=$(patsubst %.c,%.o,.c .o))
@@ -105,6 +108,17 @@ $(info corner=$(patsubst [],qqq,[]	[]	[]	[])) # tabs
 
 $(info corner=$(patsubst c,h,hello.c there.c all.c you.c rabbits.c))
 $(info corner=$(patsubst c, ,hello.c there.c all.c you.c rabbits.c))
+
+SUBS=gpl usr lib modules
+$(info clean-rule=$(SUBS:=-clean))
+
+# whitespace is removed
+SUBS=		gpl usr      lib      modules      
+$(info clean-rule=$(SUBS:=-clean))
+
+EXE:=cc.exe ld.exe as.exe ar.exe command.com
+$(info EXE=$(EXE:.exe=))
+
 
 @:;@:
 
