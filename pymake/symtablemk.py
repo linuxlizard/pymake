@@ -323,14 +323,15 @@ class SymbolTable(object):
     def _eval_abbrev_patsubst(self, key):
         # allow exception(s) to propagate
         varname, pat1, pat2 = self._parse_abbrev_patsubst(key)
+#        logger.debug("abbrev varname=%r pat1=%r pat2=%4", varname, pat1, pat2)
 
         pat1_len = len(pat1)
-        def maybe_replace(s,pat1,pat2):
-            if s.endswith(pat1):
-                return s[:-pat1_len] + pat2
-            return s
         value = self.fetch(varname)
-        new_value = " ".join([maybe_replace(s,pat1,pat2) for s in value.split()])
+        if pat1_len == 0:
+            # pat1 empty so it's a simple append operation
+            return " ".join([s+pat2 for s in value.split()])
+
+        new_value = " ".join([s[:-pat1_len] + pat2 if s.endswith(pat1) else s for s in value.split()])
         return new_value
 
     def fetch(self, key, pos=None):
