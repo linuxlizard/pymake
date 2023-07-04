@@ -11,13 +11,11 @@ import sys
 import logging
 import os
 import os.path
-import getopt
 
 logger = logging.getLogger("pymake")
 #logging.basicConfig(level=logging.DEBUG)
 
 from pymake.scanner import ScannerIterator
-from pymake.version import Version
 import pymake.vline as vline
 import pymake.symbolmk as symbolmk
 from pymake.symbolmk import *
@@ -30,6 +28,7 @@ from pymake.symtablemk import SymbolTable
 import pymake.makedb as makedb
 import pymake.rules as rules
 import pymake.shell as shell
+import pymake.pargs as pargs
 
 def get_basename( filename ) : 
     return os.path.splitext( os.path.split( filename )[1] )[0]
@@ -389,7 +388,7 @@ def execute_recipe(rule, recipe, symtable):
         # makefile in our same process context.
         if ret.is_submake:
             submake_argv = ret.stdout.strip().split("\n")
-            args = parse_args(submake_argv[1:])
+            args = pargs.parse_args(submake_argv[1:])
 #            breakpoint()
             currwd = os.getcwd()
             exit_code = _run_it(args)
@@ -411,7 +410,7 @@ def execute_recipe(rule, recipe, symtable):
 
 def execute(makefile, args):
     # ha ha type checking
-    assert isinstance(args, Args)
+    assert isinstance(args, pargs.Args)
 
     # tinkering with how to evaluate
     logger.info("Starting execute of %s", id(makefile))
@@ -538,146 +537,12 @@ def _run_it(args):
     exit_code = execute(makefile, args)
     return exit_code
 
-def usage():
-    # options are designed to be 100% compatible with GNU Make
-    # please keep this list in alphabetical order (but with identical commands
-    # still grouped together)
-    print("""Usage: pymake [options] [target] ...)
-Options:
-    -B
-    --always-make
-                TODO Unconditionally build targets.
-    -C dir
-    --directory dir
-                change to directory before reading makefiles or doing anything else.
-    -d          Print extra debugging information.
-    -f FILE
-    --file FILE
-    --makefile FILE
-                Read FILE as a makefile.
-    -h
-    --help
-                Print this help message and exit.
-    -r
-    --no-builtin-rules
-                Disable reading GNU Make's built-in rules.
-    -v
-    --version
-                Print the version number and exit.
-    --warn-undefined-variables
-                Warn whenever an undefined variable is referenced.
-
-Options not in GNU Make:
-    --dotfile FILE  
-                Write the Rules' dependency graph as a GraphViz dot file. (Work in progress.)
-    --html FILE  
-                Write the Rules' dependency graph as an HTML file. (Work in progress.)
-    --explain   Give a verbose error message for common GNU Make errors.
-    --output FILE
-                Rewrite the parsed makefile to FILE.
-    -S          Print the makefile as an S-Expression. (Useful for debugging pymake itself.)
-""")
-
-class Args:
-    def __init__(self):
-        self.debug = 0
-
-        # write rules' dependencies to graphviz .dot file
-        self.dotfile = None
-
-        # write rules' dependencies to HTML .html file
-        self.htmlfile = None
-
-        # input filename to parse
-        self.filename = None
-
-        # rewrite the parsed Makefile to this file
-        self.output = None
-
-        # print the parsed makefile as an S-Expression        
-        self.s_expr = False
-
-        self.always_make = False
-
-        self.no_builtin_rules = False
-
-        # extra arguments on the command line, interpretted either as a target
-        # or a GNU Make expression
-        self.argslist = []
-
-        # -C aka --directory option
-        self.directory = None
-
-        self.warn_undefined_variables = False
-        self.detailed_error_explain = False
-
-def parse_args(argv):
-    print_version ="""PY Make %s. Work in Progress.
-Copyright (C) 2014-2023 David Poole davep@mbuf.com, testcluster@gmail.com""" % (Version.vstring(),)
-
-    args = Args()
-    optlist, arglist = getopt.gnu_getopt(argv, "Bhvo:drSf:C:", 
-                            [
-                            "help",
-                            "always-make",
-                            "debug", 
-                            "dotfile=",
-                            "html=",
-                            "explain",
-                            "file=", 
-                            "makefile=", 
-                            "output=", 
-                            "no-builtin-rules",
-                            "version", 
-                            "warn-undefined-variables", 
-                            "directory=",
-                            ]
-                        )
-    for opt in optlist:
-        if opt[0] in ("-B", "--always-make"):
-            args.always_make = True
-        elif opt[0] in ("-f", "--file", "--makefile"):
-            args.filename = opt[1]                    
-        elif opt[0] in ('-o', "--output"):
-            args.output = opt[1]
-        elif opt[0] == '-S':
-            args.s_expr = True
-        elif opt[0] == '-d':
-            args.debug += 1            
-        elif opt[0] in ("-h", "--help"):
-            usage()
-            sys.exit(0)
-        elif opt[0] in ("-r", "--no-builtin-rules"):
-            args.no_builtin_rules = True
-        elif opt[0] in ("-v", "--version"):
-            print(print_version)
-            sys.exit(0)
-        elif opt[0] == "--warn-undefined-variables":
-            args.warn_undefined_variables = True
-        elif opt[0] == "--explain":
-            args.detailed_error_explain = True
-        elif opt[0] == "--dotfile":
-            args.dotfile = opt[1]
-        elif opt[0] == "--html":
-            args.htmlfile = opt[1]
-        elif opt[0] in ("-C", "--directory"):
-            # multiple -C options are supported for reasons I don't understand
-            if args.directory is None:
-                args.directory = []
-            args.directory.append(opt[1])
-        else:
-            # wtf?
-            assert 0, opt
-            
-    args.argslist = arglist
-    return args
-
 # FIXME ugly hack dependency injection to solve problems with circular imports
 parsermk.parse_vline_stream = parse_vline_stream 
 symbolmk.tokenize_statement = tokenize_statement
 
 def main():
-    args = parse_args(sys.argv[1:])
+    args = pargs.parse_args(sys.argv[1:])
 
     if args.debug:
         logging.basicConfig(level=logging.DEBUG)
