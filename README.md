@@ -9,7 +9,7 @@ Ultimate long-term goal is a GNU Make visual debugger. I want breakpoints on var
 
 ## Update 20230704. The Dragon Isles Update.
 
-Today I am declaring my Idependence Day from from a certain game and reclaiming my spare time. Short-term goal for pymake is to be able to build GNU Make.
+Today I am declaring my Independence Day from from a certain game and reclaiming my spare time. My next short-term goal for pymake is to be able to build GNU Make.
 
 
 ## Update 20230412. The "What am I Doing" Update.
