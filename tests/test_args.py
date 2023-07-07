@@ -85,3 +85,16 @@ def test_multiple_directory():
     assert len(args.directory)==2
     assert args.directory[0] == 'build'
     assert args.directory[1] == 'docs'
+
+def test_dry_run():
+    args = pargs.parse_args(('-n',),)
+    assert args.dry_run
+
+    args = pargs.parse_args(('--just-print',),)
+    assert args.dry_run
+
+    args = pargs.parse_args(('--dry-run',),)
+    assert args.dry_run
+
+    args = pargs.parse_args(('--recon',),)
+    assert args.dry_run

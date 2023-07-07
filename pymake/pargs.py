@@ -25,6 +25,9 @@ Options:
     -h
     --help
                 Print this help message and exit.
+    -n
+    --just-print, --dry-run, --recon
+                Don't run any recipes, just print them.
     -r
     --no-builtin-rules
                 Disable reading GNU Make's built-in rules.
@@ -75,6 +78,8 @@ class Args:
         # -C aka --directory option
         self.directory = None
 
+        self.dry_run = False
+
         self.warn_undefined_variables = False
         self.detailed_error_explain = False
 
@@ -83,7 +88,7 @@ def parse_args(argv):
 Copyright (C) 2014-2023 David Poole davep@mbuf.com, testcluster@gmail.com""" % (Version.vstring(),)
 
     args = Args()
-    optlist, arglist = getopt.gnu_getopt(argv, "Bhvo:drSf:C:", 
+    optlist, arglist = getopt.gnu_getopt(argv, "Bhvo:drSf:C:n", 
                             [
                             "help",
                             "always-make",
@@ -91,13 +96,13 @@ Copyright (C) 2014-2023 David Poole davep@mbuf.com, testcluster@gmail.com""" % (
                             "dotfile=",
                             "html=",
                             "explain",
-                            "file=", 
-                            "makefile=", 
+                            "file=", "makefile=", 
                             "output=", 
                             "no-builtin-rules",
                             "version", 
                             "warn-undefined-variables", 
                             "directory=",
+                            "just-print", "dry-run", "recon"
                             ]
                         )
     for opt in optlist:
@@ -132,6 +137,8 @@ Copyright (C) 2014-2023 David Poole davep@mbuf.com, testcluster@gmail.com""" % (
             if args.directory is None:
                 args.directory = []
             args.directory.append(opt[1])
+        elif opt[0] in ('-n', '--just-print', '--dry-run', '--recon'):
+            args.dry_run = True
         else:
             # wtf?
             assert 0, opt
