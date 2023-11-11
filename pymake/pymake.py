@@ -277,7 +277,7 @@ def _execute_statement_list(stmt_list, curr_rules, rulesdb, symtable):
     # bottom of loop
     return exit_code
 
-def execute_recipe(rule, recipe, symtable):
+def execute_recipe(rule, recipe, symtable, dry_run=False):
     def remove_duplicates(s_list):
         # the $^ variable removes duplicates but must must must preserve order
         seen_list = []
@@ -333,6 +333,8 @@ def execute_recipe(rule, recipe, symtable):
 
         return s, ignore_failure, silent
 
+    makelevel = int(symtable.fetch("MAKELEVEL"))
+
     # TODO many more automatic variables
     symtable.push("@")
     symtable.push("^")
@@ -373,6 +375,11 @@ def execute_recipe(rule, recipe, symtable):
 
         s, ignore_failure, silent = check_prefixes(s)
 
+        if dry_run:
+            # TODO submakes
+            print(s)
+            continue
+
         if not silent:
             print(s)
 
@@ -391,7 +398,7 @@ def execute_recipe(rule, recipe, symtable):
             args = pargs.parse_args(submake_argv[1:])
 #            breakpoint()
             currwd = os.getcwd()
-            exit_code = _run_it(args)
+            exit_code = _run_it(args, makelevel+1)
             os.chdir(currwd)
             # clean up the output from the submake helper
             ret.stdout = ""
@@ -408,7 +415,7 @@ def execute_recipe(rule, recipe, symtable):
 
     return exit_status["error"] if exit_code else exit_status["success"] 
 
-def execute(makefile, args):
+def execute(makefile, args, makelevel):
     # ha ha type checking
     assert isinstance(args, pargs.Args)
 
@@ -428,6 +435,8 @@ def execute(makefile, args):
     # GNU Make 4.3 2020 
     # The -C option will be handled before this function is called.
     symtable.add("CURDIR", os.getcwd())
+
+    symtable.add("MAKELEVEL", str(makelevel))
 
     target_list = []
 
@@ -496,7 +505,7 @@ def execute(makefile, args):
         # walk a dependency tree
         for rule in rulesdb.walk_tree(target):
             for recipe in rule.recipe_list:
-                exit_code = execute_recipe(rule, recipe, symtable)
+                exit_code = execute_recipe(rule, recipe, symtable, args.dry_run)
                 if exit_code != 0:
                     break
 
@@ -505,7 +514,7 @@ def execute(makefile, args):
 
     return exit_status["error"] if exit_code else exit_status["success"] 
     
-def _run_it(args):
+def _run_it(args, makelevel):
     # -C option
     if args.directory:
         os.chdir(os.path.join(*args.directory))
@@ -534,7 +543,7 @@ def _run_it(args):
             print(makefile.makefile(), file=outfile)
         print("# end makefile %s" % args.output)
 
-    exit_code = execute(makefile, args)
+    exit_code = execute(makefile, args, makelevel)
     return exit_code
 
 # FIXME ugly hack dependency injection to solve problems with circular imports
@@ -553,7 +562,7 @@ def main():
 #        usage()
 #        sys.exit(1)
 
-    sys.exit(_run_it(args))
+    sys.exit(_run_it(args,0))
 
 if __name__=='__main__':
     main()
