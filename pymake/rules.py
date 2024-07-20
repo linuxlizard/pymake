@@ -95,7 +95,11 @@ class RuleDB:
             logger.debug("target=\"%s\" exists", target)
             return
 
-        rule = self.get(target)
+        try:
+            rule = self.get(target)
+        except KeyError:
+            # TODO: Fix this KeyError issue
+            rule = Rule(target, [], [], ('unknown', (0, 0)))
         for p in rule.prereq_list:
             yield from self.walk_tree(p)
         yield rule
