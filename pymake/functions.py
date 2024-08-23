@@ -251,6 +251,15 @@ class Shell(Function):
     # "After the shell function or ‘!=’ assignment operator is used, its exit status is placed in
     # the .SHELLSTATUS variable."
     #
+    # I've discovered the $(shell) function behaves differently than recipe
+    # execution. A recipe execution will default to /bin/sh if $(SHELL) is
+    # empty. The $(shell) function will happily exec an empty string.
+    #
+    # Example:
+    # SHELL:=
+    # .SHELLFLAGS:=
+    # $(shell /bin/ls)
+    #
     def eval(self, symbol_table):
         return shell.execute_tokens(self.token_list, symbol_table)
 

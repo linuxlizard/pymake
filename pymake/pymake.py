@@ -183,14 +183,15 @@ def find_location(tok):
 def _add_internal_db(symtable):
     # grab gnu make's internal db, add to our own
     # NOTE! this requires my code to be the same license as GNU Make (GPLv3 as of 20221002)
-    defaults, automatics = makedb.fetch_database()
+#    defaults, automatics = makedb.fetch_database()
+    defaults = []
 
     # If I don't run this code, is my code still under GPLv3 ???
 
     # now have a list of strings containing Make syntax.
     for oneline in defaults:
         # TODO mark these variables 'default'
-        v = vline.VirtualLine([oneline], (0,0), "...defaults")
+        v = vline.VirtualLine([oneline], (0,0), "@defaults")
         stmt = tokenize_statement(iter(v))
         stmt.eval(symtable)
 
@@ -436,7 +437,7 @@ def execute(makefile, args):
     # so the arglist must be parsed and assignment statements saved. Anything
     # not an Assignment is likely a target.
     for onearg in args.argslist:
-        v = vline.VirtualLine([onearg], (0,0), "...commandline")
+        v = vline.VirtualLine([onearg], (0,0), "@commandline")
         stmt = tokenize_statement(iter(v))
         if isinstance(stmt,AssignmentExpression):
             symtable.command_line_start()

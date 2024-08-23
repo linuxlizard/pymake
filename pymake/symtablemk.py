@@ -11,7 +11,7 @@ from pymake.error import warning_message, MakeError
 
 logger = logging.getLogger("pymake.symtable")
 
-logger.setLevel(level=logging.INFO)
+#logger.setLevel(level=logging.INFO)
 
 #_fail_on_undefined = True
 _fail_on_undefined = False
@@ -197,15 +197,24 @@ class SymbolTable(object):
         self._add_entry(CallbackEntry('.VARIABLES', self.variables))
         self._add_entry(DefaultEntry('MAKE_VERSION', version.Version.vstring()))
 
+        # "Unlike most variables, the variable SHELL is never set from the environment."
+        # -- 5.3.2 Choosing the Shell
+        # GNU Make Manual Version 4.3 January 2020
+
+        self._add_entry(DefaultEntry('SHELL', constants.DEFAULT_SHELL))
+        self._add_entry(DefaultEntry('.SHELLFLAGS', constants.DEFAULT_SHELLFLAGS))
+
     def _init_envvars(self):
         # "Every environment variable that make sees when it starts up is
         # transformed into a make variable with the same name and value."
         # 6.10 Variables from the Environment
         # Page 72. GNU Make Version 4.3 January 2020.
 
-        # read all env vars, add to symbol table
-        for k,v in os.environ.items():
-            self._add_entry(EnvVarEntry(k,v))
+        # read (almost) all env vars, add to symbol table
+        # "Unlike most variables, the variable SHELL is never set from the environment."
+        # -- 5.3.2 Choosing the Shell
+        # GNU Make Manual Version 4.3 January 2020
+        [ self._add_entry(EnvVarEntry(k,v)) for k,v in os.environ.items() if k != "SHELL" ]
 
     def _add_entry(self, entry):
 
@@ -338,7 +347,6 @@ class SymbolTable(object):
         # now try a var lookup 
         # Will always return an empty string on any sort of failure. 
         logger.debug("fetch key=%r", key)
-#        print("fetch key=\"%r\"" % key)
         assert isinstance(key,str), type(key)
         assert len(key)  # empty key bad
 
