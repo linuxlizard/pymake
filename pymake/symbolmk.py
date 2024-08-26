@@ -1071,8 +1071,6 @@ class Makefile(object) :
         return "Makefile([{0}])".format(", \n".join( [ str(block) for block in self.token_list ] ) )
 #        return "Makefile([{0}])".format(", \n".join( [ "{0}".format(block) for block in self.token_list ] ) )
 
-    __repr__ = __str__
-
     def makefile(self):
         s = "\n".join( [ "{0}".format(token.makefile()) for token in self.token_list ] )
         return s
