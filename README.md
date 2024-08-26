@@ -7,6 +7,10 @@ I want to debug my GNU Makefiles.
 
 Ultimate long-term goal is a GNU Make visual debugger. I want breakpoints on variables changing. I want to single step through the rules. I want to put a breakpoint on a rule.
 
+## Update 20240707.  The WOOOOO!!! Update.
+
+I've been given official permission by Ericsson, my employer, to once again work on Pymake.  I'm very excited to get this project moving again.
+
 ## Update 20231018.  The Lawyer Update.
 
 I've been asked by my employer to suspend work on this project because it is GPL licensed. I'm asking for further clarification but will need to wait for a while.

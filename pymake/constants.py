@@ -112,4 +112,7 @@ builtin_variables = {
     "SUFFIXES",
 }
 
+DEFAULT_SHELL="/bin/sh"
+DEFAULT_SHELLFLAGS="-c"
+SHELLSTATUS = ".SHELLSTATUS"
 

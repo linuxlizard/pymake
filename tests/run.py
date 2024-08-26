@@ -37,12 +37,11 @@ def _real_run(args, extra_args=None, extra_env=None):
 
     p = subprocess.run(all_args, shell=False, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env)
 
-    if _debug:
-        print("stdout=",p.stdout)
-        print("stderr=",p.stderr)
+#    if _debug:
+#        print("stdout=",p.stdout)
+#        print("stderr=",p.stderr)
 
     return p
-#    return m.stdout if m.stdout else m.stderr
 
 def run_makefile(infilename, extra_args=None, extra_env=None):
     if os.name == 'nt':
@@ -81,6 +80,7 @@ def _write_and_run(makefile, runner_fn, extra_args=None, extra_env=None, expect_
     if _debug:
         print("stdout=",p.stdout)
         print("stderr=",p.stderr)
+
     return p
 
 FLAG_OUTPUT_STDOUT=1<<0
@@ -121,18 +121,16 @@ def _should_have_failed(makefile, output_str):
     assert 0, "should have failed"
 
 
-def pymake_should_fail(makefile, extra_args=None, extra_env=None):
+def _should_fail(fn, makefile, extra_args, extra_env):
     try:
-        stdout = pymake_string(makefile, extra_args, extra_env, expect_fail=True)
+        stdout = fn(makefile, extra_args, extra_env, expect_fail=True)
     except subprocess.CalledProcessError as err:
         return err.stderr.decode('utf8').strip()
 
-    _should_have_failed(makefile, stdout)
+    return _should_have_failed(makefile, stdout)
+
+def pymake_should_fail(makefile, extra_args=None, extra_env=None):
+    return _should_fail(pymake_string, makefile, extra_args, extra_env)
 
 def gnumake_should_fail(makefile, extra_args=None, extra_env=None):
-    try:
-        stdout = gnumake_string(makefile, extra_args, extra_env, expect_fail=True)
-    except subprocess.CalledProcessError as err:
-        return err.stderr.decode('utf8').strip()
-
-    _should_have_failed(makefile, stdout)
+    return _should_fail(gnumake_string, makefile, extra_args, extra_env)

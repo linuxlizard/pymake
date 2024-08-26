@@ -106,6 +106,11 @@ infilename_list = (
 def test_makefile(infilename):
     ground_truth = _run_makefile(infilename)
     test_output = _run_pymake(infilename)
+    if ground_truth != test_output:
+        with open("/tmp/%s-test.txt" % infilename,"wb") as outfile:
+            outfile.write(test_output)
+        with open("/tmp/%s-ground.txt" % infilename,"wb") as outfile:
+            outfile.write(ground_truth)
     assert ground_truth == test_output
 
 
