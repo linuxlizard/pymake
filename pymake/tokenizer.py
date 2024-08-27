@@ -809,7 +809,7 @@ def tokenize_variable_ref(vchar_scanner):
                 except IndexError:
                     # Unbalanced expression.
                     # TODO nice error message
-                    raise ParseError()
+                    raise ParseError(msg="unbalanced variable ref", pos=vchar.get_pos())
 
                 # if the stack is empty, we have a balanced expression so we
                 # _should_ be done.

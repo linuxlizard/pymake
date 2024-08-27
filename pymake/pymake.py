@@ -130,7 +130,7 @@ def parse_makefile_from_src(src):
     for t in statement_list:
         assert t and isinstance(t,Symbol), t
 
-    return Makefile(statement_list)
+    return Makefile(statement_list, src.name)
 
 #def parse_makefile_string(s):
 #    import io
@@ -255,6 +255,8 @@ def _execute_statement_list(stmt_list, curr_rules, rulesdb, symtable):
                 # Catch our own Error exceptions. Report, break out of our execute loop and leave.
                 logger.exception(err)
                 error_message(tok.get_pos(), err.msg)
+                breakpoint()
+                raise FileExistsError("breakpoint")
                 # check cmdline arg to dump err.description for a more detailed error message
 #                if detailed_error_explain:
 #                    error_message(tok.get_pos(), err.description)
@@ -429,6 +431,9 @@ def execute(makefile, args):
     # GNU Make 4.3 2020 
     # The -C option will be handled before this function is called.
     symtable.add("CURDIR", os.getcwd())
+
+    #  As make reads various makefiles, including any obtained from the MAKEFILES variable, the command line, the default files, or from include directives, their names will be automatically appended to the MAKEFILE_LIST variable. They are added right before make begins to parse them.
+    symtable.append("MAKEFILE_LIST", Literal(vline.VCharString([vline.VChar(c,(0,0), makefile.filename) for c in makefile.filename])))
 
     target_list = []
 

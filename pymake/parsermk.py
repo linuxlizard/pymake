@@ -685,9 +685,13 @@ def handle_conditional_directive(directive_inst, vline_iter):
             line_list = save_block(line_list)
             state = state_endif
 
-        else : 
+        else :
+            # Directive that is not a conditional
             # wtf?
-            assert 0, dir_str
+            if dir_str not in ['define', 'undefine', 'export', 'unexport', 'override', 'include', '-include', 'sinclude']:
+                logging.warning("unexpected directive \"%s\" at %r", dir_str, directive_vstr.get_pos())
+            # save the line into the block
+            line_list.append(virt_line)
 
         if state==state_endif : 
             # close the if/else/endif collection

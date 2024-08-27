@@ -99,6 +99,7 @@ Copyright (C) 2014-2023 David Poole davep@mbuf.com, testcluster@gmail.com""" % (
                             "file=", "makefile=", 
                             "output=", 
                             "no-builtin-rules",
+                            "no-print-directory",
                             "version", 
                             "warn-undefined-variables", 
                             "directory=",
@@ -126,6 +127,9 @@ Copyright (C) 2014-2023 David Poole davep@mbuf.com, testcluster@gmail.com""" % (
             sys.exit(0)
         elif opt[0] == "--warn-undefined-variables":
             args.warn_undefined_variables = True
+        elif opt[0] in ("--no-print-directory"):
+            # TODO: implement this
+            pass
         elif opt[0] == "--explain":
             args.detailed_error_explain = True
         elif opt[0] == "--dotfile":
