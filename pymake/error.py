@@ -103,6 +103,7 @@ def warning_message(pos, msg):
         print("(pos unknown): %s" % (msg,), file=sys.stderr)
 
 def error_message(pos, msg):
+    breakpoint()
     if pos:
         print("%s %r: *** %s" % (pos[0], pos[1], msg), file=sys.stderr)
     else:

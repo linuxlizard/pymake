@@ -8,7 +8,13 @@ __all__ = [
 class Version(object):
     major = 4
     minor = 1
-
+    # TODO: this list is incomplete and inaccurate
+    features = " ".join({
+        "output-sync",
+        "jobserver",
+        "order-only",
+        "archives",
+    })
 # major = 3
 # minor = 81
 

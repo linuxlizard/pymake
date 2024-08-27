@@ -570,7 +570,16 @@ class UnExportDirective(ExportDirective):
     name = "unexport"
 
     def eval(self, symbol_table):
-        raise NotImplementedError()
+        if not self.expression:
+            # export everything
+            symbol_table.unexport()
+            return ""
+
+        s = self.expression.eval(symbol_table)
+        for name in s.split():
+            symbol_table.unexport(name)
+
+        return ""
 
 class IncludeDirective(Directive):
     name = "include"
@@ -1063,10 +1072,10 @@ class Makefile(object) :
     # A collection of statements, directives, rules.
     # Note this class is separate from the Symbol hierarchy.
 
-    def __init__(self, token_list):
+    def __init__(self, token_list, filename):
         Symbol.validate(token_list)
         self.token_list = token_list
-
+        self.filename = filename
     def __str__(self):
         return "Makefile([{0}])".format(", \n".join( [ str(block) for block in self.token_list ] ) )
 #        return "Makefile([{0}])".format(", \n".join( [ "{0}".format(block) for block in self.token_list ] ) )

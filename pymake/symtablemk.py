@@ -86,6 +86,12 @@ class Entry:
 
         return self._appends.append(value)
 
+    def __str__(self):
+        if self.origin != "(invalid origin)": 
+            return f'<Entry {self.name}={self._value} origin={self.origin}>'
+        return f'<Entry {self.name}={self._value}>'
+
+    __repr__ = __str__
 class FileEntry(Entry):
     origin = "file"
 
@@ -203,6 +209,7 @@ class SymbolTable(object):
 
         self._add_entry(DefaultEntry('SHELL', constants.DEFAULT_SHELL))
         self._add_entry(DefaultEntry('.SHELLFLAGS', constants.DEFAULT_SHELLFLAGS))
+        self._add_entry(DefaultEntry('.FEATURES', version.Version.features))
 
     def _init_envvars(self):
         # "Every environment variable that make sees when it starts up is
@@ -599,3 +606,12 @@ class SymbolTable(object):
     def command_line_stop(self):
         self.command_line_flag = False
 
+    def __str__(self):
+        return f'<SymbolTable symbols={str(self.symbols)}>'
+    
+    def __repr__(self):
+        return f'<SymbolTable symbols={repr(self.symbols)}>'
+    
+    def __getitem__(self, key):
+        return self.symbols[key]
+    

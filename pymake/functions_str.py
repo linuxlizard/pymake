@@ -97,7 +97,7 @@ class FilterClass(FunctionWithArguments):
         pattern_step2 = "".join(pattern_step1).split()
 
         text_step1 = [t.eval(symbol_table) for t in self.args[1]]
-        text_step2 = "".join(text_step1).split()
+        text_step2 = "".join(text_step1).split() # Any whitespace
 
         return " ".join(wildcard_match_list(pattern_step2, text_step2, self.name=="filter-out"))
 

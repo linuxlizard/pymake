@@ -155,6 +155,8 @@ class Error(PrintingFunction):
     def eval(self, symbol_table):
         super().eval(symbol_table)
         # buh-bye
+        breakpoint()
+        print('AAAA')
         sys.exit(1)
 
 
@@ -191,8 +193,50 @@ class Call(FunctionWithArguments):
         return s
 
 
-class Eval(TODOMixIn, Function):
+class Eval(FunctionWithArguments):
     name = "eval"
+    num_args = -1
+    #  The argument to the eval function is expanded,
+    #  then the results of that expansion are parsed as makefile syntax.
+    # $(eval $(call PROGRAM_template,$(prog)))
+    '''
+    $(eval $(call gen_generic_defconfigs,32 64,r1 r2 r6,eb el))
+
+    1) expand $(call gen_generic_defconfigs,32 64,r1 r2 r6,eb el) into a makefile fragment
+    2) parse the makefile fragment as a second phase
+
+define myprint
+echo "this is a $(1)"
+endef
+
+define mygoal
+$(1):
+    $$(call myprint,line)
+    gcc -o $(1) $(2).c
+endef
+$(eval $(call mygoal,goal,test))
+----
+define myprint
+echo "this is a $(1)"
+endef
+goal:
+    $(call myprint,line)
+    gcc -o goal test.c
+---
+goal:
+    echo "this is a line"
+    gcc -o goal test.c
+    '''
+    def eval(self, symbol_table):
+        args = self.args
+        # Need to expand the args with our makefile parser
+        var = "".join([a.eval(symbol_table) for a in self.token_list])
+        logging.debug("Eval var=%s", var)
+        # The result of the eval function is always the empty string;
+        # thus, it can be placed virtually anywhere in a makefile without causing syntax errors. 
+        # tokenize_variable_ref
+        raise NotImplementedError()
+        return ""
 
 class Flavor(Function):
     name = "flavor"
