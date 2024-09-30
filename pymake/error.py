@@ -10,6 +10,7 @@ __all__ = [ "ParseError",
             "InvalidSyntaxInConditional",
             "EmptyVariableName",
             "NoMakefileFound",
+            "InternalError",
 
             "warning_message",
             "error_message",
@@ -91,6 +92,9 @@ class EmptyVariableName(ParseError):
 
 class NoMakefileFound(MakeError):
     default_msg = "No targets specified and no makefile found."
+
+class InternalError(MakeError):
+    default_msg = "INTERNAL ERROR! Something went wrong inside pymake itself."
 
 #class VersionError(MakeError):
 #    """Feature not in this version"""

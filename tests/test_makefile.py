@@ -144,15 +144,30 @@ def test_submake():
     # clean up some of the variable parts 
     pid_re = re.compile("pid=[0-9]+")
 
-    def clean(s):
-        s = re.sub(pid_re,"pid=",s)
-        s = s.replace("py-submake","make")
-        return s
-
+    # this test loop is a little weird because I added it after I wrote submake.mk
+    # and I was only visually verifying the results
     for result in zip(truth_strlist,test_strlist):
-        print("%r" % (result,))
-        truth,test = [clean(s) for s in result]
-#        print(truth,test)
-        assert truth==test
-        
+        # 1st output should be CURDIR and will be 100% identical
+
+        if result[0].startswith("CURDIR"):
+            print("result1=",result)
+            assert result[0] == result[1]
+
+        elif result[0].startswith("hello from"):
+            # 2nd output contains the PIDs so fix that up
+            result = [ re.sub(pid_re, "pid=", s) for s in result ]
+            print("result2=",result)
+            assert result[0] == result[1]
+
+        elif result[0].startswith("make -f"):
+            # 3rd output is the make vs py-submake;
+            # because the submake helper name is now based on the pid and contains
+            # a full path, let's make our lives easier by just throwing away
+            # argv[0]
+            cleaned = [ s[s.index(' '):] for s in result ]
+            print("cleaned3=",cleaned)
+            assert cleaned[0] == cleaned[1]
+
+        else:
+            assert result[0] == result[1]
 

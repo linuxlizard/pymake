@@ -21,6 +21,8 @@ hello.o : hello.c
 
 clean : ; $(RM) $(OBJ) $(EXE)
 
+$(info RM=$(RM))
+
 # make parses/runs whole file before starting on the rules
 # (will see this message before rules are run)
 $(info end of file bye now come again)

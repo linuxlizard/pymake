@@ -29,6 +29,7 @@ import pymake.makedb as makedb
 import pymake.rules as rules
 import pymake.shell as shell
 import pymake.pargs as pargs
+import pymake.submake as submake
 
 def get_basename( filename ) : 
     return os.path.splitext( os.path.split( filename )[1] )[0]
@@ -132,17 +133,6 @@ def parse_makefile_from_src(src):
 
     return Makefile(statement_list)
 
-#def parse_makefile_string(s):
-#    import io
-#    with io.StringIO(s) as infile:
-#        file_lines = infile.readlines()
-#    try : 
-#        return parse_makefile_from_strlist(file_lines)
-#    except ParseError as err:
-#        err.filename = "<string id={0}>".format(id(s)) 
-#        print(err,file=sys.stderr)
-#        raise
-
 def parse_makefile(infilename) : 
     logger.debug("parse_makefile infilename=%s", infilename)
     src = source.SourceFile(infilename)
@@ -152,39 +142,11 @@ def parse_makefile(infilename) :
 def find_location(tok):
     return tok.get_pos()
 
-#    # recursively descend into a token tree to find a token with a non-null vcharstring
-#    # which will show the starting filename/position of the token
-#    logger.debug("find_location tok=%s", tok)
-#
-#    if isinstance(tok, ConditionalBlock):
-#        # conditionals don't have a token_list so we have to drill into the
-#        # instance to find something that does
-#        return find_location(tok.cond_exprs[0].expression)
-#
-#    if isinstance(tok, Directive):
-#        return find_location(tok.expression)
-#
-#    # If the tok has a token_list, it's an Expression
-#    # otherwise, is a Symbol.
-#    #
-#    # Expressions contain list of Symbols (although an Expression is also
-#    # itself a Symbol). Expression does not have a string (VCharString)
-#    # associated with it but contains the Symbols that do.
-#    try:
-#        for t in tok.token_list:
-#            return find_location(t)
-#    except AttributeError:
-#        # we found a Symbol
-#        c = tok.string[0]
-#        return c.filename, c.pos
-##        for c in tok.string:
-##            logger.debug("f %s %s %s", c, c.pos, c.filename)
-
 def _add_internal_db(symtable):
     # grab gnu make's internal db, add to our own
     # NOTE! this requires my code to be the same license as GNU Make (GPLv3 as of 20221002)
-#    defaults, automatics = makedb.fetch_database()
-    defaults = []
+    # TODO 202040927 ; confirm this ---^^^ because it sounds wrong
+    defaults, automatics = makedb.fetch_database()
 
     # If I don't run this code, is my code still under GPLv3 ???
 
@@ -243,7 +205,6 @@ def _execute_statement_list(stmt_list, curr_rules, rulesdb, symtable):
                         # makefile rules, statements, etc.
                         # GNU Make itself seems to interpret raw text as a rule and
                         # will print a "missing separator" error
-#                        msg = "unexpected non-empty eval result=\"%s\"" % (result, )
                         raise MissingSeparator(tok.get_pos())
                 else:
                     # A conditional block's or include's eval returns an array
@@ -278,7 +239,7 @@ def _execute_statement_list(stmt_list, curr_rules, rulesdb, symtable):
     # bottom of loop
     return exit_code
 
-def execute_recipe(rule, recipe, symtable):
+def execute_recipe(rule, recipe, symtable, args):
     def remove_duplicates(s_list):
         # the $^ variable removes duplicates but must must must preserve order
         seen_list = []
@@ -374,8 +335,12 @@ def execute_recipe(rule, recipe, symtable):
 
         s, ignore_failure, silent = check_prefixes(s)
 
-        if not silent:
+        if not silent and not args.silent:
             print(s)
+
+        if args.dry_run:
+            print(s)
+            continue
 
         exit_code = 0
         ret = shell.execute(s, symtable)
@@ -384,13 +349,19 @@ def execute_recipe(rule, recipe, symtable):
         # !!! Run a Sub-Make !!!
         #
         # The shell.execute() determined that we ran the sub-make helper. The
-        # return value of the submake will is the args as interpretted by the
+        # return value of the submake is the args as interpretted by the
         # shell (whichever shell). We now take those args tokenzparse+run that
         # makefile in our same process context.
         if ret.is_submake:
+            # the submake is very simple and should not fail
+            if ret.exit_code != 0:
+                raise InternalError(msg="running submake failed",
+                        moremsg=ret.stderr,                        
+                        pos=recipe.get_pos() ) 
+
             submake_argv = ret.stdout.strip().split("\n")
             args = pargs.parse_args(submake_argv[1:])
-#            breakpoint()
+
             currwd = os.getcwd()
             exit_code = _run_it(args)
             os.chdir(currwd)
@@ -414,14 +385,15 @@ def execute(makefile, args):
     assert isinstance(args, pargs.Args)
 
     # tinkering with how to evaluate
-    logger.info("Starting execute of %s", id(makefile))
     symtable = SymbolTable(warn_undefined_variables=args.warn_undefined_variables)
 
     if not args.no_builtin_rules:
         _add_internal_db(symtable)
 
     # aim sub-makes at my helper script
-    symtable.add("MAKE", "py-submake")
+#    symtable.add("MAKE", "py-submake")
+    symtable.add("MAKE", submake.create_helper())
+    logger.debug("submake helper=%s", symtable.fetch("MAKE"))
 
     # "For your convenience, when GNU make starts (after it has processed any -C options)
     # it sets the variable CURDIR to the pathname of the current working directory. This value
@@ -465,7 +437,7 @@ def execute(makefile, args):
     # write the rules db to graphviz if requested
     if args.dotfile:
         title = get_basename(makefile.get_pos()[0])
-        rulesdb.graphiz_graph(title + "_makefile", args.dotfile)
+        rulesdb.graphviz_graph(title + "_makefile", args.dotfile)
         print("wrote %s for graphviz" % args.dotfile)
 
     if args.htmlfile:
@@ -483,6 +455,7 @@ def execute(makefile, args):
     #
     # At this point, we start executing the makefile Rules.
     #
+    logger.info("Starting run of %s", makefile.get_pos()[0])
     for target in target_list:
         try:
             rule = rulesdb.get(target)
@@ -491,19 +464,28 @@ def execute(makefile, args):
             exit_code = exit_status["error"]
             break
 
+        if args.dotfile:
+            rule.graphviz_graph()
+
 #        print("rule=",rule)
+#        print("target=",rule.target)
+#        print("recipe=",rule.recipe_list)
 #        print("prereqs=",rule.prereq_list)
 
         # walk a dependency tree
         for rule in rulesdb.walk_tree(target):
+            if not rule.recipe_list:
+                # this warning catches where I fail to find an implicit rule
+                logger.warning("I didn't find a recipe to build target=\"%s\"", target)
+
             for recipe in rule.recipe_list:
-                exit_code = execute_recipe(rule, recipe, symtable)
+                exit_code = execute_recipe(rule, recipe, symtable, args)
                 if exit_code != 0:
                     break
-
             if exit_code != 0:
                 break
 
+    submake.remove_helper()
     return exit_status["error"] if exit_code else exit_status["success"] 
     
 def _run_it(args):

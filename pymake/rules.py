@@ -8,6 +8,7 @@ logger = logging.getLogger("pymake.rules")
 
 from pymake.error import *
 from pymake.html import save_rules
+import pymake.constants as constants
 
 _debug = True
 
@@ -39,10 +40,23 @@ class Rule:
         logger.debug("add recipe to rule=%r", self)
         self.recipe_list.append(recipe)
 
-class RuleDB:
-    # TODO need to better handle built-in rules
-    pseudo_targets = [ ".PHONY" ]
+    def graphviz_graph(self):
+        title = self.target.replace("/","_").replace(".","_")
+        dotfilename = self.target + ".dot"
 
+        with open(dotfilename,"w") as outfile:
+            outfile.write("digraph %s {\n" % title)
+
+            outfile.write("\t\"%s\"\n" % self.target)
+
+            for p in self.prereq_list:
+                if p.startswith("/usr"):
+                    continue
+                outfile.write("\t\"%s\" -> \"%s\"\n" % (self.target, p))
+
+            outfile.write("}\n")
+
+class RuleDB:
     def __init__(self):
         self.rules = {}
 
@@ -115,15 +129,19 @@ class RuleDB:
 
             for target,rule in self.rules.items():
                 # add the nodes 
-                if target in self.pseudo_targets:
+                if target in constants.built_in_targets:
+                    continue
+                if target.startswith("/usr"):
                     continue
                 outfile.write("\t\"%s\"\n" % target)
 
             for target,rule in self.rules.items():
                 # add the edges
-                if target in self.pseudo_targets:
+                if target in constants.built_in_targets:
                     continue
                 for p in rule.prereq_list:
+                    if p.startswith("/usr"):
+                        continue
                     outfile.write("\t\"%s\" -> \"%s\"\n" % (target, p))
 
             outfile.write("}\n")

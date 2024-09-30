@@ -9,6 +9,7 @@ import subprocess
 
 from pymake.error import *
 import pymake.constants as constants
+import pymake.submake as submake
 
 logger = logging.getLogger("pymake.shell")
 logger.setLevel(level=logging.DEBUG)
@@ -100,6 +101,11 @@ def execute(cmd_str, symbol_table, use_default_shell=True):
     # the return status is 126."
     # man page: GNU Bash 5.1 2020 October 29
 
+    # TODO make this a command line arg
+#    with open("make.sh","a") as outfile:
+#        outfile.write(" ".join(cmd))
+#        outfile.write("\n\n\n")
+
     try:
         p = subprocess.run(cmd, 
                 shell=False,
@@ -120,7 +126,7 @@ def execute(cmd_str, symbol_table, use_default_shell=True):
         # match gnu make's output
         return_status.stderr = err.strerror
 
-    if cmd_str.startswith("py-submake"):
+    if cmd_str.startswith(submake.getname()):
         return_status.is_submake = True
 
     return return_status

@@ -64,17 +64,18 @@ $(info $(shell %s *.mk))
 @:;@:
 """ % ls
 
+    error = ("No such file or directory", "Command not found")
     # will launch .e.g, '/usr/bin/ls *.mk' as the complete command
     # argv[0] == '/usr/bin/ls *.mk'
     # which should error with 'No such file or directory'
     p = run.gnumake_string(makefile, flags=run.FLAG_OUTPUT_STDERR)
 #    print("p=",p)
     assert "ls *.mk" in p, p
-    assert "No such file or directory" in p, p
+    assert any([e in p for e in error])
 
     p = run.pymake_string(makefile, flags=run.FLAG_OUTPUT_STDERR)
     assert "ls *.mk" in p, p
-    assert "No such file or directory" in p, p
+    assert any([e in p for e in error])
 
 def test_permission_denied():
     # this makefile will try to literally exec /dev/zero which will fail with a

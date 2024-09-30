@@ -31,6 +31,9 @@ Options:
     -r
     --no-builtin-rules
                 Disable reading GNU Make's built-in rules.
+    -s
+    --silent, --quiet
+                Don't echo recipes.
     -v
     --version
                 Print the version number and exit.
@@ -50,25 +53,33 @@ Options not in GNU Make:
 
 class Args:
     def __init__(self):
+        # -d 
         self.debug = 0
 
+        # --dotfile
         # write rules' dependencies to graphviz .dot file
         self.dotfile = None
 
+        # --html
         # write rules' dependencies to HTML .html file
         self.htmlfile = None
 
+        # -f
         # input filename to parse
         self.filename = None
 
+        # --makefile
         # rewrite the parsed Makefile to this file
         self.output = None
 
+        # -S
         # print the parsed makefile as an S-Expression        
         self.s_expr = False
 
+        # -B
         self.always_make = False
 
+        # -r
         self.no_builtin_rules = False
 
         # extra arguments on the command line, interpretted either as a target
@@ -78,17 +89,33 @@ class Args:
         # -C aka --directory option
         self.directory = None
 
+        # -n
         self.dry_run = False
+
+        # -s
+        self.silent = False
 
         self.warn_undefined_variables = False
         self.detailed_error_explain = False
 
+    def __str__(self):
+        # useful for debugging the sub-make
+        s = ""
+        s += "-B " if self.always_make else ""
+        s += "-C %s " % self.directory if self.directory else ""
+        s += "-d " if self.debug else ""
+        s += "-f %s " % self.filename if self.filename else ""
+        s += "-n " if self.dry_run else ""
+        s += "-s " if self.silent else ""
+        s += " ".join(self.argslist)
+        return s
+
 def parse_args(argv):
     print_version ="""PY Make %s. Work in Progress.
-Copyright (C) 2014-2023 David Poole davep@mbuf.com, testcluster@gmail.com""" % (Version.vstring(),)
+Copyright (C) 2014-2024 David Poole david.poole@ericsson.com, davep@mbuf.com, testcluster@gmail.com""" % (Version.vstring(),)
 
     args = Args()
-    optlist, arglist = getopt.gnu_getopt(argv, "Bhvo:drSf:C:n", 
+    optlist, arglist = getopt.gnu_getopt(argv, "Bhvo:drSf:C:ns", 
                             [
                             "help",
                             "always-make",
@@ -102,7 +129,8 @@ Copyright (C) 2014-2023 David Poole davep@mbuf.com, testcluster@gmail.com""" % (
                             "version", 
                             "warn-undefined-variables", 
                             "directory=",
-                            "just-print", "dry-run", "recon"
+                            "just-print", "dry-run", "recon",
+                            "silent", "quiet"
                             ]
                         )
     for opt in optlist:
@@ -139,6 +167,8 @@ Copyright (C) 2014-2023 David Poole davep@mbuf.com, testcluster@gmail.com""" % (
             args.directory.append(opt[1])
         elif opt[0] in ('-n', '--just-print', '--dry-run', '--recon'):
             args.dry_run = True
+        elif opt[0] in ('-s', '--silent', '--quiet'):
+            args.silent = True
         else:
             # wtf?
             assert 0, opt
