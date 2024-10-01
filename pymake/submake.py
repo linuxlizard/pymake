@@ -32,23 +32,31 @@ for a in $@ ; do
 	echo $a
 done
 """
+import atexit
 
 def getname():
     return os.path.join( os.getcwd(), "py-submake-%d" % os.getpid() )
 
 def create_helper():
     outfilename = getname()
+    if os.path.exists(outfilename):
+        return outfilename
     # create an executable file
     # TODO windows batch file???
     fd = os.open(outfilename, os.O_CREAT|os.O_WRONLY, mode=0o755)
     os.write(fd, submake_helper.encode("utf8") )
     os.close(fd)
+
+    atexit.register(remove_helper)
     return outfilename
 
 def remove_helper():
     # clean up after myself
     # should be safe because I'm only ever running with the one main process (no threads)
-    os.unlink( getname() )
+    try:
+        os.unlink( getname() )
+    except OSError:
+        pass
 
 if __name__ == '__main__':
     print(create_helper())

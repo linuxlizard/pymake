@@ -28,7 +28,7 @@ if __name__ == "__main__":
             "Operating System :: OS Independent",
         ],
         scripts = [
-            'pymake/py-submake',
+#            'pymake/py-submake',
         ],
         packages=[
             "pymake", 

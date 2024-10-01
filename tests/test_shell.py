@@ -146,13 +146,17 @@ all:
 
 def test_multiword():
     makefile="""
-# "SHELL may be a multi-word command" comment in src/job.c
+# "SHELL may be a multi-word command" says a comment in src/job.c
 SHELL:=perl -e
 .SHELLFLAGS:=
 $(info $(shell print('hello again, perl')))
 @:;@:
     """
-    # TODO
+    p = run.gnumake_string(makefile)
+    print("p=",p)
+
+#    p = run.pymake_string(makefile)
+#    print("p=",p)
 
 def test_shell_python():
     makefile="""

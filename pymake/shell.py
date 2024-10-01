@@ -56,9 +56,10 @@ def execute(cmd_str, symbol_table, use_default_shell=True):
         shell = constants.DEFAULT_SHELL
 
     # GNU Make does a lot of string crunching on the shell command string.  One
-    # of the side effects is the SHELL value has trailing whitespace removed.
+    # of the side effects is the SHELL value is broken into individual tokens
+    # based on surrounding whitespace.
     # see construct_command_argv_internal()-src/job.c
-    shell = shell.rstrip()
+    shell_list = [s.strip() for s in shell.split()]
 
     shellflags = symbol_table.fetch(".SHELLFLAGS")
     if not shellflags and use_default_shell:
@@ -68,7 +69,7 @@ def execute(cmd_str, symbol_table, use_default_shell=True):
 
     cmd = []
     if shell:
-        cmd.append(shell)
+        cmd.extend(shell_list)
     if shellflags:
         cmd.append(shellflags)
     cmd.append(cmd_str)
@@ -116,6 +117,8 @@ def execute(cmd_str, symbol_table, use_default_shell=True):
                 env=env
             )
         logger.debug("shell exit status=%r", p.returncode)
+#        if p.returncode != 0:
+#            breakpoint()
         return_status.exit_code = p.returncode
         return_status.stdout = p.stdout
         return_status.stderr = p.stderr

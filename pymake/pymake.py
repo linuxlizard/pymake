@@ -485,7 +485,6 @@ def execute(makefile, args):
             if exit_code != 0:
                 break
 
-    submake.remove_helper()
     return exit_status["error"] if exit_code else exit_status["success"] 
     
 def _run_it(args):
