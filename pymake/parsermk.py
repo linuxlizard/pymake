@@ -7,10 +7,12 @@ from pymake.printable import printable_char
 from pymake.scanner import ScannerIterator
 from pymake.tokenizer import tokenize_recipe, tokenize_assign_RHS, comment
 import pymake.vline as vline
+from pymake.debug import *
 
 _debug = True
 
 logger = logging.getLogger("pymake.parser")
+#logger.setLevel(level=logging.DEBUG)
 
 # hack dependency injection
 parse_vline_stream = None
@@ -686,8 +688,8 @@ def handle_conditional_directive(directive_inst, vline_iter):
             state = state_endif
 
         else : 
-            # wtf?
-            assert 0, dir_str
+            # we found another directive inside our if directive block(s)
+            line_list.append(virt_line)
 
         if state==state_endif : 
             # close the if/else/endif collection
@@ -760,7 +762,8 @@ def parse_expression(expr, virt_line, vline_iter):
     #   define foo   # start of multi-line variable
 
     logger.debug("parse %s", expr.__class__.__name__)
-#    breakpoint()
+#    if get_line_number(expr) > 151:
+#        breakpoint()
     assert isinstance(expr,Expression), type(expr)
 
     # If we do find a directive, we'll wind up re-parsing the entire line as a

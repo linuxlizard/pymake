@@ -395,6 +395,14 @@ def execute(makefile, args):
     symtable.add("MAKE", submake.create_helper())
     logger.debug("submake helper=%s", symtable.fetch("MAKE"))
 
+    # "Contains the name of each makefile that is parsed by make, in the order
+    # in which it was parsed. The name is appended just before make begins to
+    # parse the makefile."
+    # This is tricky for me because the parse and execute happen independently.
+    # GNU Make is a one pass.  I'm 2+ passes.  
+    pos = makefile.get_pos()
+    symtable.add("MAKEFILE_LIST", pos[0], pos=pos)
+
     # "For your convenience, when GNU make starts (after it has processed any -C options)
     # it sets the variable CURDIR to the pathname of the current working directory. This value
     # is never touched by make again:"

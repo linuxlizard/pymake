@@ -4,11 +4,8 @@ import sys
 import logging
 import itertools
 
-_debug = True
-
-_testing = False
-
 logger = logging.getLogger("pymake.symbol")
+logger.setLevel(level=logging.DEBUG)
 
 from pymake.constants import whitespace
 from pymake.printable import printable_char, printable_string
@@ -18,6 +15,9 @@ from pymake.error import *
 import pymake.shell as shell
 from pymake.scanner import ScannerIterator
 import pymake.source as source
+from pymake.debug import *
+
+_testing = False
 
 _debug = True
 
@@ -81,7 +81,7 @@ class Symbol(object):
                 else:
                     logger.error(type(vstring))
                     raise
-            logger.debug("new Symbol vstring=\"%s\"", printable_string(str(vstring)))
+            logger.debug("new Symbol vstring=\"%s\" at %r", printable_string(str(vstring)), vstring.get_pos())
             vstring.validate()
 
         # by default, save the token's VChars
@@ -570,7 +570,11 @@ class UnExportDirective(ExportDirective):
     name = "unexport"
 
     def eval(self, symbol_table):
-        raise NotImplementedError()
+        s = self.expression.eval(symbol_table)
+        for name in s.split():
+            symbol_table.unexport(name)
+
+        return ""
 
 class IncludeDirective(Directive):
     name = "include"
@@ -599,6 +603,8 @@ class IncludeDirective(Directive):
         # GNU Make ignores an empty include
         if not s:
             return []
+
+        symbol_table.append("MAKEFILE_LIST", s, self.expression.get_pos())
 
         self.source = source.SourceFile(s)
         self.source.load()
@@ -949,6 +955,8 @@ class IfeqDirective(ConditionalDirective):
         #
         # FIXME this ugly and slow and ugly and I'd like to fix it
         # (circular imports are circular)
+#        if get_line_number(self) > 130:
+#            breakpoint()
         from pymake.tokenizer import tokenize_statement
         from pymake.parsermk import parse_ifeq_conditionals
         expr = tokenize_statement(ScannerIterator(self.vcstring.chars, None))
@@ -960,6 +968,9 @@ class IfeqDirective(ConditionalDirective):
             assert self.vcstring is not None
 
             self._parse()
+
+        if get_line_number(self) == 150:
+            breakpoint()
 
         s1 = self.expr1.eval(symbol_table)
         s2 = self.expr2.eval(symbol_table)

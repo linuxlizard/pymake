@@ -86,6 +86,11 @@ class Entry:
 
         return self._appends.append(value)
 
+    def append(self, value, pos):
+        # simple string append, space separated
+        assert isinstance(value,str), type(value)
+        self.set_value(self.value + " " + value, pos)
+
 class FileEntry(Entry):
     origin = "file"
 
@@ -162,6 +167,7 @@ class AutomaticEntry(Entry):
         super().__init__(name, value, pos)
 
 
+
 class SymbolTable(object):
     def __init__(self, **kwargs):
         # key: variable name
@@ -189,9 +195,6 @@ class SymbolTable(object):
     def _init_builtins(self):
         # key: var name
         # value: symbol table method to return values
-#        self.built_ins = {
-#            ".VARIABLES" : self.variables,
-#        }
         
         # TODO add more internal vars
         self._add_entry(CallbackEntry('.VARIABLES', self.variables))
@@ -260,20 +263,6 @@ class SymbolTable(object):
             new_entry = FileEntry(name, value, pos)
             new_entry.set_export(self.export_default_value)
 
-#        if entry is None:
-#            if self.command_line_flag:
-#                # this flag is a weird hack to support command line vars
-#                # implicitly
-#                entry = CommandLineEntry(name, value)
-#                # command line vars are always exported
-#                # TODO unless unexport ?
-#            else:
-#                entry = FileEntry(name, value, pos)
-#                entry.set_export(self.export_default_value)
-#        else:
-#            logger.debug("overwrite value name=%s at pos=%r", entry.name, pos)
-#            entry.set_value(value, pos)
-
         # XXX not sure read-only is a good idea yet
 #        if entry.read_only:
 #            raise PermissionDenied(name)
@@ -294,22 +283,6 @@ class SymbolTable(object):
             pass
 
         return self.add(name, value, pos)
-
-#    def _maybe_eval(self, entry):
-#
-#        # handle the case where an expression is stored in the symbol table vs
-#        # a value 
-#        # e.g.,  a=10  (evaluated whenever $a is used)
-#        # vs   a:=10  (evaluated immediately and "10" stored in symtable)
-#        #
-#        if isinstance(entry.value,Symbol):
-#            step1 = [t.eval(self) for t in entry.value]
-#            return "".join(step1)
-#
-#        if isinstance(entry, CallbackEntry):  
-#            return entry.callback_fn()
-#
-#        return entry.value
 
     def _parse_abbrev_patsubst(self, key):
         # This function handles the case of an abbrevitated patsubst.
@@ -376,13 +349,14 @@ class SymbolTable(object):
         return ""
 
     def append(self, name, value, pos=None):
-        # ha ha type checking
-        assert isinstance(value,Symbol), type(value)
 
         # "When the variable in question has not been defined before, ‘+=’ acts
         # just like normal ‘=’: it defines a recursively-expanded variable."
         # GNU Make 4.3 January 2020
         if name not in self.symbols:
+            # ha ha type checking
+            assert isinstance(value,Symbol), type(value)
+
             return self.add(name, value, pos)
 
         entry = self.symbols[name]
@@ -390,7 +364,11 @@ class SymbolTable(object):
             return entry.append_recursive(value)
 
         # simple string append, space separated
-        entry.set_value( entry.value+" "+value.eval(self), pos )
+#        entry.set_value( entry.value+" "+value.eval(self), pos )
+        try:
+            entry.append(value.eval(self), pos)
+        except AttributeError:
+            entry.append(value, pos)
 
     def push(self, name):
         # save current value of 'name' in secure, undisclosed location
@@ -490,12 +468,6 @@ class SymbolTable(object):
             return entry.origin
         except KeyError:
             return "undefined"
-
-#        try:
-#            callback_fn = self.built_ins[name]
-#            return "default"
-#        except KeyError:
-#            return "undefined"
 
     def value(self, name):
         # support for the $(value) function
