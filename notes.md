@@ -32,9 +32,9 @@ Triggered by tox. Manually run with:
 https://docs.pytest.org/en/stable/
 
 	# run everything
-	PYTHONPATH=. pytest	
+	PYTHONPATH=. pytest
 
-	# run verbose	
+	# run verbose
 	PYTHONPATH=. pytest -v
 
 	# run just the shell tests

@@ -7,6 +7,12 @@ I want to debug my GNU Makefiles.
 
 Ultimate long-term goal is a GNU Make visual debugger. I want breakpoints on variables changing. I want to single step through the rules. I want to put a breakpoint on a rule.
 
+## Update 20241006.  The Linux Kernel Make Update.
+
+I'm going to focus on parsing the Linux Kernel makefiles. Analyzing the linux kernel build is why I started this crazy project in the first place. 
+
+I will write documentation on pymake as well.
+
 ## Update 20240707.  The WOOOOO!!! Update.
 
 I've been given official permission by Ericsson, my employer, to once again work on Pymake.  I'm very excited to get this project moving again.
