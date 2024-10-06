@@ -1,3 +1,5 @@
+# TODO pymake cannot yet parse this file
+
 # the next line is $<space>  (gnu make ignores as of v4.3)
 $ 
 
@@ -34,6 +36,11 @@ $(info foo=$(foo))
 
 # *** empty variable name. Stop.
 # = bar
+
+# leading whitespace is preserved
+# trailing whitespace is discarded
+FOO:=   BAR   
+$(info FOO=>>>$(FOO)<<<)
 
 @:;@:
 

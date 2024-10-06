@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-2.0
+
 import logging
 
 from pymake.constants import *
@@ -7,10 +9,12 @@ from pymake.printable import printable_char
 from pymake.scanner import ScannerIterator
 from pymake.tokenizer import tokenize_recipe, tokenize_assign_RHS, comment
 import pymake.vline as vline
+from pymake.debug import *
 
 _debug = True
 
 logger = logging.getLogger("pymake.parser")
+#logger.setLevel(level=logging.DEBUG)
 
 # hack dependency injection
 parse_vline_stream = None
@@ -461,7 +465,7 @@ def parse_include_directive(expr, directive_vstr, *ignore):
     klass = include_directive_lut[dir_str]
 
     # note we're passing in the parse function
-    return klass(directive_vstr, expr, parse_vline_stream)
+    return klass(directive_vstr, expr)
 
 def seek_directive(viter, seek=directive):
     # viter - character iterator
@@ -587,11 +591,7 @@ def handle_conditional_directive(directive_inst, vline_iter):
     # Passed to LineBlock constructor.
     line_list = []
 
-    # Pass in the tokenize() fn because will eventually need to parse the
-    # contents of the block. Sending in the fn because the circular references
-    # between pymake.py and symbol.py make calling tokenize from
-    # ConditionalBlock impossible. A genuine fancy-pants dependency injection!
-    cond_block = ConditionalBlock(parse_vline_stream)
+    cond_block = ConditionalBlock()
     cond_block.add_conditional( directive_inst )
 
     def make_conditional(dir_str, directive_vstr, expr1=None, expr2=None):
@@ -686,8 +686,8 @@ def handle_conditional_directive(directive_inst, vline_iter):
             state = state_endif
 
         else : 
-            # wtf?
-            assert 0, dir_str
+            # we found another directive inside our if directive block(s)
+            line_list.append(virt_line)
 
         if state==state_endif : 
             # close the if/else/endif collection
@@ -760,7 +760,8 @@ def parse_expression(expr, virt_line, vline_iter):
     #   define foo   # start of multi-line variable
 
     logger.debug("parse %s", expr.__class__.__name__)
-#    breakpoint()
+#    if get_line_number(expr) > 151:
+#        breakpoint()
     assert isinstance(expr,Expression), type(expr)
 
     # If we do find a directive, we'll wind up re-parsing the entire line as a

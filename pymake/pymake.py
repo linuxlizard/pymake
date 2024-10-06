@@ -30,6 +30,7 @@ import pymake.rules as rules
 import pymake.shell as shell
 import pymake.pargs as pargs
 import pymake.submake as submake
+from pymake.debug import *
 
 def get_basename( filename ) : 
     return os.path.splitext( os.path.split( filename )[1] )[0]
@@ -62,6 +63,9 @@ def parse_vline_stream(virt_line, vline_iter):
         if not parsermk.seek_directive(iter(virt_line)):
             recipe = parsermk.tokenize_recipe(iter(virt_line))
             return recipe
+
+#    if get_line_number(virt_line) > 150:
+#        breakpoint()
 
     # tokenize character by character across a VirtualLine
     vchar_scanner = iter(virt_line)
@@ -207,7 +211,7 @@ def _execute_statement_list(stmt_list, curr_rules, rulesdb, symtable):
                         # will print a "missing separator" error
                         raise MissingSeparator(tok.get_pos())
                 else:
-                    # A conditional block's or include's eval returns an array
+                    # A conditional block or include eval returns an array
                     # of parsed Symbols ready for eval.  
                     assert isinstance(result,list), type(result)
                     exit_code = _execute_statement_list(result, curr_rules, rulesdb, symtable)
@@ -233,8 +237,9 @@ def _execute_statement_list(stmt_list, curr_rules, rulesdb, symtable):
                 exit_code = 1
                 break
     
+        # leave early on error
         if exit_code:
-            return exit_code
+            break
 
     # bottom of loop
     return exit_code
@@ -395,6 +400,14 @@ def execute(makefile, args):
     symtable.add("MAKE", submake.create_helper())
     logger.debug("submake helper=%s", symtable.fetch("MAKE"))
 
+    # "Contains the name of each makefile that is parsed by make, in the order
+    # in which it was parsed. The name is appended just before make begins to
+    # parse the makefile."
+    # This is tricky for me because the parse and execute happen independently.
+    # GNU Make is a one pass.  I'm 2+ passes.  
+    pos = makefile.get_pos()
+    symtable.add("MAKEFILE_LIST", pos[0], pos=pos)
+
     # "For your convenience, when GNU make starts (after it has processed any -C options)
     # it sets the variable CURDIR to the pathname of the current working directory. This value
     # is never touched by make again:"
@@ -521,6 +534,7 @@ def _run_it(args):
 
 # FIXME ugly hack dependency injection to solve problems with circular imports
 parsermk.parse_vline_stream = parse_vline_stream 
+symbolmk.parse_vline_stream = parse_vline_stream 
 symbolmk.tokenize_statement = tokenize_statement
 
 def main():

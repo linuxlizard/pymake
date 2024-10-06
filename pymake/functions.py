@@ -6,7 +6,6 @@ import sys
 import logging
 
 logger = logging.getLogger("pymake.functions")
-
 #logger.setLevel(level=logging.DEBUG)
 
 from pymake.symbolmk import VarRef, Literal
@@ -273,6 +272,14 @@ class ValueClass(Function):
 
         return symbol_table.value(var)
 
+class Breakpoint(Function):
+    name = "breakpoint"
+    num_args = -1
+
+    def eval(self, symbol_table):
+        breakpoint()
+        return ""
+
 _classes = {
     # please keep in alphabetical order
     "abspath" : AbsPath,
@@ -311,6 +318,9 @@ _classes = {
     "word" : Word,
     "wordlist" : WordList,
     "words" : Words,
+
+    # functions not in official Make
+    "breakpoint" : Breakpoint,
 }
 
 def maybe_function_call(vcstr):

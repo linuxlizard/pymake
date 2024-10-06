@@ -1,14 +1,9 @@
-#!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0
 
-import sys
 import logging
-import itertools
-
-_debug = True
-
-_testing = False
 
 logger = logging.getLogger("pymake.symbol")
+#logger.setLevel(level=logging.DEBUG)
 
 from pymake.constants import whitespace
 from pymake.printable import printable_char, printable_string
@@ -18,8 +13,11 @@ from pymake.error import *
 import pymake.shell as shell
 from pymake.scanner import ScannerIterator
 import pymake.source as source
+from pymake.debug import *
 
-_debug = True
+_testing = False
+
+_debug = False
 
 __all__ = [ "Symbol",
             "Literal",
@@ -57,6 +55,7 @@ __all__ = [ "Symbol",
 
 # hack dependency injection
 tokenize_statement = None
+parse_vline_stream = None
 
 # test/debug fn for debugger
 def _view(token_list):
@@ -81,7 +80,7 @@ class Symbol(object):
                 else:
                     logger.error(type(vstring))
                     raise
-            logger.debug("new Symbol vstring=\"%s\"", printable_string(str(vstring)))
+            logger.debug("new Symbol vstring=\"%s\" at %r", printable_string(str(vstring)), vstring.get_pos())
             vstring.validate()
 
         # by default, save the token's VChars
@@ -570,15 +569,17 @@ class UnExportDirective(ExportDirective):
     name = "unexport"
 
     def eval(self, symbol_table):
-        raise NotImplementedError()
+        s = self.expression.eval(symbol_table)
+        for name in s.split():
+            symbol_table.unexport(name)
+
+        return ""
 
 class IncludeDirective(Directive):
     name = "include"
 
-    def __init__(self, keyword, expression, parse_fn):
+    def __init__(self, keyword, expression):
         self.source = None
-        # https://en.wikipedia.org/wiki/Dependency_injection
-        self.parse_fn = parse_fn
 
         super().__init__(keyword, expression)
 
@@ -600,12 +601,14 @@ class IncludeDirective(Directive):
         if not s:
             return []
 
+        symbol_table.append("MAKEFILE_LIST", s, self.expression.get_pos())
+
         self.source = source.SourceFile(s)
         self.source.load()
         line_scanner = ScannerIterator(self.source.file_lines, self.source.name)
         vline_iter = get_vline(self.source.name, line_scanner)
 
-        statement_list = [self.parse_fn(vline, vline_iter) for vline in vline_iter] 
+        statement_list = [parse_vline_stream(vline, vline_iter) for vline in vline_iter] 
         return statement_list
 
 class MinusIncludeDirective(IncludeDirective):
@@ -694,9 +697,7 @@ class LineBlock(Symbol):
     def eval(self, symbol_table):
         vline_iter = iter(self.vline_list)
 
-        # XXX temp hack ; use self.parse_fn()  (would be nice to call a
-        # global parse fn but circular imports make that difficult)
-        statement_list = [self.parse_fn(vline, vline_iter) for vline in vline_iter] 
+        statement_list = [parse_vline_stream(vline, vline_iter) for vline in vline_iter] 
         return statement_list
 
 
@@ -736,12 +737,9 @@ class ConditionalBlock(Symbol):
     # Is an array of unparsed text (LineBlock) intermixed with more nested
     # conditionals (ConditionalBlock).
 
-    def __init__(self, parse_fn) :
+    def __init__(self) :
         super().__init__()
         
-        # https://en.wikipedia.org/wiki/Dependency_injection
-        self.parse_fn = parse_fn
-
         # cond_expr is an array of ConditionalDirective
         #
         # cond_blocks is an array of arrays. Each cond_block[n] array is an
@@ -823,34 +821,18 @@ class ConditionalBlock(Symbol):
     def eval(self, symbol_table):
         logger.debug("eval %s", self.name)
 
-        def eval_blocks(block_list):
-            statement_list = []
-
-            # block list must be a LineBlock or a ConditionalBlock
-            for block in block_list:
-                # FIXME passing the parse fn down here is ugly and I hate it
-                # and it's ugly.  Fix it somehow.
-                block.parse_fn = self.parse_fn
-                result = block.eval(symbol_table)
-                statement_list.extend(result)
-            return statement_list
-
-        for expr,block in zip(self.cond_exprs,self.cond_blocks):
-            # FIXME more monkey patching bletcherousness
-            expr.parse_fn = self.parse_fn
-
+        for expr,block_list in zip(self.cond_exprs,self.cond_blocks):
             flag = expr.eval(symbol_table)
             if flag:
                 # We found a truthy so execute the block then we're done.
-                return eval_blocks(block)
+                return block_list
 
         # At this point we have run out of expressions to evaluate.
         # Is there one more cond_block which indicates an unconditional else?
         if len(self.cond_blocks) > len(self.cond_exprs):
             assert len(self.cond_blocks) == len(self.cond_exprs)+1
 
-            results = eval_blocks(self.cond_blocks[-1])
-            return results
+            return self.cond_blocks[-1]
 
         # At this point we found no truthy conditionals and no else condition.
         # So we have nothing to return.
@@ -949,7 +931,6 @@ class IfeqDirective(ConditionalDirective):
         #
         # FIXME this ugly and slow and ugly and I'd like to fix it
         # (circular imports are circular)
-        from pymake.tokenizer import tokenize_statement
         from pymake.parsermk import parse_ifeq_conditionals
         expr = tokenize_statement(ScannerIterator(self.vcstring.chars, None))
         self.expr1, self.expr2 = parse_ifeq_conditionals(expr, self.name)
@@ -960,6 +941,9 @@ class IfeqDirective(ConditionalDirective):
             assert self.vcstring is not None
 
             self._parse()
+
+        if get_line_number(self) == 150:
+            breakpoint()
 
         s1 = self.expr1.eval(symbol_table)
         s2 = self.expr2.eval(symbol_table)
