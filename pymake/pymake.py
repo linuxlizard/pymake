@@ -224,7 +224,6 @@ def _execute_statement_list(stmt_list, curr_rules, rulesdb, symtable):
 #                if detailed_error_explain:
 #                    error_message(tok.get_pos(), err.description)
                 exit_code = 1
-                break
             except SystemExit:
                 raise
             except Exception as err:
@@ -235,7 +234,6 @@ def _execute_statement_list(stmt_list, curr_rules, rulesdb, symtable):
                 filename,pos = tok.get_pos()
                 logger.error("eval failed tok=%r file=%s pos=%s", tok, filename, pos)
                 exit_code = 1
-                break
     
         # leave early on error
         if exit_code:

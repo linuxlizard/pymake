@@ -3,6 +3,7 @@
 import os
 import logging
 import collections
+from enum import Enum
 
 import pymake.version as version
 import pymake.constants as constants
@@ -16,6 +17,21 @@ logger = logging.getLogger("pymake.symtable")
 #_fail_on_undefined = True
 _fail_on_undefined = False
 
+class Export(Enum):
+    # by default, var not exported
+    NOEXPORT = 0
+
+    # command line and env vars are always passed to submakes
+    SUBMAKE = 1<<1
+
+    # an 'export varname' statement exported this var
+    # (immune to global 'unexport')
+    EXPLICIT = 1<<2
+
+    # a global 'export' exported this var
+    # (will be undone by a global 'unexport')
+    IMPLICIT = 1<<3
+    
 # classes for vars saved in SymbolTable
 class Entry:
     origin = "(invalid origin)"
@@ -30,7 +46,7 @@ class Entry:
         # I'm not sure this is a good idea yet.
 #        self.read_only = False
 
-        self._export = False
+        self._export = Export.NOEXPORT.value
 
         # handle appended expressions
         self._appends = []
@@ -40,10 +56,20 @@ class Entry:
 
     @property
     def export(self):
-        return self._export
+        return not (self.never_export or self._export == Export.NOEXPORT)
 
-    def set_export(self, value):
-        self._export = value
+    def set_export(self, flag):
+        if self.never_export:
+            return
+
+        self._export = self._export | flag.value
+
+    def set_unexport(self, flag):
+        if self.never_export:
+            return
+
+        self._export = self._export & ~flag.value
+        
 
     @property
     def value(self):
@@ -68,6 +94,8 @@ class Entry:
         # vs   a:=10  (evaluated immediately and "10" stored in symtable)
         #
         if isinstance(self._value, Symbol):
+            if self.name=='KERNELRELEASE':
+                breakpoint()
             logger.debug("recursive eval %r name=%s at pos=%r", self, self.name, self.get_pos())
             if self.loop > 0:
                 msg = "Recursive variable %r references itself (eventually)" % self.name
@@ -121,13 +149,13 @@ class CallbackEntry(DefaultEntry):
         super().__init__(name)
 
         # self.eval() will call this fn to get a value
-        self.callback_fn = callback_fn
+        self._value = callback_fn
 
     def eval(self, symbol_table):
-        return self.callback_fn(symbol_table)
+        return self._value(symbol_table)
 
-# Environment Variables higher precedence than File variables.  But Command
-# Line args are high precedence than Environment Variables.
+# Environment Variables are higher precedence than File variables.  But Command
+# Line args are higher precedence than Environment Variables.
 # "By default, only variables that came from the environment or the
 # command line are passed to recursive invocations."
 # -- GNU Make manual  Version 4.3 Jan 2020
@@ -137,7 +165,7 @@ class EnvVarEntry(Entry):
     def __init__(self, name, value):
         pos = ("environment",(0,0))
         super().__init__(name,value,pos)
-        self.set_export( True )
+        self.set_export( Export.SUBMAKE )
 
 # Command line args are higher precedence than variables in the makefile except
 # if the variable is marked with 'override'
@@ -152,7 +180,7 @@ class CommandLineEntry(Entry):
 
     def __init__(self, name, value):
         super().__init__(name,value)
-        self.set_export(True)
+        self.set_export(Export.SUBMAKE)
 
     def set_value(self, value, pos):
         pass
@@ -179,7 +207,7 @@ class SymbolTable(object):
         # symbol table just to save/restore a single var)
         self.stack = {}
 
-        self.export_default_value = False
+        self.export_default_value = Export.NOEXPORT
 
         self.warn_undefined = kwargs.get("warn_undefined_variables", False)
 
@@ -364,7 +392,6 @@ class SymbolTable(object):
             return entry.append_recursive(value)
 
         # simple string append, space separated
-#        entry.set_value( entry.value+" "+value.eval(self), pos )
         try:
             entry.append(value.eval(self), pos)
         except AttributeError:
@@ -492,6 +519,19 @@ class SymbolTable(object):
         # is this varname in our symbol table (or other mechanisms)
         return name in self.symbols
         
+    def ifdef(self, name):
+        if not name in self.symbols:
+            return False
+
+        # it's in our table but does it have a value?
+        value = self.symbols[name]
+        assert value._value is not None
+
+        if not len(value._value):
+            return False
+
+        return True
+
     def export(self, name=None):
         if name is None:
             # export everything
@@ -499,11 +539,10 @@ class SymbolTable(object):
             return
 
         try:
-            value = self.symbols[name]
-            value.set_export(True)
+            value = self.symbols[name].set_export(Export.EXPLICIT)
         except KeyError:
             # no such entry
-            return
+            pass
 
     def unexport(self, name=None):
         if name is None:
@@ -512,11 +551,10 @@ class SymbolTable(object):
             return
 
         try:
-            value = self.symbols[name]
-            value.set_export(False)
+            self.symbols[name].set_unexport(Export.EXPLICIT)
         except KeyError:
             # no such entry
-            return
+            pass
 
     def undefine(self, name):
         # support the undefine directive
@@ -532,16 +570,13 @@ class SymbolTable(object):
 
     def _export_all(self):
         for k,v in self.symbols.items():
-            if not v.never_export:
-                v.set_export( True )
+            v.set_export( Export.IMPLICIT )
         # new vars from this point on will be marked as export
         self.export_start()
 
     def _unexport_all(self):
         for k,v in self.symbols.items():
-            if not v.never_export:
-                v.set_export(False)
-        # new vars from this point on will be marked as export
+            v.set_unexport(Export.IMPLICIT)
         self.export_stop()
 
     def get_exports(self):
@@ -559,10 +594,10 @@ class SymbolTable(object):
         # "By default, only variables that came from the environment or the
         # command line are passed to recursive invocations."
         #  -- GNU Make manual  Version 4.3 Jan 2020
-        self.export_default_value = True
+        self.export_default_value = Export.IMPLICIT
 
     def export_stop(self):
-        self.export_default_value = False
+        self.export_default_value = Export.NOEXPORT
 
     def command_line_start(self):
         # yuk ugly hack

@@ -15,8 +15,8 @@ $(info help=$(words $(help)) status=$(status))
 #$(info $(file))
 
 filename=hello.c
-include= $(shell cat $(filename) | grep include)
-$(info includes=$(include))
+includes= $(shell cat $(filename) | grep includes)
+$(info includes=$(includes))
 
 filename=mulmer.c
 $(info includes=$(include))
@@ -41,7 +41,8 @@ status:=$(.SHELLSTATUS)
 $(info fail=$(fail) status=$(status))
 
 # Permission denied
-fail= $(shell ./shell.mk)
+# FIXME not portable
+fail= $(shell /etc/shadow)
 status:=$(.SHELLSTATUS)
 $(info fail=$(fail) status=$(status))
 

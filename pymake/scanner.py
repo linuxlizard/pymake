@@ -35,7 +35,6 @@ class ScannerIterator(object):
     def lookahead(self):
         if self.idx >= self.max_idx:
             return None
-#        print("lookahead={0}".format(self.data[self.idx]))
         return self.data[self.idx]
 
     def pushback(self):
@@ -45,10 +44,8 @@ class ScannerIterator(object):
 
     def push_state(self):
         self.state_stack.append(self.idx)
-#        print( "push stack=", self.state_stack )
 
     def pop_state(self):
-#        print( "pop stack=", self.state_stack )
         self.idx = self.state_stack.pop()
 
     def remain(self):

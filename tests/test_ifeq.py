@@ -169,3 +169,15 @@ ifeq
     msg = run.pymake_should_fail(s)
     assert "invalid syntax in conditional" in msg
 
+def test_nested_evalutation():
+    s="""
+ifneq (0,1)
+foo:=1
+ifneq ($(foo),1)
+    $(error should not hit this)
+endif
+endif
+@:;@:
+"""
+    run.pymake_string(s)
+

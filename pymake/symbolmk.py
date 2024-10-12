@@ -176,7 +176,9 @@ class Expression(Symbol):
     def __getitem__(self, idx):
         return self.token_list[idx]
 
-    def __eq__(self, rhs):
+    def xxx__eq__(self, rhs):
+        assert 0, "do I use this anymore?"
+
         # Used in test code.
         #
         # lhs is self
@@ -538,6 +540,17 @@ class Directive(Symbol):
 class ExportDirective(Directive):
     name = "export"
 
+    # "If you want all variables to be exported by default, you can use export
+    # by itself:
+    # export
+    # "This tells make that variables which are not explicitly mentioned in an
+    # export or unexport directive should be exported. Any variable given in an
+    # unexport directive will still not be exported."
+    #  GNU make Version 4.3 January 2020
+
+    # /* (un)export by itself causes everything to be (un)exported. */ 
+    # src/read.c GNU Make 4.4.1 source
+
     def __init__(self, keyword, expression=None):
         # TODO 
         # make 3.81 "export define" not allowed ("missing separator")
@@ -568,10 +581,24 @@ class ExportDirective(Directive):
 class UnExportDirective(ExportDirective):
     name = "unexport"
 
+    # "Likewise, you can use unexport by itself to tell make not to export
+    # variables by default.  Since this is the default behavior, you would only
+    # need to do this if export had been used by itself earlier (in an included
+    # makefile, perhaps)."
+    #  GNU make Version 4.3 January 2020
+
+    # export by itself exports everything
+    # unexport turns that off. Variables explicitly export'd remain export.
+    #
+
     def eval(self, symbol_table):
-        s = self.expression.eval(symbol_table)
-        for name in s.split():
-            symbol_table.unexport(name)
+        if self.expression is None:
+            # unexport everything
+            symbol_table.unexport()
+        else:
+            s = self.expression.eval(symbol_table)
+            for name in s.split():
+                symbol_table.unexport(name)
 
         return ""
 
@@ -866,11 +893,19 @@ class ConditionalDirective(Directive):
 class IfdefDirective(ConditionalDirective):
     name = "ifdef"
 
+    # 
+    # "If the value of that variable has a non-empty value, the text-if-true is
+    # effective; otherwise, the text-if-false, if any, is effective. Variables
+    # that have never been defined have an empty value."
+    #
+    # This is different than the C preprocessor which treats even empty
+    # variables as ifdef'd => true
+    #
     def eval(self, symbol_table):
         # don't use .fetch() because we don't want to eval the expression in
         # the symbol table. We just want proof of exist.
         name = self._eval(symbol_table)
-        return symbol_table.is_defined(name)
+        return symbol_table.ifdef(name)
 
     def _parse(self):
         # FIXME this ugly and slow and ugly and I'd like to fix it
