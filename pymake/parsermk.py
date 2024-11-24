@@ -7,7 +7,8 @@ from pymake.error import *
 from pymake.symbolmk import *
 from pymake.printable import printable_char
 from pymake.scanner import ScannerIterator
-from pymake.tokenizer import tokenize_recipe, tokenize_assign_RHS, comment
+from pymake.tokenizer import tokenize_recipe, tokenize_assign_RHS,\
+    comment, seek_word, tokenize_assignment_statement
 import pymake.vline as vline
 from pymake.debug import *
 
@@ -467,85 +468,22 @@ def parse_include_directive(expr, directive_vstr, *ignore):
     # note we're passing in the parse function
     return klass(directive_vstr, expr)
 
-def seek_directive(viter, seek=directive):
-    # viter - character iterator
-    assert isinstance(viter, ScannerIterator), type(viter)
-
-    logger.debug("seek_directive")
-
-    if viter.is_empty():
-        # nothing to parse so nothing to find
-        logger.debug("seek_directive False")
-        return None
-
-    # we're looking ahead to see if we have a directive inside our set 'seek'
-    # so we need to save the state; we'll restore it on return if we haven't
-    # found a directive.
-    viter.push_state()
-
-    # Consume leading whitespace; throw a warning if first char is the recipeprefix.
+def seek_directive(viter):
+    # Throw a warning if first char is the recipeprefix.
     # GNU Make allows <tab><directive> so we have to carefully see if there's a
     # directive in what originally is a recipe line.
-    vcstr = vline.VCharString()
-
-    # look at first char first
-    vchar = next(viter)
+    # (This mimics what GNU Make does)
+    logger.debug("seek_directive at %r", viter.get_pos())
+    vchar = viter.lookahead()
     warn_on_recipe_prefix = None
-    if vchar.char == recipe_prefix:
+    if vchar and vchar.char == recipe_prefix:
         warn_on_recipe_prefix = vchar.get_pos()
         warn_msg = "recipe prefix means directive %r might be confused as a rule"
 
-    state_whitespace = 1  # ignore leading whitespace
-    state_char = 2
-    state_trailing_whitespace = 3
-
-    if vchar.char in whitespace:
-        state = state_whitespace
-    else:
-        state = state_char
-        vcstr += vchar
-
-#    print("seek_directive c={0} state={1}".format(printable_char(vchar.char), state))
-
-    for vchar in viter:
-        # continue to ignore leading whitespace
-#        print("seek_directive c={0} state={1} pos={2}".format(printable_char(vchar.char), state, vchar.get_pos()))
-        if state == state_whitespace:
-            if not vchar.char in whitespace:
-                state = state_char
-                vcstr += vchar
-
-        elif state == state_char:
-            if vchar.char in whitespace:
-                state = state_trailing_whitespace
-            elif vchar.char in eol:
-                state = state_trailing_whitespace
-            elif vchar.char == '#':
-                viter.pushback()
-                comment(viter)                
-            else:
-                vcstr += vchar
-
-        elif state == state_trailing_whitespace:
-            if vchar.char not in whitespace:
-                # push back the char we just looked at
-                viter.pushback()
-                break
-
-    # did we find a directive amidst all this whitespace?
-    s = str(vcstr)
-    if s in directive:
-        # we found a directive
-        logger.debug("seek_directive found \"%s\" at %r", s, vcstr.get_pos())
-
-        if warn_on_recipe_prefix:
-            warning_message(warn_on_recipe_prefix, warn_msg % str(vcstr))
-        return vcstr
-
-    # nope, not a directive
-    viter.pop_state()
-    logger.debug("seek_directive none")
-    return None
+    vstr = seek_word(viter, seek=directive)
+    if vstr is not None and warn_on_recipe_prefix:
+        warning_message(warn_on_recipe_prefix, warn_msg % str(vstr))
+    return vstr
 
 def handle_conditional_directive(directive_inst, vline_iter):
     # GNU make doesn't parse the stuff inside the conditional unless the
@@ -573,13 +511,10 @@ def handle_conditional_directive(directive_inst, vline_iter):
     # the entire makefile assuming correct syntax OR raise a syntax error.
     # Unfortunately, invalid syntax is now detected at eval-time. My bad. 
 
-    logger.debug("handle_conditional_directive \"%s\"", directive_inst)
+    logger.debug("handle_conditional_directive \"%s\" at %r", directive_inst, directive_inst.get_pos())
 
     # call should have sent us a Directive instance (stupid human check)
     assert isinstance(directive_inst,ConditionalDirective), type(directive_inst)
-
-#    print( "handle_conditional_directive() \"{0}\" line={1}".format(
-#        directive_inst.name, line_scanner.idx-1))
 
     state_if = 1
     state_else = 3
@@ -621,21 +556,31 @@ def handle_conditional_directive(directive_inst, vline_iter):
 #        print("h state={0}".format(state))
 #        print("={0}".format(str(virt_line)), end="")
 
+        viter = iter(virt_line)
+
+        # first check if this is an assignment statement
+        # (mimic exactly what GNU Make eval() does)
+        # need to do this first to catch stuff like
+        # ifdef:=12345 
+        stmt = tokenize_assignment_statement(iter(virt_line))
+        if stmt:
+            # found an assignment
+            line_list.append(virt_line)
+            continue
+
         # search for nested directive 
 
-        viter = iter(virt_line)
         directive_vstr = seek_directive(viter)
 
         if directive_vstr is None:
             # not another conditional, just plain normal everyday "something"
             # save the line into the block
-#            print("save \"{0}\"".format(printable_string(str(virt_line))))
             line_list.append(virt_line)
             continue
 
         dir_str = str(directive_vstr)
 
-        if dir_str in conditional_directive : 
+        if dir_str in conditional_open : 
             # save the block of stuff we've read
             line_list = save_block(line_list)
 
@@ -659,7 +604,7 @@ def handle_conditional_directive(directive_inst, vline_iter):
             # handle "else ifCOND"
 
             # look for a following conditional directive
-            directive_vstr = seek_directive(viter, conditional_directive)
+            directive_vstr = seek_word(viter, seek=conditional_open)
             if directive_vstr: 
                 # found an "else ifsomething"
                 dir_str = str(directive_vstr)
@@ -686,7 +631,7 @@ def handle_conditional_directive(directive_inst, vline_iter):
             state = state_endif
 
         else : 
-            # we found another directive inside our if directive block(s)
+            # we found stuff to be parsed later
             line_list.append(virt_line)
 
         if state==state_endif : 
@@ -723,12 +668,18 @@ def error_extraneous(expr, directive_str, virt_line, vline_iter):
 
 def parse_directive(expr, directive_vstr, virt_line, vline_iter):
     # expr - Expression instance
-    #       We've started to consume token_list[0] which is a Literal containing the name of the directive 
-    #       (ifdef, ifeq, etc). The directive_str and viter come from token_list[0]
-    # directive_str - python string indicating which directive we found at the start of the Expression token_list[0]
-    # virt_line - the entire directive as a virtual line (XXX do I need this? probably not)
+    #       We've started to consume token_list[0] which is a Literal
+    #       containing the name of the directive (ifdef, ifeq, etc). The
+    #       directive_str and viter come from token_list[0]
+    #
+    # directive_str - python string indicating which directive we found at the
+    #       start of the Expression token_list[0] 
+    #
+    # virt_line - the entire directive as a virtual line so can parse the rest
+    #       of the line
+    #
     # vline_iter - virtualline iterator across the input; need this to make
-    #              LineBlock et al for contents of the ifdef/ifeq directives
+    #       LineBlock et al for contents of the ifdef/ifeq directives
     #
     logger.debug("parse_directive() \"%s\" at pos=%r",
             directive_vstr, virt_line.get_pos())
@@ -739,11 +690,11 @@ def parse_directive(expr, directive_vstr, virt_line, vline_iter):
         "ifdef" : parse_ifdef_directive,
         "ifndef" : parse_ifdef_directive,
         "define" : parse_define_directive,
-        "export" : parse_export_directive,
-        "unexport" : parse_export_directive,
+#        "export" : parse_export_directive,
+#        "unexport" : parse_export_directive,
         "endif" : error_extraneous,
-        "undefine" : parse_undefine_directive,
-        "override" : parse_override_directive,
+#        "undefine" : parse_undefine_directive,
+#        "override" : parse_override_directive,
         "include" : parse_include_directive,
         "-include" : parse_include_directive,
         "sinclude" : parse_include_directive,
@@ -752,6 +703,9 @@ def parse_directive(expr, directive_vstr, virt_line, vline_iter):
     return lut[str(directive_vstr)](expr, directive_vstr, virt_line, vline_iter)
 
 def parse_expression(expr, virt_line, vline_iter):
+    # davep 20241123 ; obsolete 
+    assert 0, "TODO"
+
     # This is a second pass through an Expression.
     # An Expression could be something like:
     #   $(info blah blah)  # fn call ; most are invalid in standalone context

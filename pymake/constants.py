@@ -1,5 +1,3 @@
-import string
-
 # can't use string.whitespace because want to preserve line endings
 whitespace = set(' \t')
 
@@ -41,22 +39,29 @@ built_in_targets = {
 
 # Conditionals separate because conditionals can be multi-line and require some
 # complex handling.
-conditional_directive = {
+conditional_open = {
     "ifdef", "ifndef", 
     # newer versions of Make? (TODO verify when these appeared)
     "ifeq", "ifneq"
 }
 
-# all directives
-directive = {
-    "define", "enddef", "undefine",
+conditional_close = {
     "else", "endif",
-    "include", "-include", "sinclude",
-    "override", 
+}
+
+conditional_directive = conditional_open | conditional_close
+
+assignment_modifier = {
     "export", "unexport",
-    "private", 
+    "override", "private", "define", "undefine"
+}
+
+# all directives (pseudo "reserved words")
+directive = {
+    "enddef",
+    "include", "-include", "sinclude",
     "vpath",
-} | conditional_directive
+} | conditional_directive | assignment_modifier
 
 # directives are all lowercase and the - from "-include"
 #directive_chars = set(string.ascii_lowercase) | set("-")

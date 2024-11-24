@@ -56,3 +56,7 @@ For example, foreach.mk-test.txt and foreach.mk-ground.txt will contain the
 result of the tests/foreach.mk 
 
 
+# POSIX
+
+https://pubs.opengroup.org/onlinepubs/9799919799/
+

@@ -56,7 +56,7 @@ class Entry:
 
     @property
     def export(self):
-        return not (self.never_export or self._export == Export.NOEXPORT)
+        return (not self.never_export) and (self._export != Export.NOEXPORT.value)
 
     def set_export(self, flag):
         if self.never_export:
@@ -94,7 +94,7 @@ class Entry:
         # vs   a:=10  (evaluated immediately and "10" stored in symtable)
         #
         if isinstance(self._value, Symbol):
-            if self.name=='KERNELRELEASE':
+            if self.name=='include':
                 breakpoint()
             logger.debug("recursive eval %r name=%s at pos=%r", self, self.name, self.get_pos())
             if self.loop > 0:

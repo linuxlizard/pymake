@@ -1,8 +1,13 @@
+# SPDX-License-Identifier: GPL-2.0
+# Copyright (C) David Poole david.poole@ericsson.com
+
 import logging
+import string
 
 _debug = True
 
 logger = logging.getLogger("pymake.tokenize")
+#logger.setLevel(level=logging.DEBUG)
 
 from pymake.constants import *
 from pymake.error import *
@@ -103,6 +108,9 @@ def tokenize_statement(vchar_scanner):
     # get the starting position of this string (for error reporting)
     starting_pos = vchar_scanner.lookahead().pos
 
+#    # davep 20241116 ; rewriting the tokenizer from scratch to better match GNU Make's eval()-read.c
+#    assert 0
+
     logger.debug("tokenize_statement() pos=%s", starting_pos)
 
     # save current position in the token stream
@@ -172,7 +180,6 @@ def tokenize_statement(vchar_scanner):
         # LHS should be one an array of Symbol. We'll dig into the Expression
         # during the 2nd pass.
 
-#        breakpoint()
         return Expression(lhs)
 
     # should not get here
@@ -180,9 +187,37 @@ def tokenize_statement(vchar_scanner):
 
 
 def tokenize_statement_LHS(vchar_scanner):
+
+    assert 0, "FIXME do not use this anymore"
+
+
     # Tokenize the LHS of a rule or an assignment statement. A rule uses
     # whitespace as a separator. An assignment statement preserves internal
     # whitespace but leading/trailing whitespace is stripped.
+
+    # I'm using this function as the first stop in tokenizing *everything*
+    # (rule, assignment, and plain expression).  A Rule or Assignment has a
+    # terminating Operator (Rule uses :, Assignment uses = := += etc). 
+    #
+    # The problem is a plain Expression is hard to disambiguate from an
+    # assignment.
+    #
+    # export CC=gcc is an assignment
+    # ifeq (=CC,=CC) is an expression
+    #
+    # I can't blindly look for colon or assignment to terminate the tokenzing
+    # and assume I have an LHS. I have to carefully maintain state of the
+    # characters I see.
+    #
+    # GNU make uses raw C strings and jumps around in the string. I'm not doing
+    # that. I decided to be clever and use a state machine.
+    #
+    
+    # Expression is single function like $(info) or $(warning) or a directive
+    # (ifdef, etc). Not all functions are valid in statement context.  A lone
+    # Expression in GNU Make usually triggers the "missing separator" error
+    # because the parser gets confused.
+    #
 
     logger.debug("tokenize_statement_LHS()")
 
@@ -194,14 +229,13 @@ def tokenize_statement_LHS(vchar_scanner):
     state_colon_colon = 6
     state_error = 7
 
-    state = state_start
     # array of vchar
     token = vline.VCharString()
 
     token_list = []
 
     def pushtoken(t):
-        # if we have something to make a literal from,
+        # if we have something to make a literal from then
         if len(t):
             # create the literal, save to the token_list
             token_list.append(Literal(t))
@@ -225,16 +259,104 @@ def tokenize_statement_LHS(vchar_scanner):
     #   ifdef:   <--- legal (verified 3.81, 3.82, 4.0)
     #   ifdef =  <--- legal
     #   ifdef=   <--- legal
-    # 
-    # Expression is single function like $(info) or $(warning). Not all
-    # functions are valid in statement context.  A lone Expression in GNU Make
-    # usually triggers the "missing separator" error because the parser gets
-    # confused.
-    #
+
+
+    def tokenize_expression(token):
+
+        state = state_start
+
+        for vchar in vchar_scanner : 
+            c = vchar.char
+            logger.debug("e c={} state={} idx={} token=\"{}\" pos={} src={}".format(
+                printable_char(c), state, vchar_scanner.idx, str(token), vchar.pos, vchar.filename))
+
+            if state==state_start:
+                if c in whitespace: 
+                    # save whitespace as its own Literal
+                    token += vchar
+                else :
+                    # whatever it is, push it back so can tokenize it
+                    vchar_scanner.pushback()
+                    # save the whitespace string we've seen so far
+                    token = pushtoken(token)
+                    state = state_in_word
+
+            elif state==state_in_word:
+                if c==backslash:
+                    state = state_backslash
+                    token += vchar
+
+                elif c in whitespace:
+                    # end of word
+                    # and start new token
+                    token = pushtoken(token)
+
+                    # jump back to start searching for next symbol
+                    vchar_scanner.pushback()
+                    state = state_start
+
+                elif c=='$':
+                    state = state_dollar
+
+                elif c=='#':
+                    # capture anything we might have seen 
+                    # and start new token
+                    token = pushtoken(token)
+                    # done with this line
+                    # eat the comment (which lets us cleanly drop out of the loop
+                    # as well as sanity check the scanner)
+                    vchar_scanner.pushback()
+                    comment(vchar_scanner)
+
+                elif c in eol : 
+                    # capture any leftover when the line ended
+                    token = pushtoken(token)
+                    # end of line; bye!
+                    break
+
+                else :
+                    assert isinstance(token, vline.VCharString), type(token)
+                    assert isinstance(vchar, vline.VChar), type(vchar)
+                    token += vchar
+
+            elif state==state_dollar :
+                if c=='$':
+                    # literal $
+                    token += vchar 
+                else:
+                    # save token so far (if any)
+                    # also starts new token
+                    token = pushtoken(token)
+                    
+                    # jump to variable_ref tokenizer
+                    # restore "$" + "(" in the scanner
+                    vchar_scanner.pushback()
+                    vchar_scanner.pushback()
+
+                    # jump to var_ref tokenizer
+                    token_list.append( tokenize_variable_ref(vchar_scanner) )
+
+                state=state_in_word
+
+            elif state==state_backslash :
+                # literal '\' + somechar
+                token += vchar
+                state = state_in_word
+
+            else:
+                # wtf?
+                assert 0, state
+
+        # ran out of string; save anything we might have seen
+        token = pushtoken(token)
+
 
     # get the starting position of this scanner (for error reporting)
     starting_pos = vchar_scanner.lookahead().pos
     logger.debug("LHS starting_pos=%s", starting_pos)
+
+    state = state_start
+    start_count = 0
 
     for vchar in vchar_scanner : 
         # ha ha type checking
@@ -245,6 +367,13 @@ def tokenize_statement_LHS(vchar_scanner):
             printable_char(c), state, vchar_scanner.idx, str(token), vchar.pos, vchar.filename))
 
         if state==state_start:
+#            if start_count == 2:
+#                # the rules need to change here
+#                logger.debug("jump to expression tokenizer")
+#                vchar_scanner.pushback()
+#                tokenize_expression( token )
+#                return [token_list, None]
+
             # eat whitespace while in the starting state
             # NOTE: we will NEVER call this function for a Recipe so always ignore RECIPEPREFIX
             if c in whitespace: 
@@ -261,6 +390,7 @@ def tokenize_statement_LHS(vchar_scanner):
                 # save the whitespace string we've seen so far
                 token = pushtoken(token)
                 state = state_in_word
+                start_count += 1
 
         elif state==state_in_word:
             if c==backslash:
@@ -322,6 +452,7 @@ def tokenize_statement_LHS(vchar_scanner):
             else :
                 assert isinstance(token, vline.VCharString), type(token)
                 assert isinstance(vchar, vline.VChar), type(vchar)
+
                 token += vchar
 
         elif state==state_dollar :
@@ -434,15 +565,15 @@ def tokenize_rule_prereq_or_assign(vchar_scanner):
         # FIXME 20230205 I've broken this with the new LHS tokenizer
         raise NotImplementedError()
 
-        statement = tokenize_statement_LHS(vchar_scanner)
-        assert isinstance(statement, list)
-        assert isinstance(statement[0], Expression)
-
-        # verify the operator parsed correctly 
-        assert str(statement[-1].string) in assignment_operators
-
-        statement.append( tokenize_assign_RHS(vchar_scanner) )
-        rhs = AssignmentExpression( statement )
+#        statement = tokenize_statement_LHS(vchar_scanner)
+#        assert isinstance(statement, list)
+#        assert isinstance(statement[0], Expression)
+#
+#        # verify the operator parsed correctly 
+#        assert str(statement[-1].string) in assignment_operators
+#
+#        statement.append( tokenize_assign_RHS(vchar_scanner) )
+#        rhs = AssignmentExpression( statement )
     else : 
         assert isinstance(rhs,PrerequisiteList)
 
@@ -622,6 +753,7 @@ def tokenize_rule_RHS(vchar_scanner):
                 return None
             else:
                 # implicit pattern rule
+                breakpoint()
                 raise NotImplementedError()
 
         elif state==state_double_colon : 
@@ -684,7 +816,7 @@ def tokenize_assign_RHS(vchar_scanner):
 
     for vchar in vchar_scanner :
         c = vchar.char
-        logger.debug("a c={0} state={1} idx={2}".format(printable_char(c), state, vchar_scanner.idx, vchar_scanner.remain()))
+        logger.debug("r c={0} state={1} idx={2}".format(printable_char(c), state, vchar_scanner.idx, vchar_scanner.remain()))
 
         if state==state_whitespace :
             if not c in whitespace : 
@@ -981,5 +1113,392 @@ def tokenize_recipe(vchar_scanner):
         assert 0, state
 
     return Recipe( token_list )
+
+def tokenize_assignment_expression(vchar_scanner):
+
+    # Assume this statement is an assignment and attempt to tokenize it as such.
+    # Return None if this statement is not an assignment.
+
+    # array of vchar
+    token = vline.VCharString()
+
+    token_list = []
+
+    state_start = 1
+    state_in_word = 2
+    state_dollar = 3
+    state_backslash = 4
+    state_colon = 5
+    state_colon_colon = 6
+    state_seek_assign = 7
+
+    state = state_start
+
+    def savetoken(t):
+        # if we have something to make a literal from then
+        if len(t):
+            # create the literal, save to the token_list
+            token_list.append(Literal(t))
+        # then start new token
+        return vline.VCharString()
+
+    for vchar in vchar_scanner:
+        c = vchar.char
+
+        logger.debug("a c={} state={} idx={} token=\"{}\" pos={} src={}".format(
+            printable_char(c), state, vchar_scanner.idx, str(token), vchar.pos, vchar.filename))
+
+        if state==state_start:
+            # eat whitespace while in the starting state
+            if c in whitespace: 
+                # save whitespace as its own Literal
+                token += vchar
+            else :
+                # whatever it is, push it back so can tokenize it
+                vchar_scanner.pushback()
+                # save the whitespace string we've seen so far
+                token = savetoken(token)
+                state = state_in_word
+
+        elif state==state_in_word:
+            if c==backslash:
+                state = state_backslash
+                token += vchar
+
+            elif c in whitespace:
+                # end of word
+                # and start new token
+                token = savetoken(token)
+
+                # Whitespace and AssignOp is the only way to separate the fields of
+                # an assignment statement. We've seen a word. Now we need to
+                # look for an Assignment Operator. If we don't seen an
+                # Assignment Operator next, we're not an Assignment statement.
+                vchar_scanner.pushback()
+                state = state_seek_assign
+
+            elif c=='$':
+                state = state_dollar
+
+            elif c=='#':
+                # at this point, we have ended useful input and 
+                # we haven't found an assignment
+                return None
+
+            elif c==':':
+                # start new token
+                token = savetoken(token)
+                # keep scanning until we know what colon token we've seen
+                token += vchar
+                state = state_colon
+
+            elif c in set("?+!"):
+                # maybe assignment ?= += !=
+                # cheat and peekahead
+                if vchar_scanner.lookahead().char == '=':
+                    token = savetoken(token)
+                    # consume the character
+                    eq = vchar_scanner.next()
+                    operator = AssignOp(vline.VCharString([vchar, eq]))
+
+                    statement = [ Expression(token_list), 
+                                  operator, 
+                                  tokenize_assign_RHS(vchar_scanner)
+                                ]
+                    return AssignmentExpression(statement)
+
+                else:
+                    token += vchar
+
+            elif c=='=':
+                # definitely an assignment 
+                token = savetoken(token)
+                operator = AssignOp(vline.VCharString([vchar]))
+
+                statement = [ Expression(token_list), 
+                              operator, 
+                              tokenize_assign_RHS(vchar_scanner)
+                            ]
+                return AssignmentExpression(statement)
+
+            elif c in eol : 
+                # end of line without finding assignment operator; bye!
+                break
+                
+            else :
+                assert isinstance(token, vline.VCharString), type(token)
+                assert isinstance(vchar, vline.VChar), type(vchar)
+
+                token += vchar
+
+        elif state==state_dollar :
+            if c=='$':
+                # literal $
+                token += vchar 
+            else:
+                # save token so far (if any)
+                # also starts new token
+                token = savetoken(token)
+                
+                # jump to variable_ref tokenizer
+                # restore "$" + "(" in the scanner
+                vchar_scanner.pushback()
+                vchar_scanner.pushback()
+
+                # jump to var_ref tokenizer
+                token_list.append( tokenize_variable_ref(vchar_scanner) )
+
+            state=state_in_word
+
+        elif state==state_backslash :
+            # literal '\' + somechar
+            # FIXME I'm probably doing this wrong. Need to lookup the \x to see
+            # if it's a valid char. What does GNU Make do?
+            token += vchar
+            state = state_in_word
+
+        elif state==state_colon :
+            # assignment end of LHS is := or ::= 
+            # rule's end of target(s) is either a single ':' or double colon '::'
+            if c==':':
+                # double colon
+                state = state_colon_colon
+                token += vchar
+            elif c=='=':
+                # :=
+                # end of LHS
+                token += vchar
+                statement = [ Expression(token_list), 
+                              AssignOp(token), 
+                              tokenize_assign_RHS(vchar_scanner)
+                            ]
+                return AssignmentExpression(statement)
+            else:
+                # Single ':' followed by something we don't care about.
+                # Might be a rule.
+                return None
+
+        elif state==state_colon_colon :
+            # preceeding chars are "::"
+            if c=='=':
+                # ::= 
+                token += vchar
+                statement = [ Expression(token_list), 
+                              AssignOp(token), 
+                              tokenize_assign_RHS(vchar_scanner)
+                            ]
+                return AssignmentExpression(statement)
+
+            # double :: followed by something we don't care about. 
+            # Might be a rule.
+            return None
+
+        elif state == state_seek_assign:
+            # At this point we've seen one string then some whitespace.
+            # Since variable names cannot contain whitespace, the next thing we
+            # need to find is an assignment operator OR we're definitely not an
+            # assignment statement.
+
+            if c in whitespace: 
+                # save whitespace as its own Literal
+                token += vchar
+
+            elif c == ':':
+                # end of current token
+                token = savetoken(token)
+                token += vchar
+
+                # allow := ::= :::=
+                while len(token) <= 3:
+                    peek = vchar_scanner.lookahead().char
+
+                    if peek == '=':
+                        # found :=
+                        # consume the '='
+                        token += vchar_scanner.next()
+                        assign = AssignOp(token)
+                        statement = [ Expression(token_list), 
+                                      assign,
+                                      tokenize_assign_RHS(vchar_scanner)
+                                    ]
+                        return AssignmentExpression(statement)
+                    elif peek == ':':
+                        # consume the ':'
+                        # go back for more
+                        token += vchar_scanner.next()
+                    else:
+                        break
+
+                return None
+
+            elif c == '=':
+                token = savetoken(token)
+                # definitely an assignment!
+                operator = AssignOp(vline.VCharString([vchar]))
+
+                statement = [ Expression(token_list), 
+                              operator, 
+                              tokenize_assign_RHS(vchar_scanner)
+                            ]
+                return AssignmentExpression(statement)
+
+            elif c in set("?+!"):
+                if vchar_scanner.lookahead().char == '=':
+                    eq = vchar_scanner.next()
+                    assign = AssignOp(vline.VCharString([vchar, eq]))
+
+                    statement = [ Expression(token_list), 
+                                  assign,
+                                  tokenize_assign_RHS(vchar_scanner)
+                                ]
+                    return AssignmentExpression(statement)
+
+                else:
+                    # TODO
+                    raise ParseError(pos=vchar.pos)
+
+            else:
+                # we wind up here when we're looking for an assignment operator
+                # but find something else.
+                # We also wind up here with something like "export CC=gcc" where
+                # we export+assign in the same statement
+                return None
+
+            # endif state == state_assign
+
+        else:
+            # should not get here
+            assert 0, state
+
+def seek_word(viter, seek):
+    # viter - character iterator
+    # * eat leading whitespace
+    # * look for a string in set 'seek'
+    #   string will always be [a-z][A-Z]+
+    # * eat trailing whitespace so iterator is positioned at 
+    #   next possible char
+    #
+    # If we don't find something in set seek, restore the state of viter
+
+    # ha ha type checking
+    _ = viter.pushback
+    _ = seek.union
+
+    charset = set(c for s in seek for c in s)
+
+    if _debug:
+        logger.debug("seek_word seek=%r", seek)
+    else:
+        logger.debug("seek_word")
+
+    if viter.is_empty():
+        # nothing to parse so nothing to find
+        logger.debug("seek_word False")
+        return None
+
+    # we're looking ahead to see if we have a "reserved word" inside our set 'seek'
+    # so we need to save the state; we'll restore it on return if we haven't
+    # found a "reserved word".
+    viter.push_state()
+
+    vcstr = vline.VCharString()
+
+    # look at first char first
+    vchar = next(viter)
+
+    state_whitespace = 1  # ignore leading whitespace
+    state_char = 2
+    state_trailing_whitespace = 3
+
+    if vchar.char in whitespace:
+        state = state_whitespace
+    else:
+        state = state_char
+        vcstr += vchar
+
+#    print("seek_word c={0} state={1}".format(printable_char(vchar.char), state))
+
+    for vchar in viter:
+        c = vchar.char
+
+        # continue to ignore leading whitespace
+#        print("seek_word c={0} state={1} pos={2}".format(printable_char(vchar.char), state, vchar.get_pos()))
+        if state == state_whitespace:
+            if not c in whitespace:
+                state = state_char
+                viter.pushback()
+
+        elif state == state_char:
+            if c in whitespace|eol:
+                state = state_trailing_whitespace
+            elif c == '#':
+                viter.pushback()
+                comment(viter)                
+            elif c not in charset:
+                # definitely not something we are looking for
+                vcstr.clear()
+                viter.pushback()
+                break
+            else:
+                vcstr += vchar
+
+        elif state == state_trailing_whitespace:
+            if c == '#':
+                viter.pushback()
+                comment(viter)                
+            elif c not in whitespace|eol:
+                # push back the char we just looked at
+                # so caller gets a clean iterator
+                viter.pushback()
+                break
+
+    # did we find a "reserved word" amidst all this whitespace?
+    s = str(vcstr)
+    if s in seek:
+        # yay! we found a "reserved word"!
+        logger.debug("seek_word found \"%s\" at %r", s, vcstr.get_pos())
+        viter.clear_state()
+        return vcstr
+
+    # nope, not a "reserved word"
+    viter.pop_state()
+    logger.debug("seek_word False")
+    return None
+
+def tokenize_assignment_statement(vchar_scanner):
+    # look for an assignment expression
+    # if that fails, look for a modified assignment expression, one with 
+    # export | unexport | override | private | define | undefine
+    # can have multiple modifiers e.g.,
+    # export private override CC=gcc
+    
+    pos = vchar_scanner.get_pos()
+    logger.debug("tokenize_assignment_statement at %r", pos)
+
+    modifier_list = []
+
+    while True:
+        # loop to capture multiple modifiers
+        vchar_scanner.push_state()
+
+        e = tokenize_assignment_expression(vchar_scanner)
+        if isinstance(e, AssignmentExpression):
+            assert vchar_scanner.is_empty(), "".join([v.char for v in vchar_scanner.remain()])
+            if modifier_list:
+                e.add_modifiers(modifier_list)
+            return e
+
+        vchar_scanner.pop_state()
+
+        # start over looking for export, etc.
+        token = seek_word(vchar_scanner, directive)
+
+        m = str(token)
+        if m not in assignment_modifier:
+            logger.debug("not an assignment statement at %r", pos)
+            return None
+
+        logger.debug("assignment_modifier \"%m\" found", m)
+        modifier_list.append(m)
 
 

@@ -39,7 +39,8 @@ __all__ = [ "Symbol",
             "MinusIncludeDirective",
             "SIncludeDirective",
             "VpathDirective",
-            "OverrideDirective",
+#            "OverrideDirective",
+#            "PrivateDirective",
             "LineBlock",
             "ConditionalBlock",
             "ConditionalDirective",
@@ -136,11 +137,19 @@ class Literal(Symbol):
             breakpoint()
         assert len(vstring)
 
+        # cache the literal string
+        self._str = str(vstring)
+
         super().__init__(vstring)
     
     def eval(self, symbol_table):
         # everything returns a single string
-        return str(self.string)
+        return self._str
+
+    @property
+    def literal(self):
+        # convenience method for the tokenzparser
+        return self._str
 
 class Operator(Symbol):
     pass
@@ -248,8 +257,9 @@ class VarRef(Expression):
         return symbol_table.fetch("".join(key), self.get_pos())
 
 class AssignmentExpression(Expression):
-    def __init__(self, token_list):
+    def __init__(self, token_list, modifier_list=None):
         super().__init__(token_list)
+        self.modifier_list = [] if modifier_list is None else modifier_list
         self.sanity()
             
     @staticmethod
@@ -327,6 +337,26 @@ class AssignmentExpression(Expression):
         assert isinstance(self.token_list[0], Expression), type(self.token_list[0])
         assert isinstance(self.token_list[1], AssignOp), type(self.token_list[1])
         assert isinstance(self.token_list[2], Expression), type(self.token_list[2])
+
+    def add_modifiers(self, modifier_list):
+        assert modifier_list
+        self.modifier_list = modifier_list
+
+    def __str__(self):
+        if not self.modifier_list:
+            return super().__str__()
+        s = "{0}([".format(self.__class__.__name__)
+        s += ", ".join([str(t) for t in self.token_list])
+        s += "],["
+        s += ", ".join(['"%s"'%m for m in self.modifier_list])
+        s += "])"
+        return s
+
+    def makefile(self):
+        if not self.modifier_list:
+            return super().makefile()
+        m = " ".join(self.modifier_list) + " " + super().makefile()
+        return m
 
 class RuleExpression(Expression):
     # Rules are tokenized in multiple steps. First the target + prerequisites
@@ -655,25 +685,43 @@ class SIncludeDirective(MinusIncludeDirective):
 class VpathDirective(Directive):
     name = "vpath"
 
-class OverrideDirective(Directive):
-    name = "override"
-
-    def __init__(self, expression ):
-        description="Override requires an assignment expression."
-        if expression is None :
-            # must have an expression (bare override not allowed)
-            raise ParseError(description=description)
-        if not isinstance(expression, AssignmentExpression):
-            # must have an assignment expression            
-            raise ParseError(description=description)
-
-        super().__init__(expression)
-
-    def eval(self, symbol_table):
-        o = self.expression.eval(symbol_table)
+#class OverrideDirective(Directive):
+#    name = "override"
+#
+#    def __init__(self, expression ):
+#        description="Override requires an assignment expression."
+#        if expression is None :
+#            # must have an expression (bare override not allowed)
+#            raise ParseError(description=description)
+#        if not isinstance(expression, AssignmentExpression):
+#            # must have an assignment expression            
+#            raise ParseError(description=description)
+#
+#        super().__init__(expression)
+#
+#    def eval(self, symbol_table):
+#        o = self.expression.eval(symbol_table)
+#        # TODO I'm unsure how to get this integrated with the symbol table yet
 #        breakpoint()
-        # TODO I'm unsure how to get this integrated with the symbol table yet
 
+#class PrivateDirective(Directive):
+#    name = "private"
+#
+#    def __init__(self, expression ):
+#        description="Private requires an assignment expression."
+#        if expression is None :
+#            # must have an expression (bare override not allowed)
+#            raise ParseError(description=description)
+#        if not isinstance(expression, AssignmentExpression):
+#            # must have an assignment expression            
+#            raise ParseError(description=description)
+#
+#        super().__init__(expression)
+#
+#    def eval(self, symbol_table):
+#        o = self.expression.eval(symbol_table)
+#        # TODO I'm unsure how to get this integrated with the symbol table yet
+#        breakpoint()
 
 class LineBlock(Symbol):
     # Pile of unparsed code inside a conditional directive or a define

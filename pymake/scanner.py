@@ -48,6 +48,11 @@ class ScannerIterator(object):
     def pop_state(self):
         self.idx = self.state_stack.pop()
 
+    def clear_state(self):
+        # remove previous state pushed but do not restore it
+        # (we pushed but decided we didn't need to pop)
+        _ = self.state_stack.pop()
+
     def remain(self):
         # Test/debug method. Return what remains of the data.
         return self.data[self.idx:]
@@ -55,3 +60,5 @@ class ScannerIterator(object):
     def is_empty(self):
         return self.idx >= self.max_idx
 
+    def get_pos(self):
+        return self.data[self.idx].get_pos()

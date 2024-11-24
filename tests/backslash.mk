@@ -323,6 +323,12 @@ leading-backslash-3\
             bar
 $(info = 3 foo bar=3 $(leading-backslash-3))
 
+SRC\
+=\
+hello.c\
+
+$(info SRC=$(SRC))
+
 # implicit "catch all" rule to trap busted rules 
 % : ; @echo {implicit} $@
 

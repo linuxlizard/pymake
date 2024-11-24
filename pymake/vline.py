@@ -205,7 +205,8 @@ class VCharString(object):
     def from_string(cls, python_string):
         # make a VCharString from a regular python string (mostly used with
         # testing so the positions and filename will be nonsense)
-        return cls([VChar(c, (0,0), "/dev/null") for c in python_string])
+        cnt = itertools.count(0)
+        return cls([VChar(c, (0,next(cnt)), "/dev/null") for c in python_string])
 
     def validate(self):
         validate_vchars(self.chars)
@@ -219,6 +220,9 @@ class VCharString(object):
     def get_pos(self):
         # XXX what about empty VCharString ?
         return self.chars[0].filename, self.chars[0].pos
+
+    def clear(self):
+        self.chars = []
 
 class VirtualLine(object):
     def __init__(self, phys_lines_list, starting_pos, filename):

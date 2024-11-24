@@ -14,7 +14,7 @@ $(info help=$(words $(help)) status=$(status))
 #file=hello.c
 #$(info $(file))
 
-filename=hello.c
+filename=tests/hello.c
 includes= $(shell cat $(filename) | grep includes)
 $(info includes=$(includes))
 
