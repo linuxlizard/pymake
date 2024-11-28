@@ -1,17 +1,16 @@
 # SPDX-License-Identifier: GPL-2.0
 # Copyright (C) David Poole david.poole@ericsson.com
 
-# simple example showing the virtual line iterator which handles backslashes
-# and maintains a file+row+col for every character
-#
-# See tests/backslash.mk for notes+tests of how GNU Make handles \
-#
+# simple example showing how to use some of the components of pymake
 # run with:
-# PYTHONPATH=. python3 examples/backslash.py
+# PYTHONPATH=. python3 examples/statement.py
 #
-# davep 20241116
+# davep 20241117
 
 import sys
+import logging
+
+logger = logging.getLogger("pymake")
 
 import pymake.source as source
 import pymake.vline as vline
@@ -29,15 +28,18 @@ def main(infilename):
     # (backslash)
     vline_iter = vline.get_vline(src.name, line_scanner)
 
-    # iterate over a file showing single lines joined by backslash
     for virt_line in vline_iter:
-        pos = virt_line.get_pos()
         s = str(virt_line)
-        print(f"{pos} {s}")
+        print(s,end="")
+        vchar_scanner = iter(virt_line)
+        stmt = tokenizer.tokenize_statement(vchar_scanner)
+        print(stmt)
 
 if __name__ == '__main__':
+    logging.basicConfig(level=logging.INFO)
     for infilename in sys.argv[1:]:
         main(infilename)
     else:
         print("usage: %s makefile1 [makefile2 [makefile3...]]", file=sys.stderr)
+
 

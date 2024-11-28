@@ -89,6 +89,9 @@ def tokenize_undefine_directive(vchar_scanner):
     raise NotImplementedError("undefine")
 
 def tokenize_statement(vchar_scanner):
+    # davep 20241116 ; rewriting the tokenizer from scratch to better match GNU Make's eval()-read.c
+    assert 0, "DO NOT USE"
+
     # vchar_scanner == ScannerIterator
     #
     # at start of scanning, we don't know if this is a rule or an assignment
@@ -107,9 +110,6 @@ def tokenize_statement(vchar_scanner):
 
     # get the starting position of this string (for error reporting)
     starting_pos = vchar_scanner.lookahead().pos
-
-#    # davep 20241116 ; rewriting the tokenizer from scratch to better match GNU Make's eval()-read.c
-#    assert 0
 
     logger.debug("tokenize_statement() pos=%s", starting_pos)
 
@@ -184,6 +184,118 @@ def tokenize_statement(vchar_scanner):
 
     # should not get here
     assert 0, operator
+
+
+def tokenize_line(vchar_scanner):
+
+    logger.debug("tokenize_line at %r", vchar_scanner.get_pos())
+
+    state_start = 1
+    state_in_word = 2
+    state_dollar = 3
+    state_backslash = 4
+
+    # array of vchar
+    token = vline.VCharString()
+
+    token_list = []
+
+    def pushtoken(t):
+        # if we have something to make a literal from then
+        if len(t):
+            # create the literal, save to the token_list
+            token_list.append(Literal(t))
+        # then start new token
+        return vline.VCharString()
+
+    state = state_start
+
+    for vchar in vchar_scanner : 
+        c = vchar.char
+        logger.debug("e c={} state={} idx={} token=\"{}\" pos={} src={}".format(
+            printable_char(c), state, vchar_scanner.idx, str(token), vchar.pos, vchar.filename))
+
+        if state==state_start:
+            if c in whitespace: 
+                # save whitespace as its own Literal
+                token += vchar
+            else :
+                # whatever it is, push it back so can tokenize it
+                vchar_scanner.pushback()
+                # save the whitespace string we've seen so far
+                token = pushtoken(token)
+                state = state_in_word
+
+        elif state==state_in_word:
+            if c==backslash:
+                state = state_backslash
+                token += vchar
+
+            elif c in whitespace:
+                # end of word
+                # and start new token
+                token = pushtoken(token)
+
+                # jump back to start searching for next symbol
+                vchar_scanner.pushback()
+                state = state_start
+
+            elif c=='$':
+                state = state_dollar
+
+            elif c=='#':
+                # capture anything we might have seen 
+                # and start new token
+                token = pushtoken(token)
+                # done with this line
+                # eat the comment (which lets us cleanly drop out of the loop
+                # as well as sanity check the scanner)
+                vchar_scanner.pushback()
+                comment(vchar_scanner)
+
+            elif c in eol : 
+                # capture any leftover when the line ended
+                token = pushtoken(token)
+                # end of line; bye!
+                break
+
+            else :
+                assert isinstance(token, vline.VCharString), type(token)
+                assert isinstance(vchar, vline.VChar), type(vchar)
+                token += vchar
+
+        elif state==state_dollar :
+            if c=='$':
+                # literal $
+                token += vchar 
+            else:
+                # save token so far (if any)
+                # also starts new token
+                token = pushtoken(token)
+                
+                # jump to variable_ref tokenizer
+                # restore "$" + "(" in the scanner
+                vchar_scanner.pushback()
+                vchar_scanner.pushback()
+
+                # jump to var_ref tokenizer
+                token_list.append( tokenize_variable_ref(vchar_scanner) )
+
+            state=state_in_word
+
+        elif state==state_backslash :
+            # literal '\' + somechar
+            token += vchar
+            state = state_in_word
+
+        else:
+            # wtf?
+            assert 0, state
+
+    # ran out of string; save anything we might have seen
+    token = pushtoken(token)
+
+    return token_list
 
 
 def tokenize_statement_LHS(vchar_scanner):
@@ -261,95 +373,6 @@ def tokenize_statement_LHS(vchar_scanner):
     #   ifdef=   <--- legal
 
 
-    def tokenize_expression(token):
-
-        state = state_start
-
-        for vchar in vchar_scanner : 
-            c = vchar.char
-            logger.debug("e c={} state={} idx={} token=\"{}\" pos={} src={}".format(
-                printable_char(c), state, vchar_scanner.idx, str(token), vchar.pos, vchar.filename))
-
-            if state==state_start:
-                if c in whitespace: 
-                    # save whitespace as its own Literal
-                    token += vchar
-                else :
-                    # whatever it is, push it back so can tokenize it
-                    vchar_scanner.pushback()
-                    # save the whitespace string we've seen so far
-                    token = pushtoken(token)
-                    state = state_in_word
-
-            elif state==state_in_word:
-                if c==backslash:
-                    state = state_backslash
-                    token += vchar
-
-                elif c in whitespace:
-                    # end of word
-                    # and start new token
-                    token = pushtoken(token)
-
-                    # jump back to start searching for next symbol
-                    vchar_scanner.pushback()
-                    state = state_start
-
-                elif c=='$':
-                    state = state_dollar
-
-                elif c=='#':
-                    # capture anything we might have seen 
-                    # and start new token
-                    token = pushtoken(token)
-                    # done with this line
-                    # eat the comment (which lets us cleanly drop out of the loop
-                    # as well as sanity check the scanner)
-                    vchar_scanner.pushback()
-                    comment(vchar_scanner)
-
-                elif c in eol : 
-                    # capture any leftover when the line ended
-                    token = pushtoken(token)
-                    # end of line; bye!
-                    break
-
-                else :
-                    assert isinstance(token, vline.VCharString), type(token)
-                    assert isinstance(vchar, vline.VChar), type(vchar)
-                    token += vchar
-
-            elif state==state_dollar :
-                if c=='$':
-                    # literal $
-                    token += vchar 
-                else:
-                    # save token so far (if any)
-                    # also starts new token
-                    token = pushtoken(token)
-                    
-                    # jump to variable_ref tokenizer
-                    # restore "$" + "(" in the scanner
-                    vchar_scanner.pushback()
-                    vchar_scanner.pushback()
-
-                    # jump to var_ref tokenizer
-                    token_list.append( tokenize_variable_ref(vchar_scanner) )
-
-                state=state_in_word
-
-            elif state==state_backslash :
-                # literal '\' + somechar
-                token += vchar
-                state = state_in_word
-
-            else:
-                # wtf?
-                assert 0, state
-
-        # ran out of string; save anything we might have seen
-        token = pushtoken(token)
-
 
     # get the starting position of this scanner (for error reporting)
     starting_pos = vchar_scanner.lookahead().pos
@@ -367,13 +390,6 @@ def tokenize_statement_LHS(vchar_scanner):
             printable_char(c), state, vchar_scanner.idx, str(token), vchar.pos, vchar.filename))
 
         if state==state_start:
-#            if start_count == 2:
-#                # the rules need to change here
-#                logger.debug("jump to expression tokenizer")
-#                vchar_scanner.pushback()
-#                tokenize_expression( token )
-#                return [token_list, None]
-
             # eat whitespace while in the starting state
             # NOTE: we will NEVER call this function for a Recipe so always ignore RECIPEPREFIX
             if c in whitespace: 
@@ -794,6 +810,9 @@ def tokenize_rule_RHS(vchar_scanner):
     assert 0, state
 
 def tokenize_assign_RHS(vchar_scanner):
+    # davep 20241124 ; do not use this function anymore; use tokenize_line()
+    assert 0, "FIXME do not use this function anymore; use tokenize_line"
+
     logger.debug("tokenize_assign_RHS()")
 
     state_start = 1
@@ -1203,7 +1222,7 @@ def tokenize_assignment_expression(vchar_scanner):
 
                     statement = [ Expression(token_list), 
                                   operator, 
-                                  tokenize_assign_RHS(vchar_scanner)
+                                  Expression(tokenize_line(vchar_scanner))
                                 ]
                     return AssignmentExpression(statement)
 
@@ -1217,7 +1236,7 @@ def tokenize_assignment_expression(vchar_scanner):
 
                 statement = [ Expression(token_list), 
                               operator, 
-                              tokenize_assign_RHS(vchar_scanner)
+                              Expression(tokenize_line(vchar_scanner))
                             ]
                 return AssignmentExpression(statement)
 
@@ -1270,7 +1289,7 @@ def tokenize_assignment_expression(vchar_scanner):
                 token += vchar
                 statement = [ Expression(token_list), 
                               AssignOp(token), 
-                              tokenize_assign_RHS(vchar_scanner)
+                              Expression(tokenize_line(vchar_scanner))
                             ]
                 return AssignmentExpression(statement)
             else:
@@ -1285,7 +1304,7 @@ def tokenize_assignment_expression(vchar_scanner):
                 token += vchar
                 statement = [ Expression(token_list), 
                               AssignOp(token), 
-                              tokenize_assign_RHS(vchar_scanner)
+                              Expression(tokenize_line(vchar_scanner))
                             ]
                 return AssignmentExpression(statement)
 
@@ -1319,7 +1338,7 @@ def tokenize_assignment_expression(vchar_scanner):
                         assign = AssignOp(token)
                         statement = [ Expression(token_list), 
                                       assign,
-                                      tokenize_assign_RHS(vchar_scanner)
+                                      Expression(tokenize_line(vchar_scanner))
                                     ]
                         return AssignmentExpression(statement)
                     elif peek == ':':
@@ -1338,7 +1357,7 @@ def tokenize_assignment_expression(vchar_scanner):
 
                 statement = [ Expression(token_list), 
                               operator, 
-                              tokenize_assign_RHS(vchar_scanner)
+                              Expression(tokenize_line(vchar_scanner))
                             ]
                 return AssignmentExpression(statement)
 
@@ -1349,7 +1368,7 @@ def tokenize_assignment_expression(vchar_scanner):
 
                     statement = [ Expression(token_list), 
                                   assign,
-                                  tokenize_assign_RHS(vchar_scanner)
+                                  Expression(tokenize_line(vchar_scanner))
                                 ]
                     return AssignmentExpression(statement)
 
@@ -1371,6 +1390,9 @@ def tokenize_assignment_expression(vchar_scanner):
             assert 0, state
 
 def seek_word(viter, seek):
+    # seek a specific word from set 'seek'
+    # used to find GNU Make's "reserved" words (define, ifdef, etc)
+    #
     # viter - character iterator
     # * eat leading whitespace
     # * look for a string in set 'seek'
@@ -1378,12 +1400,16 @@ def seek_word(viter, seek):
     # * eat trailing whitespace so iterator is positioned at 
     #   next possible char
     #
-    # If we don't find something in set seek, restore the state of viter
+    # seek - set of strings
+    #
+    # If we don't find something in set 'seek', restore the state of viter
 
     # ha ha type checking
     _ = viter.pushback
     _ = seek.union
 
+    # if we find any non-whitespace outside this set, we definitely don't have
+    # a word in set 'seek'
     charset = set(c for s in seek for c in s)
 
     if _debug:
@@ -1477,6 +1503,8 @@ def tokenize_assignment_statement(vchar_scanner):
 
     modifier_list = []
 
+    vchar_scanner.push_state()
+
     while True:
         # loop to capture multiple modifiers
         vchar_scanner.push_state()
@@ -1484,6 +1512,12 @@ def tokenize_assignment_statement(vchar_scanner):
         e = tokenize_assignment_expression(vchar_scanner)
         if isinstance(e, AssignmentExpression):
             assert vchar_scanner.is_empty(), "".join([v.char for v in vchar_scanner.remain()])
+
+            # clear the pushed state at top of the loop
+            vchar_scanner.clear_state()
+            # clean the pushed state at top of the function
+            vchar_scanner.clear_state()
+
             if modifier_list:
                 e.add_modifiers(modifier_list)
             return e
@@ -1496,6 +1530,8 @@ def tokenize_assignment_statement(vchar_scanner):
         m = str(token)
         if m not in assignment_modifier:
             logger.debug("not an assignment statement at %r", pos)
+            # restore scanner to state it was at start of function
+            vchar_scanner.pop_state()
             return None
 
         logger.debug("assignment_modifier \"%m\" found", m)

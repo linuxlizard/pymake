@@ -548,6 +548,9 @@ class Directive(Symbol):
         # ha ha type checking.  keyword needs to be a VCharString which tells
         # us the file+position of the directive
         assert isinstance(keyword, VCharString), type(keyword)
+        if expression:
+            assert expression.makefile
+
 
         super().__init__(keyword)
 
@@ -588,6 +591,10 @@ class ExportDirective(Directive):
         # make 4.0  works
 #        if not(Version.major==3 and Version.minor==81) : 
 #            raise TODO()
+
+        # davep 20241124 ; FIXME export handled differently now that it can be
+        # bundled with the AssignmentExpression
+        assert 0, "TODO"
 
         super().__init__(keyword, expression)
 

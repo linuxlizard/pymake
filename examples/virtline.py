@@ -4,6 +4,9 @@
 # simple example showing the virtual line iterator which handles backslashes
 # and maintains a file+row+col for every character
 #
+# run with:
+# PYTHONPATH=. python3 examples/virtline.py
+#
 # davep 20241116
 
 import sys
@@ -37,4 +40,7 @@ if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
     for infilename in sys.argv[1:]:
         main(infilename)
+    else:
+        print("usage: %s makefile1 [makefile2 [makefile3...]]", file=sys.stderr)
+
 

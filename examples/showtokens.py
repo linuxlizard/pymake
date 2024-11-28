@@ -2,6 +2,10 @@
 # Copyright (C) David Poole david.poole@ericsson.com
 
 # simple example showing how to use some of the components of pymake
+#
+# run with:
+# PYTHONPATH=. python3 examples/showtokens.py
+#
 # davep 20241117
 
 import sys
@@ -36,4 +40,7 @@ if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
     for infilename in sys.argv[1:]:
         main(infilename)
+    else:
+        print("usage: %s makefile1 [makefile2 [makefile3...]]", file=sys.stderr)
+
 
