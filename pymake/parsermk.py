@@ -499,7 +499,7 @@ def parse_include_directive(expr, directive_vstr, *ignore):
     # note we're passing in the parse function
     return klass(directive_vstr, expr)
 
-def seek_directive(viter):
+def seek_directive(viter, seek):
     # Throw a warning if first char is the recipeprefix.
     # GNU Make allows <tab><directive> so we have to carefully see if there's a
     # directive in what originally is a recipe line.
@@ -511,7 +511,7 @@ def seek_directive(viter):
         warn_on_recipe_prefix = vchar.get_pos()
         warn_msg = "recipe prefix means directive %r might be confused as a rule"
 
-    vstr = seek_word(viter, seek=directive)
+    vstr = seek_word(viter, seek)
     if vstr is not None and warn_on_recipe_prefix:
         warning_message(warn_on_recipe_prefix, warn_msg % str(vstr))
     return vstr
@@ -601,7 +601,7 @@ def handle_conditional_directive(directive_inst, vline_iter):
 
         # search for nested directive 
 
-        directive_vstr = seek_directive(vchar_scanner)
+        directive_vstr = seek_directive(vchar_scanner, conditional_directive)
 
         if directive_vstr is None:
             # not another conditional, just plain normal everyday "something"

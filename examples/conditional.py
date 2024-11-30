@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-2.0
 # Copyright (C) David Poole david.poole@ericsson.com
 
-# Testing finding conditional blocks.
+# Demo finding conditional blocks.
 #
 # run with:
 # PYTHONPATH=. python3 examples/conditional.py
@@ -17,13 +17,9 @@ from pymake import tokenizer
 from pymake.constants import *
 from pymake.parsermk import seek_directive, parse_directive
 
-from gnu_make import run_gnu_make
+from gnu_make import run_gnu_make, debug_save
 
 logger = logging.getLogger("pymake")
-
-def debug_save(lines):
-    with open("/tmp/tmp.mk","w") as outfile:
-        outfile.write("".join(lines))
 
 def main():
     name = "conditional-block-test"

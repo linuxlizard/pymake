@@ -5,7 +5,7 @@ import logging
 logger = logging.getLogger("pymake.symbol")
 #logger.setLevel(level=logging.DEBUG)
 
-from pymake.constants import whitespace
+from pymake.constants import whitespace, rule_operators, assignment_operators
 from pymake.printable import printable_char, printable_string
 from pymake.vline import VirtualLine, VChar, VCharString, get_vline
 from pymake.version import Version
@@ -156,11 +156,15 @@ class Operator(Symbol):
 
 class AssignOp(Operator):
     # An assignment symbol, one of { "=" | ":=" | "?=" | "+=" | "!=" | "::=" }
-    pass
+    def __init__(self, vstr):
+        assert str(vstr) in assignment_operators, str(vstr)
+        super().__init__(vstr)
     
 class RuleOp(Operator):
     # A rule symbol, one of { ":" | "::" }
-    pass
+    def __init__(self, vstr):
+        assert str(vstr) in rule_operators, str(vstr)
+        super().__init__(vstr)
 
 class Expression(Symbol):
     # An Expression is a list of Symbols. An Expression self.string is None
@@ -338,9 +342,13 @@ class AssignmentExpression(Expression):
         assert isinstance(self.token_list[1], AssignOp), type(self.token_list[1])
         assert isinstance(self.token_list[2], Expression), type(self.token_list[2])
 
+        for m in self.modifier_list:
+            assert isinstance(m, VCharString), type(m)
+
     def add_modifiers(self, modifier_list):
         assert modifier_list
         self.modifier_list = modifier_list
+        self.sanity()
 
     def __str__(self):
         if not self.modifier_list:
@@ -355,7 +363,7 @@ class AssignmentExpression(Expression):
     def makefile(self):
         if not self.modifier_list:
             return super().makefile()
-        m = " ".join(self.modifier_list) + " " + super().makefile()
+        m = " ".join( ("%s"%m for m in self.modifier_list) ) + " " + super().makefile()
         return m
 
 class RuleExpression(Expression):

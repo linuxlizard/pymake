@@ -22,7 +22,7 @@ def _view(token_list):
 
 def comment(vchar_scanner):
     # Seems weird to character by character consume a line comment until the
-    # end of line. This function used to keep the char scanner in sync with
+    # end of line. This function is used to keep the char scanner in sync with
     # expected results. There are some places where I'm making sure I've
     # consumed the entire line.
     vchar = next(vchar_scanner)
@@ -80,6 +80,7 @@ def tokenize_define_directive(vchar_scanner):
                 macro_name += vchar
 
         else:
+            # wtf?
             assert 0, state
 
     return macro_name
@@ -88,7 +89,7 @@ def tokenize_define_directive(vchar_scanner):
 def tokenize_undefine_directive(vchar_scanner):
     raise NotImplementedError("undefine")
 
-def tokenize_statement(vchar_scanner):
+def old_tokenize_statement(vchar_scanner):
     # davep 20241116 ; rewriting the tokenizer from scratch to better match GNU Make's eval()-read.c
     assert 0, "DO NOT USE"
 
@@ -556,65 +557,254 @@ def tokenize_statement_LHS(vchar_scanner):
     return [token_list, None ]
 
 
-def tokenize_rule_prereq_or_assign(vchar_scanner):
-    # We are on the RHS of a rule's : or ::
-    # We may have a set of prerequisites
-    # or we may have a target specific assignment.
-    # or we may have nothing at all!
-    #
-    # End of the rule's RHS is ';' or EOL.  The ';' may be followed by a
-    # recipe.
+def tokenize_rule(vchar_scanner):
 
-    logger.debug("tokenize_rule_prereq_or_assign()")
+    # Tokenize the LHS of a rule. 
+    # A rule uses whitespace as a separator. 
+    # A rule LHS can terminate with : or :: or &: 
 
-    # save current position in the token stream
-    vchar_scanner.push_state()
-    rhs = tokenize_rule_RHS(vchar_scanner)
+    # GNU make uses raw C strings and jumps around in the string. I'm not doing
+    # that. I decided to be clever and use a state machine.
+    
+    logger.debug("tokenize_rule()")
 
-    # Not a prereq. We found ourselves an assignment statement.
-    if rhs is None : 
-        vchar_scanner.pop_state()
+    state_start = 1
+    state_in_word = 2
+    state_dollar = 3
+    state_backslash = 4
+    state_colon = 5
 
-        # We have target-specifc assignment. For example:
-        # foo : CC=intel-cc
-        # retokenize as an assignment statement
-        # FIXME 20230205 I've broken this with the new LHS tokenizer
-        raise NotImplementedError()
+    # array of vchar
+    token = vline.VCharString()
 
-#        statement = tokenize_statement_LHS(vchar_scanner)
-#        assert isinstance(statement, list)
-#        assert isinstance(statement[0], Expression)
+    token_list = []
+
+    def pushtoken(t):
+        # if we have something to make a literal from then
+        if len(t):
+            # create the literal, save to the token_list
+            token_list.append(Literal(t))
+        # then start new token
+        return vline.VCharString()
+
+    # get the starting position of this scanner (for error reporting)
+    starting_pos = vchar_scanner.lookahead().pos
+    logger.debug("LHS starting_pos=%s", starting_pos)
+
+    state = state_start
+    start_count = 0
+
+    for vchar in vchar_scanner : 
+        # ha ha type checking
+        assert vchar.filename 
+
+        c = vchar.char
+        logger.debug("s c={} state={} idx={} token=\"{}\" pos={} src={}".format(
+            printable_char(c), state, vchar_scanner.idx, str(token), vchar.pos, vchar.filename))
+
+        if state==state_start:
+            # eat whitespace while in the starting state
+            # NOTE: we will NEVER call this function for a Recipe so always ignore RECIPEPREFIX
+            if c in whitespace: 
+                # save whitespace as its own Literal
+                token += vchar
+            elif c==':':
+                state = state_colon
+                # save the whitespace string we've seen so far
+                token = pushtoken(token)
+                token += vchar
+            else :
+                # whatever it is, push it back so can tokenize it
+                vchar_scanner.pushback()
+                # save the whitespace string we've seen so far
+                token = pushtoken(token)
+                state = state_in_word
+                start_count += 1
+
+        elif state==state_in_word:
+            if c==backslash:
+                state = state_backslash
+                token += vchar
+
+            elif c in whitespace:
+                # end of word
+                # and start new token
+                token = pushtoken(token)
+
+                # jump back to start searching for next symbol
+                vchar_scanner.pushback()
+                state = state_start
+
+            elif c=='$':
+                state = state_dollar
+
+            elif c=='#':
+                # capture anything we might have seen 
+                # and start new token
+                token = pushtoken(token)
+                # done with this line
+                # eat the comment (which lets us cleanly drop out of the loop
+                # as well as sanity check the scanner)
+                vchar_scanner.pushback()
+                comment(vchar_scanner)
+
+            elif c==':':
+                # likely the end of rule LHS
+                # start new token
+                token = pushtoken(token)
+                # keep scanning until we know what colon token we've seen
+                token += vchar
+                state = state_colon
+
+            elif c=='&':
+                # maybe grouped targets
+                # cheat and peekahead
+                if vchar_scanner.lookahead().char == ':':
+                    raise NotImplementedError("&:")
+                else:
+                    token += vchar
+
+            elif c in eol : 
+                # capture any leftover when the line ended
+                token = pushtoken(token)
+                # end of line; bye!
+                break
+                
+            else :
+                assert isinstance(token, vline.VCharString), type(token)
+                assert isinstance(vchar, vline.VChar), type(vchar)
+                token += vchar
+
+        elif state==state_dollar :
+            if c=='$':
+                # literal $
+                token += vchar 
+            else:
+                # save token so far (if any)
+                # also starts new token
+                token = pushtoken(token)
+                
+                # jump to variable_ref tokenizer
+                # restore "$" + "(" in the scanner
+                vchar_scanner.pushback()
+                vchar_scanner.pushback()
+
+                # jump to var_ref tokenizer
+                token_list.append( tokenize_variable_ref(vchar_scanner) )
+
+            state=state_in_word
+
+        elif state==state_backslash :
+            # literal '\' + somechar
+            # FIXME I'm doing backslashes wrong
+            token += vchar
+            state = state_in_word
+
+        elif state==state_colon :
+            # rule's end of target(s) is either a single ':' or double colon '::'
+            if c==':':
+                # double colon rule
+                token += vchar
+                return [token_list, RuleOp(token)]
+
+            else:
+                # Single ':' followed by something. Whatever it was, put it back!
+                vchar_scanner.pushback()
+                # successfully found rule LHS 
+                return [token_list, RuleOp(token)]
+
+        else:
+            # should not get here
+            assert 0, state
+
+    # ran out of string; save anything we might have seen
+    token = pushtoken(token)
+
+    logger.debug("end of rule LHS state=%d", state)
+
+    # hit end of scanner; what was our final state?
+    if state==state_colon:
+        # Found a regular Rule
+        # ":"
+        return [token_list, RuleOp(":") ]
+
+    if state==state_colon_colon:
+        # Found a double colon Rule
+        # "::"
+        return [token_list, RuleOp("::") ]
+
+    # We didn't find something that could be considered a rule.
+    return None
+
+
+#def tokenize_rule_prereq_or_assign(vchar_scanner):
+#    # We are on the RHS of a rule's : or ::
+#    # We may have a set of prerequisites
+#    # or we may have a target specific assignment.
+#    # or we may have nothing at all!
+#    #
+#    # End of the rule's RHS is ';' or EOL.  The ';' may be followed by a
+#    # recipe.
 #
-#        # verify the operator parsed correctly 
-#        assert str(statement[-1].string) in assignment_operators
+#    logger.debug("tokenize_rule_prereq_or_assign()")
 #
-#        statement.append( tokenize_assign_RHS(vchar_scanner) )
-#        rhs = AssignmentExpression( statement )
-    else : 
-        assert isinstance(rhs,PrerequisiteList)
-
-    # stupid human check
-    for token in rhs : 
-        assert isinstance(token,Symbol),(type(token), token)
-
-    return rhs
+#    # save current position in the token stream
+#    vchar_scanner.push_state()
+#    rhs = tokenize_rule_RHS(vchar_scanner)
+#
+#    # Not a prereq. We found ourselves an assignment statement.
+#    if rhs is None : 
+#        vchar_scanner.pop_state()
+#
+#        # We have target-specifc assignment. For example:
+#        # foo : CC=intel-cc
+#        # retokenize as an assignment statement
+#        # FIXME 20230205 I've broken this with the new LHS tokenizer
+#        raise NotImplementedError()
+#
+##        statement = tokenize_statement_LHS(vchar_scanner)
+##        assert isinstance(statement, list)
+##        assert isinstance(statement[0], Expression)
+##
+##        # verify the operator parsed correctly 
+##        assert str(statement[-1].string) in assignment_operators
+##
+##        statement.append( tokenize_assign_RHS(vchar_scanner) )
+##        rhs = AssignmentExpression( statement )
+#    else : 
+#        assert isinstance(rhs,PrerequisiteList)
+#
+#    # stupid human check
+#    for token in rhs : 
+#        assert isinstance(token,Symbol),(type(token), token)
+#
+#    return rhs
 
 def tokenize_rule_RHS(vchar_scanner):
 
     # RHS ::=                       -->  empty perfectly valid
     #     ::= symbols               -->  simple rule's prerequisites
-    #     ::= symbols : symbols     -->  implicit pattern rule
-    #     ::= symbols | symbols     -->  order only prerequisite
+    #     ::= symbols ':' symbols     -->  implicit pattern rule
+    #     ::= symbols '|' symbols     -->  order only prerequisite
     #     ::= assignment            -->  target specific assignment 
     #
-    # RHS terminated by comment, EOL, ';'
-
+    # symbol ::= Literal | VarRef
+    #
+    # RHS terminated by comment or EOL or ';'
+    
     logger.debug("tokenize_rule_RHS()")
+
+    # GNU Make checks for assignment first and thus so shall we.
+    a = tokenize_assignment_statement(vchar_scanner)
+    if a :
+        logger.debug("tokenize_rule_RHS found an assignment at pos=%r", a.get_pos())
+        return a
+    # this is a big function and I worry about polluting my namespace
+    del a
 
     state_start = 1
     state_word = 2
     state_colon = 3
-    state_double_colon = 4
     state_dollar = 5
     state_whitespace = 6
     state_backslash = 7
@@ -680,25 +870,11 @@ def tokenize_rule_RHS(vchar_scanner):
 
             elif c==':':
                 state = state_colon
-                # assignment? 
-                # implicit pattern rule?
+                # implicit pattern rule or double colon rule
 
             elif c=='|':
-                # We have hit token indicating order-only prerequisite.
-                raise NotImplementedError
-
-            elif c in set("?+!"):
-                # maybe assignment ?= += !=
-                # cheat and peekahead
-                if vchar_scanner.lookahead().char=='=':
-                    # definitely an assign; bail out and we'll retokenize as assign
-                    return None
-                else:
-                    token += vchar 
-
-            elif c=='=':
-                # definitely an assign; bail out and we'll retokenize as assign
-                return None
+                # We have hit order-only prerequisite.
+                raise NotImplementedError()
 
             elif c=='#':
                 # comment so ignore from here to the end of line
@@ -754,34 +930,14 @@ def tokenize_rule_RHS(vchar_scanner):
 
                 # jump to var_ref tokenizer
                 token_list.append( tokenize_variable_ref(vchar_scanner) )
-#                print("token_list=",token_list)
-#                print("token_list=", " ".join([t.makefile() for t in token_list]))
 
             state = state_word
 
         elif state==state_colon : 
-            if c==':':
-                # maybe ::= 
-                state = state_double_colon
-            elif c=='=':
-                # found := so definitely a rule specific  assignment; bail out
-                # and we'll retokenize as assignment
-                return None
-            else:
-                # implicit pattern rule
-                breakpoint()
-                raise NotImplementedError()
-
-        elif state==state_double_colon : 
-            # at this point, we found ::
-            if c=='=':
-                # definitely assign
-                # bail out and retokenize as assign
-                return None
-            else:
-                # is this an implicit pattern rule?
-                # or a parse error?
-                raise NotImplementedError()
+            # found a : on the Rule's right hand side
+            # static pattern rule, e.g.
+            # $(objects): %.o: %.c
+            raise NotImplementedError("static pattern rule")
 
         elif state==state_backslash : 
             if not c in eol : 
@@ -1534,7 +1690,7 @@ def tokenize_assignment_statement(vchar_scanner):
             vchar_scanner.pop_state()
             return None
 
-        logger.debug("assignment_modifier \"%m\" found", m)
-        modifier_list.append(m)
+        logger.debug("assignment_modifier \"%s\" found", m)
+        modifier_list.append(token)
 
 

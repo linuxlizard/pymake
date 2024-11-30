@@ -126,6 +126,7 @@ def main():
 
         "export unexport override private define foo=\n",
         "endef\n",
+
     ]
 
     test_errors()
@@ -173,12 +174,10 @@ def main():
                 m2 = fixws(m)
                 assert s2 == m2, (s,s2,m,m2)
         
-#        expr = parsermk.parse_expression(stmt, virt_line, vline_iter)
-#        print(f"expr={expr}")
 
 if __name__ == '__main__':
 #    logging.basicConfig(level=logging.DEBUG)
-#    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=logging.INFO)
 #    logging.getLogger("pymake.vline").setLevel(level=logging.DEBUG)
     logging.getLogger("pymake.tokenize").setLevel(level=logging.DEBUG)
     main()

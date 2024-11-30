@@ -1,49 +1,61 @@
 # SPDX-License-Identifier: GPL-2.0
 # Copyright (C) David Poole david.poole@ericsson.com
-
-# Demo simple tokenizing
+#
+# Demo parsing.
 #
 # run with:
-# PYTHONPATH=. python3 examples/tokeniz.py
+# PYTHONPATH=. python3 examples/parse.py
 #
-# davep 20241124
+# davep 20241129
 
 import logging
 
 import pymake.source as source
 import pymake.vline as vline
+from pymake.pymake import parse_vline
 from pymake.scanner import ScannerIterator
-from pymake import tokenizer
 
 from gnu_make import run_gnu_make, debug_save
 
 logger = logging.getLogger("pymake")
 
-def main():
-    name = "expression-test"
+# A list of lines as if read from a makefile.
+test_file = """
+# build hello, world
+CC?=gcc
+CFLAGS?=-Wall
 
-    # A list of lines as if read from a makefile.
-    # (must be a valid makefile for this test)
-    test_file = """
-ifeq (a,b)
+EXE:=hello
+OBJ:=hello.o
+
+ifdef DEBUG
+CFLAGS+=-g
 endif
-a:=b
-a := b
-ifeq 'a' 'b'
-endif
 
-$(info a=$(a))
-a:=
-$(a)
+all: $(EXE)
+	echo successfully built $(EXE)
 
-all: $(SRC)
+hello : hello.o
+	$(CC) $(CFLAGS) -o $@ $^
+
+hello.o : hello.c
+	$(CC) $(CFLAGS) -c -o $@ $^
+
+hello.c:
+	echo 'int main(){}' > hello.c
+    
+clean : ; $(RM) $(OBJ) $(EXE)
 """
+
+def main():
+    name = "parser-block-test"
+
     src = source.SourceString(test_file)
     src.load()
 
     debug_save(src.file_lines)
 
-    # run through GNU Make to verify we're valid 
+    # verify everything works in GNU Make
     run_gnu_make(src.file_lines)
 
     # iterator across all actual lines of the makefile
@@ -55,17 +67,9 @@ all: $(SRC)
     vline_iter = vline.get_vline(name, line_scanner)
 
     for virt_line in vline_iter:
-        s = str(virt_line).strip()
-        print(f"input=\"{s}\"")
-
-        vchar_scanner = iter(virt_line)
-
-        # a very simple tokenize pass that simply splits into Literals (whitespace or non-whitespace)
-        # and variable ref $()
-        # Pretty much anything can be tokenized into a simple token_list
-        token_list = tokenizer.tokenize_line(vchar_scanner)
-        assert isinstance(token_list,list), type(token_list)
-        print(token_list)
+        stmt = parse_vline( virt_line, vline_iter )
+        assert stmt
+        print(stmt)
 
 if __name__ == '__main__':
 #    logging.basicConfig(level=logging.DEBUG)

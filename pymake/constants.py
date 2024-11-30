@@ -3,7 +3,7 @@ whitespace = set(' \t')
 
 # davep 04-Dec-2014 ; FIXME ::= != are not in Make 3.81, 3.82 (Introduced in 4.0)
 assignment_operators = {"=", "?=", ":=", "::=", "+=", "!="}
-rule_operators = {":", "::"}
+rule_operators = {":", "::", "?:" }
 eol = set("\r\n")
 
 # eventually will need to port this thing to Windows' CR+LF
@@ -56,15 +56,15 @@ assignment_modifier = {
     "override", "private", "define", "undefine"
 }
 
+include_directive = {
+    "include", "-include", "sinclude",
+}
+
 # all directives (pseudo "reserved words")
 directive = {
     "enddef",
-    "include", "-include", "sinclude",
     "vpath",
-} | conditional_directive | assignment_modifier
-
-# directives are all lowercase and the - from "-include"
-#directive_chars = set(string.ascii_lowercase) | set("-")
+} | conditional_directive | assignment_modifier | include_directive
 
 automatic_variables = {
     "@",

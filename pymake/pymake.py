@@ -21,7 +21,7 @@ import pymake.symbolmk as symbolmk
 from pymake.symbolmk import *
 from pymake.constants import *
 from pymake.error import *
-from pymake.tokenizer import tokenize_statement
+import pymake.tokenizer as tokenizer
 import pymake.parsermk as parsermk
 import pymake.source as source
 from pymake.symtablemk import SymbolTable
@@ -39,7 +39,102 @@ def get_basename( filename ) :
 def _view(token_list):
     return "".join([str(t) for t in token_list])
 
+def parse_vline(virt_line, vline_iter): 
+    # pull apart a single line into token/symbol(s)
+    #
+    # virt_line - the current line we need to tokenize (a VirtualLine)
+    #
+    # vline_iter - <generator> across the entire file (returns VirtualLine instances) 
+    #
+    logger.debug("parse_vline()")
+
+    # tokenize character by character across a VirtualLine
+    vchar_scanner = iter(virt_line)
+
+    # closely follow GNU Make's behavior eval() src/read.c
+    #
+    # 1. try assignment expressions
+    # 2. if not (1) then try conditional line
+    # 3. if not (2) then try export/unxport
+    # 4. if not (3) then try vpath
+    # 5. if not (4) then try include/sinclude/-include
+    # 6. if not (5) then try 'load'  (NOT IMPLEMENTED IN PYMAKE)
+    # 7. if not (6) then try rule+recipe
+
+    a = tokenizer.tokenize_assignment_statement(vchar_scanner)
+    if a:
+        # Is an assignment statement not a conditional.
+        # We're done here.
+        return a
+
+    # make sure that my functions restore vchar_scanner to starting state if
+    # they don't find what they're looking for.
+    assert vchar_scanner.is_starting(), vchar_scanner.get_pos()
+
+    # mimic what GNU Make conditional_line() does
+    # by looking for a directive in this line
+    vstr = parsermk.seek_directive(vchar_scanner, conditional_directive )
+    if vstr:
+        d = parsermk.parse_directive( vstr, vchar_scanner, vline_iter)
+        if d:   
+            # we found a conditional block.
+            # We're done here.
+            return d
+    assert vchar_scanner.is_starting(), vchar_scanner.get_pos()
+
+    # seek export | unexport
+    vstr = parsermk.seek_directive(vchar_scanner, set(("export","unexport")))
+    if vstr:
+        # TODO
+        raise NotImplementedError(str(vstr))
+    assert vchar_scanner.is_starting(), vchar_scanner.get_pos()
+
+    # seek vpath
+    vstr = parsermk.seek_directive(vchar_scanner, set(("vpath",)))
+    if vstr:
+        # TODO
+        raise NotImplementedError(str(vstr))
+    assert vchar_scanner.is_starting(), vchar_scanner.get_pos()
+   
+    # seek include
+    vstr = parsermk.seek_directive(vchar_scanner, include_directive)
+    if vstr:
+        # TODO
+        raise NotImplementedError(str(vstr))
+    assert vchar_scanner.is_starting(), vchar_scanner.get_pos()
+
+    # How does GNU Make decide something is a rule?
+    # (It's complicated.)
+
+#    if isinstance(virt_line,vline.RecipeVirtualLine):
+#        recipe = parsermk.tokenize_recipe(vchar_scanner)
+    token_list = tokenizer.tokenize_line(vchar_scanner)
+    breakpoint()
+
+    # Stuff that can't be explicitly tokenzparsed as an assignment, a
+    # directive, or rule winds up being a simple Expression that needs another
+    # pass during eval()
+    #
+    # Expression is single function like $(info) or $(warning). Not all
+    # functions are valid in statement context.  GNU Make expands variables
+    # during parsing so an expression *might* wind up being a rule.
+    # 
+    # For example:
+    # COLON:=:
+    # all ${COLON} hello.o  # this is a rule
+    #
+    # A lone Expression in GNU Make usually triggers the "missing separator"
+    # error because the parser gets confused. For example, the previous example if
+    # COLON wasn't defined is expanded to:
+    # all hello.o   # this is garbage
+    #
+
+    assert 0, "failed to parse line at %r" % (vchar_scanner.get_pos(),)
+
+
 def parse_vline_stream(virt_line, vline_iter): 
+    assert 0, "OBSOLETE DO NOT USE use parse_vline() instead"
+
     # pull apart a single line into token/symbol(s)
     #
     # virt_line - the current line we need to tokenize (a VirtualLine)
@@ -129,7 +224,7 @@ def parse_makefile_from_src(src):
     # lines, joining backslashed lines into VirtualLine instances.
     vline_iter = vline.get_vline(src.name, line_scanner)
 
-    statement_list = [parse_vline_stream(vline, vline_iter) for vline in vline_iter] 
+    statement_list = [parse_vline(vline, vline_iter) for vline in vline_iter] 
 
     # good time for some sanity checks
     for t in statement_list:
@@ -531,9 +626,9 @@ def _run_it(args):
     return exit_code
 
 # FIXME ugly hack dependency injection to solve problems with circular imports
-parsermk.parse_vline_stream = parse_vline_stream 
-symbolmk.parse_vline_stream = parse_vline_stream 
-symbolmk.tokenize_statement = tokenize_statement
+parsermk.parse_vline_stream = parse_vline 
+symbolmk.parse_vline_stream = parse_vline 
+symbolmk.tokenize_statement = tokenizer.tokenize_line
 
 def main():
     args = pargs.parse_args(sys.argv[1:])

@@ -60,5 +60,8 @@ class ScannerIterator(object):
     def is_empty(self):
         return self.idx >= self.max_idx
 
+    def is_starting(self):
+        return self.idx == 0
+
     def get_pos(self):
         return self.data[self.idx].get_pos()
