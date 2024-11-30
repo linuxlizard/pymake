@@ -1,5 +1,6 @@
-#!/usr/bin/env python3
-
+# SPDX-License-Identifier: GPL-2.0
+# Copyright (C) 2014-2024 David Poole davep@mbuf.com david.poole@ericsson.com
+#
 # Scanner (as in scanner for tokenizer/parser)
 # Needed an iterator that supports pushback and state save/restore.
 # (fancy shmancy https://en.wikipedia.org/wiki/Pushdown_automaton)

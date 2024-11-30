@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0
-# Copyright (C) David Poole david.poole@ericsson.com
+# Copyright (C) 2024 David Poole david.poole@ericsson.com
 #
 # Run a block of lines through GNU Make to test for success/failure.
 

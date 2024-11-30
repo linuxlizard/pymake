@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: GPL-2.0
+# Copyright (C) 2014-2024 David Poole davep@mbuf.com david.poole@ericsson.com
+
 # can't use string.whitespace because want to preserve line endings
 whitespace = set(' \t')
 
