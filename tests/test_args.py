@@ -98,3 +98,21 @@ def test_dry_run():
 
     args = pargs.parse_args(('--recon',),)
     assert args.dry_run
+
+def test_debug():
+    args = pargs.parse_args(('-d',),)
+    assert args.debug
+
+def test_debug_flag():
+    args = pargs.parse_args(('--debug=tokenize',),)
+    assert args.debug_flags[0] == 'tokenize'
+
+def test_debug_multiple_flags():
+    args = pargs.parse_args(('--debug=tokenize,scanner',),)
+    assert args.debug_flags[0] == 'tokenize'
+    assert args.debug_flags[1] == 'scanner'
+
+def test_debug_flags_foo():
+    with pytest.raises(ValueError):
+        args = pargs.parse_args(('--debug=foo',),)
+

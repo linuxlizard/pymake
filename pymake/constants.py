@@ -5,13 +5,15 @@
 whitespace = set(' \t')
 
 # davep 04-Dec-2014 ; FIXME ::= != are not in Make 3.81, 3.82 (Introduced in 4.0)
-assignment_operators = {"=", "?=", ":=", "::=", "+=", "!="}
+# :::= is apparently a POSIX thing (see do_variable_definition()-src/variable.c)
+assignment_operators = {"=", "?=", ":=", "::=", "+=", "!=", ":::=" }
 rule_operators = {":", "::", "?:" }
 eol = set("\r\n")
 
 # eventually will need to port this thing to Windows' CR+LF
 platform_eol = "\n"
 
+# TODO can be changed by .RECIPEPREFIX
 recipe_prefix = "\t"
 
 backslash = '\\'
@@ -65,7 +67,7 @@ include_directive = {
 
 # all directives (pseudo "reserved words")
 directive = {
-    "enddef",
+    "endef",
     "vpath",
 } | conditional_directive | assignment_modifier | include_directive
 

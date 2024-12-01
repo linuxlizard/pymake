@@ -67,6 +67,8 @@ def main():
     vline_iter = vline.get_vline(name, line_scanner)
 
     for virt_line in vline_iter:
+        s = str(virt_line)
+        print("%s" % s)
         stmt = parse_vline( virt_line, vline_iter )
         assert stmt
         print(stmt)
@@ -74,7 +76,7 @@ def main():
 if __name__ == '__main__':
 #    logging.basicConfig(level=logging.DEBUG)
     logging.basicConfig(level=logging.INFO)
-#    logging.getLogger("pymake.tokenize").setLevel(level=logging.DEBUG)
+    logging.getLogger("pymake.tokenize").setLevel(level=logging.DEBUG)
 #    logging.getLogger("pymake.parser").setLevel(level=logging.DEBUG)
     main()
 

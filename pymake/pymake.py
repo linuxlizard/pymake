@@ -1,5 +1,6 @@
-#!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0
 # -*- coding: utf-8 -*-
+# Copyright (C) 2014-2024 David Poole davep@mbuf.com david.poole@ericsson.com
 
 # Parse GNU Make with state machine. 
 # Trying hand crafted state machines over pyparsing. GNU Make has very strange
@@ -48,6 +49,9 @@ def parse_vline(virt_line, vline_iter):
     #
     logger.debug("parse_vline()")
 
+    # save the starting position for error reporting
+    starting_pos = virt_line.get_pos()
+
     # tokenize character by character across a VirtualLine
     vchar_scanner = iter(virt_line)
 
@@ -73,7 +77,7 @@ def parse_vline(virt_line, vline_iter):
 
     # mimic what GNU Make conditional_line() does
     # by looking for a directive in this line
-    vstr = parsermk.seek_directive(vchar_scanner, conditional_directive )
+    vstr = tokenizer.seek_directive(vchar_scanner, conditional_directive )
     if vstr:
         d = parsermk.parse_directive( vstr, vchar_scanner, vline_iter)
         if d:   
@@ -83,21 +87,21 @@ def parse_vline(virt_line, vline_iter):
     assert vchar_scanner.is_starting(), vchar_scanner.get_pos()
 
     # seek export | unexport
-    vstr = parsermk.seek_directive(vchar_scanner, set(("export","unexport")))
+    vstr = tokenizer.seek_directive(vchar_scanner, set(("export","unexport")))
     if vstr:
         # TODO
         raise NotImplementedError(str(vstr))
     assert vchar_scanner.is_starting(), vchar_scanner.get_pos()
 
     # seek vpath
-    vstr = parsermk.seek_directive(vchar_scanner, set(("vpath",)))
+    vstr = tokenizer.seek_directive(vchar_scanner, set(("vpath",)))
     if vstr:
         # TODO
         raise NotImplementedError(str(vstr))
     assert vchar_scanner.is_starting(), vchar_scanner.get_pos()
    
     # seek include
-    vstr = parsermk.seek_directive(vchar_scanner, include_directive)
+    vstr = tokenizer.seek_directive(vchar_scanner, include_directive)
     if vstr:
         # TODO
         raise NotImplementedError(str(vstr))
@@ -106,10 +110,12 @@ def parse_vline(virt_line, vline_iter):
     # How does GNU Make decide something is a rule?
     # (It's complicated.)
 
+    r = parsermk.parse_rule(vchar_scanner)
+    print(r)
+    breakpoint()
+
 #    if isinstance(virt_line,vline.RecipeVirtualLine):
 #        recipe = parsermk.tokenize_recipe(vchar_scanner)
-    token_list = tokenizer.tokenize_line(vchar_scanner)
-    breakpoint()
 
     # Stuff that can't be explicitly tokenzparsed as an assignment, a
     # directive, or rule winds up being a simple Expression that needs another
@@ -129,7 +135,7 @@ def parse_vline(virt_line, vline_iter):
     # all hello.o   # this is garbage
     #
 
-    assert 0, "failed to parse line at %r" % (vchar_scanner.get_pos(),)
+    assert 0, "failed to parse line at %r" % (starting_pos,)
 
 
 def parse_vline_stream(virt_line, vline_iter): 
@@ -155,7 +161,7 @@ def parse_vline_stream(virt_line, vline_iter):
         # 
         # TODO test for assignment before first recipe omg why do you do this
         # to me, GNU Make?
-        if not parsermk.seek_directive(iter(virt_line)):
+        if not tokenizer.seek_directive(iter(virt_line)):
             recipe = parsermk.tokenize_recipe(iter(virt_line))
             return recipe
 
@@ -637,6 +643,12 @@ def main():
         logging.basicConfig(level=logging.DEBUG)
     else:
         logging.basicConfig(level=logging.INFO)
+
+    for f in args.debug_flags:
+        log_s = "pymake." + f
+        logr = logging.getLogger(log_s)
+        if logr:
+            logr.setLevel(level=logging.DEBUG)
 
 #    if len(sys.argv) < 2 : 
 #        usage()

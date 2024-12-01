@@ -28,46 +28,6 @@ __all__ = [ "Info",
             "make_function",
           ]
 
-# built-in functions GNU Make 3.81(ish?)
-#builtins = {
-#    "subst",
-#    "patsubst",
-#    "strip",
-#    "findstring",
-#    "filter",
-#    "filter-out",
-#    "sort",
-#    "word",
-#    "words",
-#    "wordlist",
-#    "firstword",
-#    "lastword",
-#    "dir",
-#    "notdir",
-#    "suffix",
-#    "basename",
-#    "addsuffix",
-#    "addprefix",
-#    "join",
-#    "wildcard",
-#    "realpath",
-#    "absname",
-#    "error",
-#    "warning",
-#    "shell",
-#    "origin",
-#    "flavor",
-#    "foreach",
-#    "if",
-#    "or",
-#    "and",
-#    "call",
-#    "eval",
-#    "file",
-#    "value",
-#    "info",
-#}
-
 class PrintingFunction(Function):
     fmt = None
 

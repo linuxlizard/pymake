@@ -8,8 +8,7 @@ from pymake.error import *
 from pymake.symbolmk import *
 from pymake.printable import printable_char
 from pymake.scanner import ScannerIterator
-from pymake.tokenizer import tokenize_recipe, \
-    comment, seek_word, tokenize_assignment_statement, tokenize_line
+import pymake.tokenizer as tokenizer
 import pymake.vline as vline
 from pymake.debug import *
 
@@ -48,7 +47,7 @@ def read_expression(vchar_scanner):
     # ha ha type checking
     _ = vchar_scanner.remain
 
-    token_list = tokenize_line(vchar_scanner)
+    token_list = tokenizer.tokenize_line(vchar_scanner)
     assert vchar_scanner.is_empty()
     if not token_list:
         raise ParseError("TODO")
@@ -500,23 +499,6 @@ def parse_include_directive(expr, directive_vstr, *ignore):
     # note we're passing in the parse function
     return klass(directive_vstr, expr)
 
-def seek_directive(viter, seek):
-    # Throw a warning if first char is the recipeprefix.
-    # GNU Make allows <tab><directive> so we have to carefully see if there's a
-    # directive in what originally is a recipe line.
-    # (This mimics what GNU Make does)
-    logger.debug("seek_directive at %r", viter.get_pos())
-    vchar = viter.lookahead()
-    warn_on_recipe_prefix = None
-    if vchar and vchar.char == recipe_prefix:
-        warn_on_recipe_prefix = vchar.get_pos()
-        warn_msg = "recipe prefix means directive %r might be confused as a rule"
-
-    vstr = seek_word(viter, seek)
-    if vstr is not None and warn_on_recipe_prefix:
-        warning_message(warn_on_recipe_prefix, warn_msg % str(vstr))
-    return vstr
-
 def handle_conditional_directive(directive_inst, vline_iter):
     # GNU make doesn't parse the stuff inside the conditional unless the
     # conditional expression evaluates to True. But Make does allow nested
@@ -594,7 +576,7 @@ def handle_conditional_directive(directive_inst, vline_iter):
         # (mimic exactly what GNU Make eval() does)
         # need to do this first to catch stuff like
         # ifdef:=12345 
-        stmt = tokenize_assignment_statement(vchar_scanner)
+        stmt = tokenizer.tokenize_assignment_statement(vchar_scanner)
         if stmt:
             # found an assignment
             line_list.append(virt_line)
@@ -602,7 +584,7 @@ def handle_conditional_directive(directive_inst, vline_iter):
 
         # search for nested directive 
 
-        directive_vstr = seek_directive(vchar_scanner, conditional_directive)
+        directive_vstr = tokenizer.seek_directive(vchar_scanner, conditional_directive)
 
         if directive_vstr is None:
             # not another conditional, just plain normal everyday "something"
@@ -844,4 +826,27 @@ def parse_expression(expr, virt_line, vline_iter):
 
 #    print("parse directive=%s" % dir_.makefile())
     return dir_
+
+def parse_rule(vchar_scanner):
+    lhs = tokenizer.tokenize_rule(vchar_scanner)
+    if lhs is None:
+        assert vchar_scanner.is_starting()
+        return None
+
+    targets, rule_op = lhs
+
+    # ha ha type checking
+    assert isinstance(targets,list), (type(targets),)
+
+    rhs = tokenizer.tokenize_rule_RHS(vchar_scanner)
+
+    if vchar_scanner.remain():
+        # if we have anything left, it must be a recipe after the ';'
+        vchar = vchar_scanner.lookahead()
+        assert vchar.char == ';', vchar.char
+
+    statement = [ TargetList(targets), rule_op, rhs ]
+
+    # don't look for recipe(s) yet
+    return RuleExpression(statement) 
 

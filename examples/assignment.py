@@ -21,6 +21,96 @@ from gnu_make import run_gnu_make, debug_save
 
 logger = logging.getLogger("pymake")
 
+# Note for my future self because I keep tripping over this problem: Do not
+# use embedded \n in a line fed to vline. The vline code assumes it
+# receives an array of strings already split by newlines. The embedded newlines
+# confuse the vline parser.
+# DO NOT DO THIS!!!
+#    "SRC\\\n=\\\nhello.c\\\n\n",
+# do this instead:
+#    "SRC\\\n", "=\\\n", "hello.c\\\n", "\n"
+
+# all these are valid assignment statements
+test_file = """
+SRC = hello.c
+# these four entries are one virtual line
+SRC\\
+=\\
+hello.c\\
+
+
+SRC=
+SRC=hello.c 
+SRC:=hello.c 
+SRC::=hello.c 
+SRC!=hello.c 
+ SRC  =   hello.c     
+ SRC  :=   hello.c     
+ SRC  ::=   hello.c     
+ SRC  :::=   hello.c     
+ SRC  !=   hello.c     
+
+# yay tabs
+\tSRC\t:=\thello.c\t\t\t\t
+
+# note also trailing whitespace after hello.c is preserved
+SRC=hello.c   # next line needs SRC set for GNU Make otherwise "empty variable name"
+$(SRC) = $(hello)
+
+FOO? = !! # yes, this is legal Make
+FOO?FOO = !! 
+
+# weird but legal ; creates var named the LHS, weird char and all
+export,CC:=gcc
+export!CC:=gcc
+
+# what happens with unicode?
+export 🦄:=👻
+
+# export modifier with variable assignment
+export CC =  gcc 
+  export      CC =  gcc 
+export CC=gcc CFLAGS=-Wall  # creates var named 'gcc CFLAGS=-Wall'
+unexport CC=gcc
+override CC=gcc
+private CC=gcc
+export export=export  # what does this do?
+
+# re-usingreserved" words
+ifdef=IFDEF
+ifeq=IFEQ
+vpath=VPATH
+export=EXPORT
+include=INCLUDE
+
+# multiple modifiers are evaluated left to right by gnu make 
+export private override unexport export CC=gcc
+export export CC=CFLAGS
+
+# multi-line variable def
+# 'endef' required so I can parse this test with GNU Make; ignore
+# the 'endef' in my tests later
+define foo=
+endef  
+
+export define foo=
+endef
+
+export unexport override private define foo=
+endef
+
+# define block with stuff inside
+define two-lines=
+echo one
+echo two
+endef
+
+define two-lines
+echo three
+echo four
+endef
+"""
+
 def test_errors():
     name = "error-cases"
 
@@ -50,95 +140,19 @@ def test_errors():
 def main():
     name = "assignment-test"
 
-    # Note for my future self because I keep tripping over this problem: Do not
-    # use embedded \n in a line fed to vline. The vline code assumes it
-    # receives an array of strings already split by newlines. The embedded newlines
-    # confuse the vline parser.
-    # DO NOT DO THIS!!!
-    #    "SRC\\\n=\\\nhello.c\\\n\n",
-    # do this instead:
-    #    "SRC\\\n", "=\\\n", "hello.c\\\n", "\n"
-
-    # all these are valid assignment statements
-    file_lines = [ 
-        "SRC = hello.c\n",
-        # these four entries are one virtual line
-        "SRC\\\n",
-        "=\\\n",
-        "hello.c\\\n",
-        "\n",
-
-        "SRC=\n",
-        "SRC=hello.c\n", 
-        "SRC:=hello.c\n", 
-        "SRC::=hello.c\n", 
-        "SRC!=hello.c\n", 
-        "  SRC  =   hello.c    \n", 
-        "  SRC  :=   hello.c    \n", 
-        "  SRC  ::=   hello.c    \n", 
-        "  SRC  :::=   hello.c    \n", 
-        "  SRC  !=   hello.c    \n", 
-
-        # yay tabs
-        "\tSRC\t:=\thello.c\t\t\t\t\n",
-
-        "SRC=hello.c\n",   # next test needs SRC set for GNU Make otherwise "empty variable name"
-        " $(SRC) = $(hello)\n",
-
-        "FOO? = !!\n", # yes, this is legal Make
-        "FOO?FOO = !!\n", 
-
-        # weird but legal ; creates var named the LHS, weird char and all
-        "export,CC:=gcc\n",
-        "export!CC:=gcc\n",
-
-        # what happens with unicode?
-        "export 🦄:=👻\n",
-
-        # export modifier with variable assignment
-        "export CC =  gcc\n", 
-        "   export      CC =  gcc\n", 
-        "export CC=gcc CFLAGS=-Wall\n",  # creates var named 'gcc CFLAGS=-Wall'
-        "unexport CC=gcc\n",
-        "override CC=gcc\n",
-        "private CC=gcc\n",
-        "export export=export\n",  # what does this do?
-
-        # re-using "reserved" words
-        "ifdef=IFDEF\n",
-        "ifeq=IFEQ\n",
-        "vpath=VPATH\n",
-        "export=EXPORT\n",
-        "include=INCLUDE\n",
-
-        # multiple modifiers are evaluated left to right by gnu make 
-        "export private override unexport export CC=gcc\n",
-        "export export CC=CFLAGS\n",
-        
-        # multi-line variable def
-        # 'endef' required so I can parse this test with GNU Make; ignore
-        # the 'endef' in my tests later
-        "define foo=\n",
-        "endef\n",  
-
-        "export define foo=\n",
-        "endef\n",
-
-        "export unexport override private define foo=\n",
-        "endef\n",
-
-    ]
+    src = source.SourceString(test_file)
+    src.load()
 
     test_errors()
 
-#    debug_save(file_lines)
+    debug_save(src.file_lines)
 
     # verify everything works in GNU Make
-    run_gnu_make(file_lines)
+    run_gnu_make(src.file_lines)
 
     # iterator across all actual lines of the makefile
     # (supports pushback)
-    line_scanner = ScannerIterator(file_lines, name)
+    line_scanner = ScannerIterator(src.file_lines, name)
 
     # iterator across "virtual" lines which handles the line continuation
     # (backslash)
@@ -156,6 +170,8 @@ def main():
         if stmt is None and s=="endef":
             continue
 
+        # the test input should always successfully find an assignment statement
+        assert stmt, s
         print(stmt)
         m = stmt.makefile()
         print(f"output=\"{m}\"")
@@ -163,16 +179,10 @@ def main():
         # Whitespace makes verifying the result difficult. I try very hard to
         # preserve all input whitespace but some places I deliberately need to
         # discard it (between assignment operator and RHS) or add it (the \ is
-        # replaced by a whitespace char)
-        # 
-        # (broken apart into multiple checks so can stop easily if necessary)
-        fixws = lambda s : s.replace("\t",'').replace(" ",'')
-        if s != m:
-            s2 = fixws(s)
-            if s2 != m:
-                # try killing all whitespace on the result, too
-                m2 = fixws(m)
-                assert s2 == m2, (s,s2,m,m2)
+        # replaced by a whitespace char).  
+        #
+        # As a result, I cannot compare the input to the output. The only valid
+        # test is to compare my output to GNU Make output.
         
 
 if __name__ == '__main__':

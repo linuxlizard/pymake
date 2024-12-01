@@ -156,13 +156,13 @@ class Operator(Symbol):
     pass
 
 class AssignOp(Operator):
-    # An assignment symbol, one of { "=" | ":=" | "?=" | "+=" | "!=" | "::=" }
+    # An assignment symbol, one of { "=" | ":=" | "?=" | "+=" | "!=" | "::=" }, etc.
     def __init__(self, vstr):
         assert str(vstr) in assignment_operators, str(vstr)
         super().__init__(vstr)
     
 class RuleOp(Operator):
-    # A rule symbol, one of { ":" | "::" }
+    # A rule symbol, one of { ":" | "::" }, etc.
     def __init__(self, vstr):
         assert str(vstr) in rule_operators, str(vstr)
         super().__init__(vstr)
@@ -189,31 +189,6 @@ class Expression(Symbol):
 
     def __getitem__(self, idx):
         return self.token_list[idx]
-
-    def xxx__eq__(self, rhs):
-        assert 0, "do I use this anymore?"
-
-        # Used in test code.
-        #
-        # lhs is self
-        # rhs better be another expression
-        assert isinstance(rhs, Expression), (type(rhs), rhs)
-
-        if len(self.token_list) != len(rhs.token_list):
-            logger.error("length mismatch %d != %d", len(self.token_list), len(rhs.token_list))
-            return False
-
-        for tokens in zip(self.token_list, rhs.token_list) :
-            if tokens[0].__class__ != tokens[1].__class__ : 
-                logger.error("class mismatch %s != %s", tokens[0].__class__, tokens[1].__class__)
-                return False
-
-            # Recurse into sub-expressions. It's tokens all the way down!
-            if not str(tokens[0]) == str(tokens[1]) :
-                logger.error("token mismatch %s != %s", tokens[0], tokens[1])
-                return False
-
-        return True
 
     def makefile(self):
         # Build a Makefile string from this rule expression.
@@ -388,16 +363,16 @@ class RuleExpression(Expression):
 
         assert len(token_list)==3, len(token_list)
 
-        assert isinstance(token_list[0], Expression), (type(token_list[0]),)
+        assert isinstance(token_list[0], TargetList), (type(token_list[0]),)
         assert isinstance(token_list[1], RuleOp), (type(token_list[1]),)
 
         if isinstance(token_list[2], PrerequisiteList) : 
+            # all is well
             pass
         elif isinstance(token_list[2], AssignmentExpression) :
             # target specific variable assignment
             # see: 6.11 Target-specific Variable Values  GNU Make V.4.3 Jan2020
             raise NotImplementedError()
-            pass 
         else:
             assert 0, (type(token_list[2]),)
 
@@ -473,9 +448,9 @@ class RuleList(Expression):
      # of expressions, not an expression itself or wind up with problems with
      # spaces
      #  $()a vs $() a
-     # (note the space before 'a')
+     # (note the space before 'a' in the 2nd case)
      #
-     # While an Expression is NULL joined, a RuleList is space joined.
+     # While an Expression is empty-string joined, a RuleList is space joined.
     def makefile(self):
         # space separated
         return " ".join( [ t.makefile() for t in self.token_list ] )
@@ -488,6 +463,7 @@ class RuleList(Expression):
         return iter(self.token_list)
 
 class TargetList(RuleList):
+    # The targets of a Rule (the LHS of a rule)
     def __init__(self, token_list):
         expr_list = []
         new_token_list = []

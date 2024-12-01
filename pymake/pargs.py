@@ -1,5 +1,9 @@
-#!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0
+# -*- coding: utf-8 -*-
+# Copyright (C) 2014-2024 David Poole davep@mbuf.com david.poole@ericsson.com
 
+# command line arguments
+#
 import sys
 import getopt
 
@@ -18,6 +22,7 @@ Options:
     --directory dir
                 change to directory before reading makefiles or doing anything else.
     -d          Print extra debugging information.
+    --debug[=FLAGS]
     -f FILE
     --file FILE
     --makefile FILE
@@ -52,9 +57,17 @@ Options not in GNU Make:
 """)
 
 class Args:
+    # names from logging.getLogger("pymake.NAME")
+    valid_debug_flags = ( "functions", "parser", "rules", "scanner", "shell", 
+        "symbol", "symtable", "tokenize", "vline")
+
     def __init__(self):
         # -d 
         self.debug = 0
+
+        # --debug
+        # individual flags to enable logging.debug at the module level
+        self.debug_flags = []
 
         # --dotfile
         # write rules' dependencies to graphviz .dot file
@@ -110,6 +123,15 @@ class Args:
         s += " ".join(self.argslist)
         return s
 
+def _parse_debug_flags(s):
+    flags = s.split(',')
+
+    for f in flags:
+        if f not in Args.valid_debug_flags:
+            raise ValueError("invalid debug flag=\"%s\"" % f)
+
+    return flags
+
 def parse_args(argv):
     print_version ="""PY Make %s. Work in Progress.
 Copyright (C) 2014-2024 David Poole david.poole@ericsson.com, davep@mbuf.com, testcluster@gmail.com""" % (Version.vstring(),)
@@ -119,7 +141,7 @@ Copyright (C) 2014-2024 David Poole david.poole@ericsson.com, davep@mbuf.com, te
                             [
                             "help",
                             "always-make",
-                            "debug", 
+                            "debug=", 
                             "dotfile=",
                             "html=",
                             "explain",
@@ -169,6 +191,8 @@ Copyright (C) 2014-2024 David Poole david.poole@ericsson.com, davep@mbuf.com, te
             args.dry_run = True
         elif opt[0] in ('-s', '--silent', '--quiet'):
             args.silent = True
+        elif opt[0] == '--debug':
+            args.debug_flags = _parse_debug_flags(opt[1])
         else:
             # wtf?
             assert 0, opt

@@ -75,3 +75,16 @@ parse. The only grammar documentation is the GNU Make source itself.
 5. if not (4) then try include/sinclude/-include
 6. if not (5) then try 'load'  (NOT IMPLEMENTED IN PYMAKE)
 7. if not (6) then try rule+recipe
+
+
+# Notes for my future self 
+
+I keep tripping over this problem. Do not use embedded \n in a line fed to
+vline. The vline code assumes it receives an array of strings already split by
+newlines. The embedded newlines confuse the vline parser.
+
+DO NOT DO THIS!!!
+    "SRC\\\n=\\\nhello.c\\\n\n",
+do this instead:
+    "SRC\\\n", "=\\\n", "hello.c\\\n", "\n"
+

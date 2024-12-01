@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0
-# Copyright (C) David Poole david.poole@ericsson.com
+# Copyright (C) 2024 David Poole david.poole@ericsson.com
 #
 # Demo parsing a rule
 #
@@ -22,7 +22,7 @@ logger = logging.getLogger("pymake")
 test_file="""
 one:
 
-two :
+two : $(TWO)
 
 three : ; echo foo
 
@@ -103,10 +103,13 @@ def main():
         rhs = tokenizer.tokenize_rule_RHS(vchar_scanner)
         print("rhs=",rhs)
 
-        # anything left must be pointinging to the start of a recipe
+        # anything left must be pointing to the start of a recipe
         if vchar_scanner.remain():
             vchar = vchar_scanner.lookahead()
             assert vchar.char == ';', vchar.char
+            recipe = tokenizer.tokenize_recipe(vchar_scanner)
+            assert recipe, recipe
+            print("recipe=",recipe)
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
