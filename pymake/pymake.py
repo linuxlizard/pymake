@@ -65,8 +65,14 @@ def parse_vline(virt_line, vline_iter):
     # 6. if not (5) then try 'load'  (NOT IMPLEMENTED IN PYMAKE)
     # 7. if not (6) then try rule+recipe
 
+    vline_iter.pushback
     a = tokenizer.tokenize_assignment_statement(vchar_scanner)
     if a:
+        if isinstance(a, DefineDirective):
+            breakpoint()
+            # we found an define block
+            d = parsermk.parse_define_directive(a, "define", virt_line, vline_iter)
+
         # Is an assignment statement not a conditional.
         # We're done here.
         return a

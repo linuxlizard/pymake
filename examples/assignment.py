@@ -99,15 +99,16 @@ endef
 export unexport override private define foo=
 endef
 
-# define block with stuff inside
 define two-lines=
-echo one
-echo two
 endef
 
 define two-lines
-echo three
-echo four
+endef
+
+"""
+
+qtest_file = """
+            export unexport override private define silly
 endef
 """
 
@@ -189,6 +190,6 @@ if __name__ == '__main__':
 #    logging.basicConfig(level=logging.DEBUG)
     logging.basicConfig(level=logging.INFO)
 #    logging.getLogger("pymake.vline").setLevel(level=logging.DEBUG)
-    logging.getLogger("pymake.tokenize").setLevel(level=logging.DEBUG)
+#    logging.getLogger("pymake.tokenize").setLevel(level=logging.DEBUG)
     main()
 

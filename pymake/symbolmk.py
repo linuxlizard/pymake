@@ -24,6 +24,7 @@ __all__ = [ "Symbol",
             "Literal",
             "Operator",
             "AssignOp",
+            "ImplicitAssignOp",
             "RuleOp",
             "Expression",
             "VarRef",
@@ -92,7 +93,10 @@ class Symbol(object):
     def __str__(self):
         # create a string such as Literal("all")
         # handle embedded " and ' (with backslashes I guess?)
-        return "{0}(\"{1}\")".format(self.__class__.__name__, printable_string(str(self.string)))
+        if self.string is None:
+            return ""
+        else:
+            return "{0}(\"{1}\")".format(self.__class__.__name__, printable_string(str(self.string)))
 
     def __eq__(self, rhs):
         # lhs is self
@@ -106,6 +110,8 @@ class Symbol(object):
 
     def makefile(self):
         # create a Makefile from this object
+        if self.string is None:
+            return ""
         return str(self.string)
 
     @staticmethod
@@ -161,6 +167,40 @@ class AssignOp(Operator):
         assert str(vstr) in assignment_operators, str(vstr)
         super().__init__(vstr)
     
+    def makefile(self):
+        s = str(self.string)
+        print("s=",s)
+        return s
+
+#    def __str__(self):
+#        return "XXX"
+
+class ImplicitAssignOp(AssignOp):
+    # assignment operator for a define block that doesn't explicitly use an assignment
+    # for example:
+    # define two-lines
+    # echo foo
+    # echo $(bar)
+    # endef
+    #
+    # Without the assignment character, it's implicitly treated as a recursively defined variable.
+    # But I still need an operator for the AssignmentExpression to work.
+
+    def __init__(self):
+        Operator.__init__(self)
+
+    def makefile(self):
+        return ""
+#        breakpoint()
+#        m = super().makefile()
+#        return m
+
+    def __str__(self):
+        return ""
+
+    def get_pos(self):
+        return "qqq"
+
 class RuleOp(Operator):
     # A rule symbol, one of { ":" | "::" }, etc.
     def __init__(self, vstr):
@@ -214,7 +254,7 @@ class Expression(Symbol):
             tok = tok.token_list[0]
 
         vchar = tok.string[0]
-        return vchar.filename, vchar.pos
+        return vchar.get_pos()
 
 class VarRef(Expression):
     # A variable reference found in the token stream. Save as a nested set of
@@ -237,8 +277,15 @@ class VarRef(Expression):
         return symbol_table.fetch("".join(key), self.get_pos())
 
 class AssignmentExpression(Expression):
+    # assignment statement modifier flags
+    FLAG_NONE = 1<<0
+    FLAG_EXPORT = 1<<1
+    FLAG_PRIVATE = 1<<2
+    FLAG_OVERRIDE = 1<<3
+
     def __init__(self, token_list, modifier_list=None):
         super().__init__(token_list)
+        self.modifier_flags = self.FLAG_NONE
         self.modifier_list = [] if modifier_list is None else modifier_list
         self.sanity()
             
@@ -324,6 +371,21 @@ class AssignmentExpression(Expression):
     def add_modifiers(self, modifier_list):
         assert modifier_list
         self.modifier_list = modifier_list
+
+        self.moifier_flags = self.FLAG_NONE
+        for m in self.modifier_list:
+            s = str(m)
+            if s == "export":
+                self.modifier_flags |= self.FLAG_EXPORT
+            elif s == "unexport":
+                self.modifier_flags &= ~self.FLAG_EXPORT
+            elif s == "private":
+                self.modifier_flags |= self.FLAG_PRIVATE
+            elif s == "override":
+                self.modifier_flags |= self.FLAG_OVERRIDE
+            else:
+                assert 0, s
+            
         self.sanity()
 
     def __str__(self):
@@ -339,8 +401,9 @@ class AssignmentExpression(Expression):
     def makefile(self):
         if not self.modifier_list:
             return super().makefile()
-        m = " ".join( ("%s"%m for m in self.modifier_list) ) + " " + super().makefile()
+        m = " ".join( (str(m) for m in self.modifier_list) ) + " " + super().makefile()
         return m
+
 
 class RuleExpression(Expression):
     # Rules are tokenized in multiple steps. First the target + prerequisites
@@ -535,7 +598,6 @@ class Directive(Symbol):
         assert isinstance(keyword, VCharString), type(keyword)
         if expression:
             assert expression.makefile
-
 
         super().__init__(keyword)
 
@@ -1070,28 +1132,36 @@ class DefineBlock(LineBlock):
 class DefineDirective(Directive):
     name = "define"
 
-    def __init__(self, keyword, varname, assign_op_str, block):
+    def __init__(self, keyword, expression):
         # ha ha type checking
-        assert isinstance(assign_op_str, str)
+        assert keyword.get_pos()
+        assert expression.get_pos()
 
-        # self.string will be 'define' vcstr
+        # self.keyword will be 'define' vcstr
         # self.expression is the varname (lhs)
-        super().__init__(keyword, varname)
+        super().__init__(keyword, expression)
 
-        self.assign_op_str = assign_op_str
-        self.block = block
+        self.assign_op = self.expression.token_list[1]
+        assert isinstance(self.assign_op, AssignOp)
+
+        self.block = DefineBlock([]) # TODO
 
     def __str__(self):
-        return "{0}(\"{1}\", {2})".format(self.name,
+        return "{0}(\"{1}\", {2})".format(self.__class__.__name__,
                         str(self.expression),
                         str(self.block))
 
     def makefile(self):
-        s = str(self.block)
-        return "{0} {1} {2}\n{1}\nendef".format(
-                        str(self.string),
-                        self.expression.makefile(),
-                        self.assign_op_str,
+        if self.expression.modifier_list:
+            keywords = " ".join( (str(m) for m in self.expression.modifier_list) ) + " " + str(self.string)
+        else:
+            keywords = str(self.string)
+
+        return "{0} {1}{2}\n{3}\nendef".format(
+                        keywords,
+                        # token_list[0] is the variable name expression
+                        self.expression.token_list[0].makefile(),
+                        self.assign_op.makefile(),
                         self.block.makefile() )
 
     # "The final newline before the endef is not included in the value; if you
@@ -1102,7 +1172,7 @@ class DefineDirective(Directive):
         
         # use AssignmentExpression so all the variable type and assignment type
         # special cases are in one place
-        return AssignmentExpression.assign(self.expression, self.assign_op_str, 
+        return AssignmentExpression.assign(self.expression, self.assign_op, 
                     self.block, symbol_table)
 
 

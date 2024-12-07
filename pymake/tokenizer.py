@@ -4,6 +4,7 @@
 
 import logging
 import string
+import functools
 
 _debug = True
 
@@ -16,6 +17,7 @@ from pymake.printable import printable_char, printable_string
 import pymake.vline as vline
 from pymake.symbolmk import *
 import pymake.functions as functions
+from pymake.version import Version
 
 # XXX temp for interactive debugger
 def _view(token_list):
@@ -31,20 +33,43 @@ def comment(vchar_scanner):
     for vchar in vchar_scanner:
         pass
 
-def tokenize_define_directive(vchar_scanner):
-    # multi-line macro
+def _pushtoken(token_list, t):
+    # if we have something to make a literal from then
+    if len(t):
+        # create the literal, save to the token_list
+        token_list.append(Literal(t))
+    # then start new token
+    return vline.VCharString()
+
+
+def tokenize_define_directive(directive_token, vchar_scanner):
+    # seek a multi-line macro's name.
+    # terminate on end of line or optional '='
+    #
+    # macro name can be var ref as well
+    #
+    # BAR:=bar
+    # define $(BAR)=
+    # qqq
+    # endef
+   
+    assert 0, "can't use this because doesn't handle all AssignOp"
 
     # ha-ha type checking
-    assert isinstance(vchar_scanner,ScannerIterator), type(vchar_scanner)
+    _ = vchar_scanner.pushback
 
     logger.debug("tokenize_define_directive()")
 
     state_start = 1
     state_name = 2
-    state_eol = 3
+    state_seek_equal = 3
+    state_seek_eol = 4
+    state_dollar = 5
+    state_done = 6
 
     state = state_start
-    macro_name = vline.VCharString()
+    token_list = []
+    token = vline.VCharString()
 
     # 3.81 treats the = as part of the name
     # 3.82 and beyond introduced the "=" after the macro name
@@ -52,43 +77,108 @@ def tokenize_define_directive(vchar_scanner):
         raise NotImplementedError()
 
     # get the starting position of this scanner (for error reporting)
-    starting_pos = vchar_scanner.lookahead().pos
-#    print("starting_pos=", starting_pos)
+    starting_pos = vchar_scanner.get_pos()
+
+    pushtoken = functools.partial(_pushtoken, token_list)
 
     for vchar in vchar_scanner : 
         c = vchar.char
-        logger.debug("m c={0} state={1} pos={2} ".format( 
+        logger.debug("d c={0} state={1} pos={2} ".format( 
                 printable_char(c), state, vchar.pos))
+
+        # literal backslash; I just don't want to deal with this right now
+        if c=='\\':
+            raise NotImplementedError(c)
 
         if state==state_start:
             # always eat whitespace while in the starting state
             if c in whitespace : 
                 # eat whitespace
                 pass
+            elif c=='$':
+                state = state_dollar
             else:
                 vchar_scanner.pushback()
                 state = state_name
+
+        elif state==state_dollar:
+            if c=='$':
+                # literal $
+                token += vchar 
+            else:
+                # save token so far (if any)
+                # also starts new token
+                token = pushtoken(token)
+                
+                # jump to variable_ref tokenizer
+                # restore "$" + current char in the scanner
+                vchar_scanner.pushback()
+                vchar_scanner.pushback()
+
+                # jump to var_ref tokenizer
+                token_list.append( tokenize_variable_ref(vchar_scanner) )
+
+            state=state_name
 
         elif state==state_name : 
             # save the name until EOL (we'll strip off the trailing RHS
             # whitespace later)
             #
-            # TODO if Version > 3.81 then add support for "="
-            if c in whitespace or c in eol or c == '=':
-                state = state_eol
-                break
+            # TODO only if Version > 3.81 then add support for "="
+            if c in whitespace:
+                state = state_seek_equal
+            elif c in eol or c == '=':
+                # done!
+                state = state_done
+            elif c == '#':
+                comment(vchar_scanner)
+                state = state_done
+            elif c=='$':
+                state = state_dollar
             else:
-                macro_name += vchar
+                token += vchar
+
+        elif state==state_seek_equal :
+            # eat whitespace until we find an '=' or end-of-line
+            # anything else is an error
+            if c in whitespace : 
+                # eat whitespace
+                pass
+            elif c in eol:
+                # done!
+                state = state_done
+            elif c == '=':
+                state = state_seek_eol
+            elif c == '#':
+                comment(vchar_scanner)
+                state = state_done
+            else:
+                warning_message(starting_pos, "extraneous text after '%s' directive" % str(directive_token))
+                state = state_done
+
+        elif state==state_seek_eol:
+            if c in eol or c in whitespace:
+                pass
+            elif c == '#':
+                comment(vchar_scanner)
+                state = state_done
+            else:
+                warning_message(starting_pos, "extraneous text after '%s' directive" % str(directive_token))
+                state = state_done
 
         else:
             # wtf?
             assert 0, state
 
-    return macro_name
+        if state==state_done:
+            break
 
+    pushtoken(token)
 
-def tokenize_undefine_directive(vchar_scanner):
-    raise NotImplementedError("undefine")
+    if not token_list:
+        raise ParseError("missing multi-line macro name", pos=starting_pos)
+
+    return token_list
 
 #def old_tokenize_statement(vchar_scanner):
 #    # davep 20241116 ; rewriting the tokenizer from scratch to better match GNU Make's eval()-read.c
@@ -202,13 +292,14 @@ def tokenize_line(vchar_scanner):
 
     token_list = []
 
-    def pushtoken(t):
-        # if we have something to make a literal from then
-        if len(t):
-            # create the literal, save to the token_list
-            token_list.append(Literal(t))
-        # then start new token
-        return vline.VCharString()
+#    def pushtoken(t):
+#        # if we have something to make a literal from then
+#        if len(t):
+#            # create the literal, save to the token_list
+#            token_list.append(Literal(t))
+#        # then start new token
+#        return vline.VCharString()
+    pushtoken = functools.partial(_pushtoken, token_list)
 
     state = state_start
 
@@ -225,6 +316,7 @@ def tokenize_line(vchar_scanner):
                 # whatever it is, push it back so can tokenize it
                 vchar_scanner.pushback()
                 # save the whitespace string we've seen so far
+                assert isinstance(token_list,list), type(token_list)
                 token = pushtoken(token)
                 state = state_in_word
 
@@ -276,7 +368,7 @@ def tokenize_line(vchar_scanner):
                 token = pushtoken(token)
                 
                 # jump to variable_ref tokenizer
-                # restore "$" + "(" in the scanner
+                # restore "$" + current char in the scanner
                 vchar_scanner.pushback()
                 vchar_scanner.pushback()
 
@@ -579,13 +671,14 @@ def tokenize_rule(vchar_scanner):
 
     token_list = []
 
-    def pushtoken(t):
-        # if we have something to make a literal from then
-        if len(t):
-            # create the literal, save to the token_list
-            token_list.append(Literal(t))
-        # then start new token
-        return vline.VCharString()
+#    def pushtoken(t):
+#        # if we have something to make a literal from then
+#        if len(t):
+#            # create the literal, save to the token_list
+#            token_list.append(Literal(t))
+#        # then start new token
+#        return vline.VCharString()
+    pushtoken = functools.partial(_pushtoken, token_list)
 
     # get the starting position of this scanner (for error reporting)
     starting_pos = vchar_scanner.lookahead().pos
@@ -795,7 +888,7 @@ def tokenize_rule_RHS(vchar_scanner):
     logger.debug("tokenize_rule_RHS()")
 
     # GNU Make checks for assignment first and thus so shall we.
-    a = tokenize_assignment_statement(vchar_scanner)
+    a = tokenize_assignment_statement(vchar_scanner, target_var=True)
     if a :
         logger.debug("tokenize_rule_RHS found an assignment at pos=%r", a.get_pos())
         return a
@@ -1290,9 +1383,13 @@ def tokenize_recipe(vchar_scanner):
     return Recipe( token_list )
 
 
-def tokenize_assignment_expression(vchar_scanner):
+def tokenize_assignment_expression(vchar_scanner, define=False):
     # Assume this statement is an assignment and attempt to tokenize it as such.
     # Return None if this statement is not an assignment.
+    #
+    # define=True  we've seen a 'define' so treat this expression as the LHS of
+    # a multi-line variable definition.  A 'define' expression doesn't require
+    # an assignment operator. 
 
     # array of vchar
     token = vline.VCharString()
@@ -1316,6 +1413,13 @@ def tokenize_assignment_expression(vchar_scanner):
             token_list.append(Literal(t))
         # then start new token
         return vline.VCharString()
+
+    def make_define_expression(token_list):
+        statement = [ Expression(token_list),
+                        ImplicitAssignOp(),
+                      Expression([]) 
+                    ]
+        return AssignmentExpression(statement)
 
     for vchar in vchar_scanner:
         c = vchar.char
@@ -1397,9 +1501,13 @@ def tokenize_assignment_expression(vchar_scanner):
                 return AssignmentExpression(statement)
 
             elif c in eol : 
-                # end of line without finding assignment operator; bye!
-                break
-                
+                # Found end of line without finding assignment operator.
+                # could be a valid 'define' statement assuming
+                token = savetoken(token)
+                if not define:
+                    return None
+                return make_define_directive(token_list)
+
             else :
                 assert isinstance(token, vline.VCharString), type(token)
                 assert isinstance(vchar, vline.VChar), type(vchar)
@@ -1502,7 +1610,7 @@ def tokenize_assignment_expression(vchar_scanner):
                         # go back for more
                         token += vchar_scanner.next()
                     else:
-                        break
+                        return None
 
                 return None
 
@@ -1532,12 +1640,22 @@ def tokenize_assignment_expression(vchar_scanner):
                     # TODO
                     raise ParseError(pos=vchar.pos)
 
+            elif c in eol : 
+                # Found end of line without finding assignment operator.
+                # could be a valid 'define' statement assuming
+                if not define:
+                    return None
+                token = savetoken(token)
+                return make_define_expression(token_list)
+
             else:
                 # we wind up here when we're looking for an assignment operator
                 # but find something else.
-                # We also wind up here with something like "export CC=gcc" where
-                # we export+assign in the same statement
-                return None
+                if not define:
+                    return None
+                token = savetoken(token)
+                warning_message(vchar.get_pos(), "extraneous text after 'define' directive")
+                return make_define_expression(token_list)
 
             # endif state == state_assign
 
@@ -1664,7 +1782,7 @@ def seek_directive(viter, seek):
         warning_message(warn_on_recipe_prefix, warn_msg % str(vstr))
     return vstr
 
-def tokenize_assignment_statement(vchar_scanner):
+def tokenize_assignment_statement(vchar_scanner, target_var=False):
     # look for an assignment expression
     # if that fails, look for a modified assignment expression, one with:
     # export | unexport | override | private | define | undefine
@@ -1677,6 +1795,8 @@ def tokenize_assignment_statement(vchar_scanner):
     modifier_list = []
 
     vchar_scanner.push_state()
+
+    # TODO target_var=True
 
     while True:
         # loop to capture multiple modifiers
@@ -1707,7 +1827,31 @@ def tokenize_assignment_statement(vchar_scanner):
             vchar_scanner.pop_state()
             return None
 
+        # 'define'|'undefine' will terminate a list of modifiers.  
+        # export override private define foo=   is legal
+        # export override define private foo=   ILLEGAL
+        # GNU Make parse_var_assignment()-src/read.c will leave the parsing
+        # loop on discovering the 'define'|'undefine'
+        #
+
+        # 'define'|'undefine' cannot be used in a Rule's target specific
+        # assignment:
+        #
+        # foo.o: export CC=gcc   <-- is legal
+        # foo.o: define CC=      <-- ILLEGAL
+        #
+        # GNU Make parse_var_assignment()-src/read.c has function 'targvar'
+        # flag to check for define|undefine in this case.
+        #
+        if m == "define" or m == "undefine":
+            # we still should have a valid assign from 'define' until EOL so 
+            e = tokenize_assignment_expression(vchar_scanner, define=True)
+            assert e
+            if modifier_list:
+                e.add_modifiers(modifier_list)
+            d = DefineDirective(token, e)
+            return d
+
         logger.debug("assignment_modifier \"%s\" found", m)
         modifier_list.append(token)
-
 
