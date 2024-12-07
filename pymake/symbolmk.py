@@ -35,8 +35,8 @@ __all__ = [ "Symbol",
             "Recipe",
             "RecipeList",
             "Directive",
-            "ExportDirective",
-            "UnExportDirective",
+#            "ExportDirective",
+#            "UnExportDirective",
             "IncludeDirective",
             "MinusIncludeDirective",
             "SIncludeDirective",
@@ -74,7 +74,7 @@ class Symbol(object):
         if vstring:
             # do you quack like a VCharString? everything must be VChar so know filename/pos
             try:
-                vstring.chars, vstring[0].pos, vstring[0].filename
+                vstring.vchars, vstring[0].pos, vstring[0].filename
             except AttributeError:
                 # if seeing an AttributeError then trying to pass in a non-VCharString
                 if _testing:
@@ -94,7 +94,7 @@ class Symbol(object):
         # create a string such as Literal("all")
         # handle embedded " and ' (with backslashes I guess?)
         if self.string is None:
-            return ""
+            return self.__class__.__name__
         else:
             return "{0}(\"{1}\")".format(self.__class__.__name__, printable_string(str(self.string)))
 
@@ -172,9 +172,6 @@ class AssignOp(Operator):
         print("s=",s)
         return s
 
-#    def __str__(self):
-#        return "XXX"
-
 class ImplicitAssignOp(AssignOp):
     # assignment operator for a define block that doesn't explicitly use an assignment
     # for example:
@@ -191,15 +188,12 @@ class ImplicitAssignOp(AssignOp):
 
     def makefile(self):
         return ""
-#        breakpoint()
-#        m = super().makefile()
-#        return m
 
     def __str__(self):
-        return ""
+        return self.__class__.__name__ + "()"
 
     def get_pos(self):
-        return "qqq"
+        assert 0, "TODO"
 
 class RuleOp(Operator):
     # A rule symbol, one of { ":" | "::" }, etc.
@@ -394,7 +388,7 @@ class AssignmentExpression(Expression):
         s = "{0}([".format(self.__class__.__name__)
         s += ", ".join([str(t) for t in self.token_list])
         s += "],["
-        s += ", ".join(['"%s"'%m for m in self.modifier_list])
+        s += ", ".join([m.python() for m in self.modifier_list])
         s += "])"
         return s
 
@@ -799,7 +793,7 @@ class LineBlock(Symbol):
         if _debug:
             [vline.validate() for vline in vline_list]
 
-        # ha-ha typechecking
+        # ha ha typechecking
         if len(vline_list):
             vline_list[0].filename
 
@@ -1132,7 +1126,7 @@ class DefineBlock(LineBlock):
 class DefineDirective(Directive):
     name = "define"
 
-    def __init__(self, keyword, expression):
+    def __init__(self, keyword, expression, block=None):
         # ha ha type checking
         assert keyword.get_pos()
         assert expression.get_pos()
@@ -1144,16 +1138,24 @@ class DefineDirective(Directive):
         self.assign_op = self.expression.token_list[1]
         assert isinstance(self.assign_op, AssignOp)
 
-        self.block = DefineBlock([]) # TODO
+        if block is None:
+            self.block = DefineBlock([])
+        else:
+            self.block = block
+
+    def add_block(self, block):
+        assert isinstance(block,DefineBlock)
+        self.block = block
 
     def __str__(self):
-        return "{0}(\"{1}\", {2})".format(self.__class__.__name__,
+        return "{0}({1}, {2}, {3})".format(self.__class__.__name__,
+                        self.string.python(),
                         str(self.expression),
                         str(self.block))
 
     def makefile(self):
         if self.expression.modifier_list:
-            keywords = " ".join( (str(m) for m in self.expression.modifier_list) ) + " " + str(self.string)
+            keywords = " ".join( (m.python() for m in self.expression.modifier_list) ) + " " + str(self.string)
         else:
             keywords = str(self.string)
 

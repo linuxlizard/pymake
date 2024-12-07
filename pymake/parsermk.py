@@ -413,54 +413,22 @@ def parse_ifdef_directive(directive_vstr, vchar_scanner, vline_iter ):
     cond_block = handle_conditional_directive(dir_, vline_iter)
     return cond_block
 
-def parse_define_declaration(expr):
-    # "You may omit the variable assignment operator if you prefer. If omitted,
-    # make assumes it to be ‘=’ and creates a recursively-expanded variable"
-    # -- GNU Make 4.3 Jan 2020
-    # We have to use a string as the operator because it is optional. We can't
-    # manufacture a token where one doesn't exist. (Might revisit this later.)
 
-    # we should see:
-    # 1  varname (required)
-    # 2  operator (optional)
-    # 3+ anything past the operator is junk that generators a warning
-    #
-    # BNF is sorta:
-    # declaration ::= "define" varname operator
-    # varname ::= Expression
-    # operator ::= Operator | None
-
-    if isinstance(expr,AssignmentExpression):
-        # we have an expression with the optional operator
-        name_expr = expr.token_list[0]
-        op_str = expr.token_list[1].makefile()
-
-        # the last expression might exist but can be empty because we first
-        # tokenize the statement into an assignment with an empty RHS
-        if expr.token_list[2].token_list:
-            warning_message(
-                pos = expr.token_list[2].get_pos(),
-                msg = "extraneous text after 'define' directive")
-    else:
-        # plain expression
-        name_expr = expr
-        op_str = "=" 
-
-    return name_expr, op_str
-
-def parse_define_directive(expr, directive_vstr, virt_line, vline_iter ):
+def parse_define_block(expr, virt_line, vline_iter ):
     # save where this define block begins so we can report errors about 
     # missing enddef 
-    starting_pos = directive_vstr.get_pos()
+    starting_pos = expr.get_pos()
+    assert isinstance(expr, DefineDirective)
 
     # array of VirtualLine
     line_list = []
 
-    if not len(expr.token_list):
-        raise EmptyVariableName(pos=directive_vstr.get_pos())
-
-    # pull apart the expression to find the name and optional equal sign
-    varname_expr, operator_str = parse_define_declaration(expr) 
+    # TODO nested blocks
+    # GNU make supports
+    # define outer
+    # define inner
+    # endef
+    # endef
 
     for virt_line in vline_iter : 
         # seach for enddef in physical line
@@ -478,8 +446,9 @@ def parse_define_directive(expr, directive_vstr, virt_line, vline_iter ):
         errmsg = "missing enddef"
         raise ParseError(pos=starting_pos, description=errmsg)
 
-    def_ = DefineDirective(directive_vstr, varname_expr, operator_str, DefineBlock(line_list))
-    return def_
+    block = DefineBlock(line_list)
+    expr.add_block(block)
+    return expr
 
 
 #def parse_undefine_directive(expr, directive_vstr, *ignore):

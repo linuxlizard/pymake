@@ -55,7 +55,7 @@ def tokenize_define_directive(directive_token, vchar_scanner):
    
     assert 0, "can't use this because doesn't handle all AssignOp"
 
-    # ha-ha type checking
+    # ha ha type checking
     _ = vchar_scanner.pushback
 
     logger.debug("tokenize_define_directive()")
@@ -1506,7 +1506,7 @@ def tokenize_assignment_expression(vchar_scanner, define=False):
                 token = savetoken(token)
                 if not define:
                     return None
-                return make_define_directive(token_list)
+                return make_define_expression(token_list)
 
             else :
                 assert isinstance(token, vline.VCharString), type(token)
