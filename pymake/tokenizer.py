@@ -1701,7 +1701,7 @@ def seek_word(viter, seek):
     # found a "reserved word".
     viter.push_state()
 
-    vcstr = vline.VCharString()
+    token = vline.VCharString()
 
     # look at first char first
     vchar = next(viter)
@@ -1714,7 +1714,7 @@ def seek_word(viter, seek):
         state = state_whitespace
     else:
         state = state_char
-        vcstr += vchar
+        token += vchar
 
 #    print("seek_word c={0} state={1}".format(printable_char(vchar.char), state))
 
@@ -1736,11 +1736,11 @@ def seek_word(viter, seek):
                 comment(viter)                
             elif c not in charset:
                 # definitely not something we are looking for
-                vcstr.clear()
+                token.clear()
                 viter.pushback()
                 break
             else:
-                vcstr += vchar
+                token += vchar
 
         elif state == state_trailing_whitespace:
             if c == '#':
@@ -1753,12 +1753,12 @@ def seek_word(viter, seek):
                 break
 
     # did we find a "reserved word" amidst all this whitespace?
-    s = str(vcstr)
+    s = str(token)
     if s in seek:
         # yay! we found a "reserved word"!
-        logger.debug("seek_word found \"%s\" at %r", s, vcstr.get_pos())
+        logger.debug("seek_word found \"%s\" at %r", s, token.get_pos())
         viter.clear_state()
-        return vcstr
+        return token
 
     # nope, not a "reserved word"
     viter.pop_state()

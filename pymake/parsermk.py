@@ -421,32 +421,44 @@ def parse_define_block(expr, virt_line, vline_iter ):
     assert isinstance(expr, DefineDirective)
 
     # array of VirtualLine
-    line_list = []
+    vline_list = []
 
-    # TODO nested blocks
-    # GNU make supports
+    # Supports nested blocks.
+    # GNU make supports nesting define/endef. For example:
     # define outer
     # define inner
     # endef
     # endef
 
+    depth = 1
+
     for virt_line in vline_iter : 
-        # seach for enddef in physical line
-        phys_line = str(virt_line).lstrip()
-        if phys_line.startswith("endef"):
-            phys_line = phys_line[5:].lstrip()
-            if not phys_line or phys_line[0]=='#':
-                break
-            errmsg = "extraneous text after 'enddef' directive"
-            raise ParseError(vline=virt_line, pos=virt_line.starting_pos(),
-                        description=errmsg)
+        # search for endef or a nested define
+        viter = iter(virt_line)
+        token = tokenizer.seek_word(viter, {"endef","define"})
+        if token:
+            s = str(token)
+            # we found 'endef'
+            if s == "endef":
+                depth -= 1
+                assert depth >= 0
+                if depth == 0:
+                    # final endef; we're done 
+                    if viter.remain():
+                        # report leftover grunge
+                        warning_message(pos=virt_line.starting_pos,
+                            msg="extraneous text after 'endef' directive")
+                    break
+            elif s == "define":
+                depth += 1
+            else:
+                assert 0, s
 
-        line_list.append(virt_line)
+        vline_list.append(virt_line)
     else :
-        errmsg = "missing enddef"
-        raise ParseError(pos=starting_pos, description=errmsg)
+        raise ParseError(pos=starting_pos, msg="missing endef")
 
-    block = DefineBlock(line_list)
+    block = DefineBlock(vline_list)
     expr.add_block(block)
     return expr
 

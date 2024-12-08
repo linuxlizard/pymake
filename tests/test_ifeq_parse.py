@@ -6,10 +6,11 @@ logger = logging.getLogger("pymake")
 logging.basicConfig(level=logging.DEBUG)
 
 from pymake.vline import VirtualLine
-from pymake.parsermk import read_expression, seek_directive, parse_directive, parse_ifeq_conditionals
+from pymake.parsermk import read_expression, parse_directive, parse_ifeq_conditionals
 from pymake.symbolmk import Expression
 from pymake.error import InvalidSyntaxInConditional
 from pymake.constants import whitespace
+from pymake.tokenizer import seek_directive
 
 # Note on the weird strings e.g. s= " '$a' '$b' " without the ifeq/ifneq:
 # parse_ifeq_conditionals() parses the directive expression not the entire
