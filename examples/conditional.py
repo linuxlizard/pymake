@@ -15,7 +15,8 @@ import pymake.vline as vline
 from pymake.scanner import ScannerIterator
 from pymake import tokenizer
 from pymake.constants import *
-from pymake.parsermk import seek_directive, parse_directive
+from pymake.tokenizer import seek_directive
+from pymake.parsermk import parse_directive
 
 from gnu_make import run_gnu_make, debug_save
 
@@ -113,7 +114,7 @@ endif
 
         # mimic what GNU Make conditional_line() does
         # by looking for a directive in this line
-        vstr = seek_directive(vchar_scanner)
+        vstr = seek_directive(vchar_scanner, conditional_open)
 
         # for this test, we should always find a directive
         assert vstr, vstr
