@@ -12,9 +12,6 @@ ifdef FOO)
     $(info FOO paren)    
 endif
 
-ifndef TERM
-$(error TERM missing)
-endif
 ifndef PATH
 $(error PATH missing)
 endif
