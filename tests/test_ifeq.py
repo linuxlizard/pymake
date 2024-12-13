@@ -132,7 +132,7 @@ endif
 @:;@:
 """
     msg = run.pymake_should_fail(s)
-    assert "extraneous 'endif'" in msg
+    assert "extraneous 'endif'" in msg, msg
 
 # This is a weird corner case. Check for a directive that isn't
 # properly whitespace separated. GNU Make doesn't detect it as

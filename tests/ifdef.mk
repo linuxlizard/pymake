@@ -12,6 +12,13 @@ ifdef FOO)
     $(info FOO paren)    
 endif
 
+ifndef TERM
+$(error TERM missing)
+endif
+ifndef PATH
+$(error PATH missing)
+endif
+
 ifdef PATH
     $(info PATH=$(PATH))
 else ifdef TERM

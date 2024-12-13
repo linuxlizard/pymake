@@ -9,7 +9,7 @@ from pymake.vline import VirtualLine
 from pymake.parsermk import read_expression, parse_directive, parse_ifeq_conditionals
 from pymake.symbolmk import Expression
 from pymake.error import InvalidSyntaxInConditional
-from pymake.constants import whitespace
+from pymake.constants import *
 from pymake.tokenizer import seek_directive
 
 # Note on the weird strings e.g. s= " '$a' '$b' " without the ifeq/ifneq:
@@ -24,8 +24,8 @@ def _run(s, expect):
     virt_line = VirtualLine([s], (0,0), "/dev/null")
     vchar_scanner = iter(virt_line)
     
-    # position the
-    vstr = seek_directive(vchar_scanner)
+    # position the scanner right after the conditional open
+    vstr = seek_directive(vchar_scanner, conditional_open)
     assert vstr, vstr
     print(f"vstr={vstr}")
 

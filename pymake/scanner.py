@@ -66,3 +66,4 @@ class ScannerIterator(object):
 
     def get_pos(self):
         return self.data[self.idx].get_pos()
+

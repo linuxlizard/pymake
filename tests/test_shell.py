@@ -158,6 +158,17 @@ $(info $(shell print('hello again, perl')))
 #    p = run.pymake_string(makefile)
 #    print("p=",p)
 
+def test_empty_shell():
+    makefile = """
+foo=$(shell )
+@:;@:
+"""
+    p = run.gnumake_string(makefile)
+    print("p=",p)
+
+    p = run.pymake_string(makefile)
+    print("p=",p)
+
 def test_shell_python():
     makefile="""
 """

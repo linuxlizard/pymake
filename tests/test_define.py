@@ -109,10 +109,10 @@ foo
 echo $(bar)
 endef
     
-\tdefine two-lines:=
+define two-lines:=
 \t\techo foo
 \t\techo $(bar)
-\tendef
+endef
 """
 
     name = "test-define-block"

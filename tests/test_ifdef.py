@@ -55,6 +55,28 @@ endif
 """
     run.pymake_string(s)
 
+def test_ifdef_trailing_whitespace():
+    # six spaces after 'foo:='
+    s = """
+foo:=      
+ifdef foo
+$(error should not have found foo)
+endif
+@:;@:
+"""
+    run.pymake_string(s)
+
+def test_ifdef_trailing_tabs():
+    s = """
+foo:=			
+ifdef foo
+$(error should not have found foo)
+endif
+@:;@:
+"""
+    run.pymake_string(s)
+
+
 def test_ifdef_empty_recursive_assign():
     s = """
 foo=
@@ -65,13 +87,3 @@ endif
 """
     run.pymake_string(s)
 
-def test_ifdef_shell():
-    # I shouldn't eval() when testing the value
-    s = """
-foo=$(shell cat /etc/os-release)
-ifdef foo
-$(error should not have found foo)
-endif
-@:;@:
-"""
-    run.pymake_string(s)

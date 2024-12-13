@@ -35,8 +35,8 @@ __all__ = [ "Symbol",
             "Recipe",
             "RecipeList",
             "Directive",
-#            "ExportDirective",
-#            "UnExportDirective",
+            "ExportDirective",
+            "UnExportDirective",
             "IncludeDirective",
             "MinusIncludeDirective",
             "SIncludeDirective",
@@ -57,8 +57,8 @@ __all__ = [ "Symbol",
 ]
 
 # hack dependency injection
-tokenize_statement = None
-parse_vline_stream = None
+tokenize_line = None
+parse_vline = None
 
 # test/debug fn for debugger
 def _view(token_list):
@@ -133,6 +133,9 @@ class Symbol(object):
         return self.string.get_pos()
 
     def is_whitespace(self):
+        # whitespace is always tokenized into its own literal so it's only
+        # necessary to check the first character to ensure the entire string is
+        # whitespace
         return self.string is not None and self.string[0].char in whitespace
 
 class Literal(Symbol):
@@ -158,6 +161,10 @@ class Literal(Symbol):
         # convenience method for the tokenzparser
         return self._str
 
+    def hide(self):
+        self.string.hide()
+        self._str = str(self.string)
+
 class Operator(Symbol):
     pass
 
@@ -169,7 +176,6 @@ class AssignOp(Operator):
     
     def makefile(self):
         s = str(self.string)
-        print("s=",s)
         return s
 
 class ImplicitAssignOp(AssignOp):
@@ -282,9 +288,19 @@ class AssignmentExpression(Expression):
         self.modifier_flags = self.FLAG_NONE
         self.modifier_list = [] if modifier_list is None else modifier_list
         self.sanity()
-            
+
+        # kill any leading whitespace between the assignment operator and the rhs
+        rhs = self.token_list[2]
+        if rhs.token_list:
+            first = rhs.token_list[0]
+            # GNU Make example:
+            # "CC = gcc"  becomes "gcc"
+            # "CFLAGS = -g "  becomes "-g "  (note trailing whitespace)
+            if first.is_whitespace():
+                first.hide()
+
     @staticmethod
-    def assign(lhs, op, rhs, symbol_table):
+    def assign(lhs, op, rhs, symbol_table, flags=0):
         # from the gnu make pdf:
         # immediate = deferred
         # immediate ?= deferred
@@ -294,48 +310,57 @@ class AssignmentExpression(Expression):
         # immediate != immediate
 
         logger.debug("assignment lhs=%s op='%s'", lhs, op)
-        key = lhs.eval(symbol_table)
+        key = lhs.eval(symbol_table).strip()
 
         # handle different styles of assignment
-        if op == ":=" or op == "::=":
+        op_str = op.makefile()
+
+        if op_str == ":=" or op_str == "::=":
             # simply expanded
             rhs = rhs.eval(symbol_table)
-        elif op == "=":
+        elif op_str == "=":
             # recursively expanded
             # store the expression in the symbol table without evaluating
             pass
-        elif op == "!=":
+        elif op_str == "!=":
             # != seems to be a > 3.81 feature so add a version check here
             if Version.major < 4:
                 raise VersionError("!= not in this version of make")
 
             # execute RHS as shell
             rhs = shell.execute_tokens(rhs, symbol_table )
-        elif op == "?=":
+        elif op_str == "?=":
             # deferred expand
             # store the expression in the symbol table w/o eval
             pass 
-        elif op == "+=":
+        elif op_str == "+=":
             # Append is a little tricky because we have to treat recursively vs
             # simply expanded variables differently (making the expression
             # sensitive to what's in the LHS). Pass the Expression to the
             # symbol table to figure out.
             pass
+        elif isinstance(op, ImplicitAssignOp):
+            # a define without an explicit assignment operator is a recursively
+            # assigned variable (plain '=')
+            pass
         else:
-            # TODO
-            raise NotImplementedError("op=%s"%op)
-
-        logger.debug("assignment rhs=%s", rhs)
+            raise NotImplementedError("op=%s" % op_str)
 
         pos = lhs.get_pos()
-        assert pos is not None
 
-        if op == "?=":
+        logger.debug("assignment rhs=%s", rhs)
+#        breakpoint()
+
+        if op_str == "?=":
             symbol_table.maybe_add(key, rhs, pos)
-        elif op == "+=":
+        elif op_str == "+=":
             symbol_table.append(key, rhs, pos)
         else:
             symbol_table.add(key, rhs, pos)
+
+        if flags & AssignmentExpression.FLAG_EXPORT:
+            symbol_table.export(key)
+
         return ""
 
 
@@ -346,11 +371,29 @@ class AssignmentExpression(Expression):
         # pyfiles := $(wildcard foo*.py) $(wildcard bar*.py) $(wildcard baz*.py)
         assert len(self.token_list) == 3
 
-        lhs = self.token_list[0]
-        op = self.token_list[1]
-        rhs = self.token_list[2]
+#        lhs = self.token_list[0]
+#        op = self.token_list[1]
+#        rhs = self.token_list[2]
+#
+        return self.assign(self.lhs, self.assign_op, self.rhs, symbol_table, self.modifier_flags)
 
-        return self.assign(lhs, op, rhs, symbol_table)
+    @property 
+    def lhs(self):
+        # convenience method to get the LHS (left hand side)
+        assert isinstance(self.token_list[0], Expression), type(self.token_list[0])
+        return self.token_list[0]
+
+    @property
+    def assign_op(self):
+        # convenience method to get the assignment operator
+        assert isinstance(self.token_list[1], AssignOp), type(self.token_list[1])
+        return self.token_list[1]
+
+    @property 
+    def rhs(self):
+        # convenience method to get the RHS (right hand side)
+        assert isinstance(self.token_list[2], Expression), type(self.token_list[2])
+        return self.token_list[2]
 
     def sanity(self):
         # AssignmentExpression :=  Expression AssignOp Expression
@@ -633,10 +676,6 @@ class ExportDirective(Directive):
 #        if not(Version.major==3 and Version.minor==81) : 
 #            raise TODO()
 
-        # davep 20241124 ; FIXME export handled differently now that it can be
-        # bundled with the AssignmentExpression
-        assert 0, "TODO"
-
         super().__init__(keyword, expression)
 
     def eval(self, symbol_table):
@@ -646,13 +685,23 @@ class ExportDirective(Directive):
             return ""
 
         if isinstance(self.expression,AssignmentExpression):
+            # Should not happen anymore. Export handled differently now that it
+            # can be bundled with the AssignmentExpression
+            assert 0
+
             symbol_table.export_start()
             s = self.expression.eval(symbol_table)
             symbol_table.export_stop()
         else:
             s = self.expression.eval(symbol_table)
-            for name in s.split():
-                symbol_table.export(name)
+            if all(c in whitespace for c in s):
+                # nothing but whitespace trailing the 'export'
+                # so export everything
+                symbol_table.export()
+            else:
+                # whitespace separated variable name(s)
+                for name in s.split():
+                    symbol_table.export(name)
 
         return ""
 
@@ -713,7 +762,7 @@ class IncludeDirective(Directive):
         line_scanner = ScannerIterator(self.source.file_lines, self.source.name)
         vline_iter = get_vline(self.source.name, line_scanner)
 
-        statement_list = [parse_vline_stream(vline, vline_iter) for vline in vline_iter] 
+        statement_list = [parse_vline(vline, vline_iter) for vline in vline_iter] 
         return statement_list
 
 class MinusIncludeDirective(IncludeDirective):
@@ -820,7 +869,7 @@ class LineBlock(Symbol):
     def eval(self, symbol_table):
         vline_iter = iter(self.vline_list)
 
-        statement_list = [parse_vline_stream(vline, vline_iter) for vline in vline_iter] 
+        statement_list = [parse_vline(vline, vline_iter) for vline in vline_iter] 
         return statement_list
 
 
@@ -1006,8 +1055,8 @@ class IfdefDirective(ConditionalDirective):
     def _parse(self):
         # FIXME this ugly and slow and ugly and I'd like to fix it
         # (circular imports are circular)
-        from pymake.tokenizer import tokenize_statement
-        self.expression = tokenize_statement(ScannerIterator(self.vcstring.chars, None))
+        from pymake.parsermk import read_expression, parse_ifeq_conditionals
+        self.expression = read_expression(ScannerIterator(self.vcstring.vchars, self.get_pos()[0] ))
         
     def _eval(self, symbol_table):
         logger.debug("eval %s", self.name)
@@ -1062,8 +1111,8 @@ class IfeqDirective(ConditionalDirective):
         #
         # FIXME this ugly and slow and ugly and I'd like to fix it
         # (circular imports are circular)
-        from pymake.parsermk import parse_ifeq_conditionals
-        expr = tokenize_statement(ScannerIterator(self.vcstring.chars, None))
+        from pymake.parsermk import read_expression, parse_ifeq_conditionals
+        expr = read_expression(ScannerIterator(self.vcstring.vchars, self.get_pos()[0] ))
         self.expr1, self.expr2 = parse_ifeq_conditionals(expr, self.name)
 
     def _exprs_eval(self, symbol_table):
@@ -1107,7 +1156,9 @@ class DefineBlock(LineBlock):
 
     def eval(self, symbol_table):
         if self.statement_list is None:
-            self.statement_list = [tokenize_statement(iter(v)) for v in self.vline_list]
+            from pymake.pymake import parse_vline
+            vline_iter = iter(self.vline_list)
+            self.statement_list = [parse_vline(vline, vline_iter) for vline in vline_iter]
 
         # TODO make this one list comprehension statement 
         s_list = []
@@ -1135,8 +1186,7 @@ class DefineDirective(Directive):
         # self.expression is the varname (lhs)
         super().__init__(keyword, expression)
 
-        self.assign_op = self.expression.token_list[1]
-        assert isinstance(self.assign_op, AssignOp)
+        assert isinstance(self.expression.token_list[1], AssignOp)
 
         if block is None:
             self.block = DefineBlock([])
@@ -1163,7 +1213,8 @@ class DefineDirective(Directive):
                         keywords,
                         # token_list[0] is the variable name expression
                         self.expression.token_list[0].makefile(),
-                        self.assign_op.makefile(),
+                        # token_list[1] is the assigment operator expression
+                        self.expression.token_list[1].makefile(),
                         self.block.makefile() )
 
     # "The final newline before the endef is not included in the value; if you
@@ -1171,21 +1222,31 @@ class DefineDirective(Directive):
     # line." -- GNU Make 4.3 Jan 2020
     def eval(self, symbol_table):
         # self.expression contains the directive's name
-        
+
         # use AssignmentExpression so all the variable type and assignment type
         # special cases are in one place
-        return AssignmentExpression.assign(self.expression, self.assign_op, 
-                    self.block, symbol_table)
+        return AssignmentExpression.assign(
+                    self.expression.token_list[0],  # LHS
+                    self.expression.token_list[1],  # assignment operator
+                    self.block, 
+                    symbol_table)
 
 
 class UnDefineDirective(Directive):
     name = "undefine"
+    
+    def __init__(self, keyword, expression, modifier_list):
+        super().__init__(keyword, expression)
+        self.modifier_list = modifier_list
 
     def eval(self, symbol_table):
         s = self.expression.eval(symbol_table)
 
-        # TODO check for valid varname
+        # TODO handle modifiers
+        if self.modifier_list:
+            raise NotImplementedError("undefine modifiers")
 
+        # undefine LHS is treated as one big argument (no whitespace separation)
         symbol_table.undefine(s)
 
         return ""

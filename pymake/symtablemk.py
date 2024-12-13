@@ -11,7 +11,7 @@ from enum import Enum
 import pymake.version as version
 import pymake.constants as constants
 from pymake.symbolmk import Symbol
-from pymake.error import warning_message, MakeError
+from pymake.error import *
 
 logger = logging.getLogger("pymake.symtable")
 
@@ -260,15 +260,15 @@ class SymbolTable(object):
     def add(self, name, value, pos=None):
         logger.debug("store \"%s\"=\"%s\"", name, value)
 
-        # an attempt to store empty string is a bug
         assert isinstance(name,str), type(name)
-        if not len(name):
-            breakpoint()
-        assert len(name)
+
+        # an attempt to store empty string is a bug
+        if not name:
+            raise EmptyVariableName(pos=pos)
 
         # sanity check for bad names XXX add more cases
         # (will hit this if my tokenparser is screwing up)
-        assert ' ' not in name, name
+        assert ' ' not in name, ">>%s<<" % name
 
         # GNU Make doesn't do this warning
         if name in constants.builtin_variables:

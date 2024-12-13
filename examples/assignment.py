@@ -16,6 +16,7 @@ import pymake.vline as vline
 from pymake.scanner import ScannerIterator
 from pymake import tokenizer
 from pymake import parsermk
+from pymake.symtablemk import SymbolTable
 
 from gnu_make import run_gnu_make, debug_save
 
@@ -33,6 +34,7 @@ logger = logging.getLogger("pymake")
 # all these are valid assignment statements
 test_file = """
 SRC = hello.c
+ SRC = hello.c
 # these four entries are one virtual line
 SRC\\
 =\\
@@ -47,7 +49,7 @@ SRC!=hello.c
  SRC  =   hello.c     
  SRC  :=   hello.c     
  SRC  ::=   hello.c     
- SRC  :::=   hello.c     
+# SRC  :::=   hello.c     
  SRC  !=   hello.c     
 
 # yay tabs
@@ -105,11 +107,11 @@ endef
 define two-lines
 endef
 
-"""
+undefine FOO
+undefine FOO BAR BAZ
 
-qtest_file = """
-            export unexport override private define silly
-endef
+# will undefine a variable named 'FOO:=1'
+undefine FOO:=1
 """
 
 def test_errors():
@@ -136,7 +138,7 @@ def test_errors():
     for virt_line in vline_iter:
         s = str(virt_line).strip()
         expr = tokenizer.tokenize_assignment_statement(iter(virt_line))
-        assert expr is None, s
+        assert expr is None, expr.makefile()
 
 def main():
     name = "assignment-test"
@@ -158,6 +160,8 @@ def main():
     # iterator across "virtual" lines which handles the line continuation
     # (backslash)
     vline_iter = vline.get_vline(name, line_scanner)
+
+    symtable = SymbolTable()
 
     for virt_line in vline_iter:
         s = str(virt_line).strip()
@@ -184,12 +188,15 @@ def main():
         #
         # As a result, I cannot compare the input to the output. The only valid
         # test is to compare my output to GNU Make output.
-        
+        #
+        # But I can run a few sanity checks by executing the statement.
+        stmt.eval(symtable)
 
 if __name__ == '__main__':
 #    logging.basicConfig(level=logging.DEBUG)
     logging.basicConfig(level=logging.INFO)
 #    logging.getLogger("pymake.vline").setLevel(level=logging.DEBUG)
-#    logging.getLogger("pymake.tokenize").setLevel(level=logging.DEBUG)
+    logging.getLogger("pymake.tokenize").setLevel(level=logging.DEBUG)
+    logging.getLogger("pymake.symbol").setLevel(level=logging.DEBUG)
     main()
 

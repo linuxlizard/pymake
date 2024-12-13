@@ -49,6 +49,7 @@ def vchars_debug_string(vchar_list):
 def validate_vchars(vchar_list):
     if not _debug:
         return            
+    breakpoint()
 
     # Super paranoid check on the validity of every character in every token.
     # Verify the position of every character in the characters' filenames.
@@ -121,7 +122,7 @@ class VChar(object):
 
         # show/hide this char (e.g., hide if in a comment or backslash with
         # weird whitespace)
-        self.hide = False
+        self._hide = False
 
         self.filename = filename
 
@@ -176,6 +177,14 @@ class VChar(object):
         # sanity validation code needs to see a '\' in order to match the
         # source file.
         self._char = ' '
+
+    @property
+    def hide(self):
+        return self._hide
+
+    @hide.setter
+    def hide(self, flag):
+        self._hide = bool(flag)
 
 
 class VCharString(object):
@@ -232,6 +241,11 @@ class VCharString(object):
         # note: normally I'm using __str__() for this functionality but the VCharString and VirtualLine
         # use __str__() to return the contents as a pure python string. 
         return "VCharString(\"{}\")".format(self)
+
+    def hide(self):
+        # hide this entire string
+        for v in self.vchars:
+            v.hide = True
     
 
 class VirtualLine(object):

@@ -42,19 +42,29 @@ def read_expression(vchar_scanner):
     # utility function to tokenize a string into a token_list then create an
     # Expression around it.
     # Will consume the rest of the line.
-    # Created to capture the expression in ifdef and ifeq
+    # Originally created to capture the expression in ifdef and ifeq
     
     # ha ha type checking
     _ = vchar_scanner.remain
 
+    if vchar_scanner.is_empty():
+        return None
+
+    starting_pos = vchar_scanner.get_pos()
+
     token_list = tokenizer.tokenize_line(vchar_scanner)
+    # we must consume the entire line
     assert vchar_scanner.is_empty()
     if not token_list:
-        raise ParseError("TODO")
+        return None
+
     expr = Expression(token_list)
     return expr
 
 def parse_ifeq_conditionals(ifeq_expr, directive_vstr):
+    # ha ha type checking
+    assert isinstance(ifeq_expr, Expression), type(ifeq_expr)
+
     if not ifeq_expr.token_list:
         raise InvalidSyntaxInConditional(pos=directive_vstr.get_pos(), 
             moremsg="missing conditional expression")
@@ -382,9 +392,12 @@ def parse_ifeq_directive(directive_vstr, vchar_scanner, vline_iter):
             directive_vstr, directive_vstr.get_pos())
 
     # ha ha type checking
+    _ = directive_vstr.vchars
     _ = vchar_scanner.remain
 
     expr = read_expression(vchar_scanner)
+    if expr is None:
+        raise InvalidSyntaxInConditional(pos=directive_vstr.get_pos())
 
     expr1,expr2 = parse_ifeq_conditionals(expr, directive_vstr)
 
@@ -472,6 +485,9 @@ def parse_define_block(expr, virt_line, vline_iter ):
 #    raise NotImplementedError(directive_vstr)
 
 def parse_include_directive(expr, directive_vstr, *ignore):
+    # ha ha type checking
+    _ = expr.token_list
+
     # TODO any validity checks I need to do here? (Probably)
     dir_str = str(directive_vstr)
     
@@ -525,6 +541,7 @@ def handle_conditional_directive(directive_inst, vline_iter):
     cond_block.add_conditional( directive_inst )
 
     def make_conditional(dir_str, directive_vstr, expr1=None, expr2=None):
+        logger.debug("make_conditional s=%s at pos=%r", dir_str, directive_vstr.get_pos())
         klass = conditional_directive_lut[dir_str]
         if dir_str in ("ifeq", "ifneq"):
             # two expressions (not yet parsed)
@@ -548,8 +565,7 @@ def handle_conditional_directive(directive_inst, vline_iter):
     starting_pos = directive_inst.get_pos()
 
     for virt_line in vline_iter : 
-#        print("h state={0}".format(state))
-#        print("={0}".format(str(virt_line)), end="")
+        logger.debug("h state=%d s=\"%s\"", state, virt_line)
 
         vchar_scanner = iter(virt_line)
 
@@ -557,17 +573,24 @@ def handle_conditional_directive(directive_inst, vline_iter):
         # (mimic exactly what GNU Make eval() does)
         # need to do this first to catch stuff like
         # ifdef:=12345 
-        stmt = tokenizer.tokenize_assignment_statement(vchar_scanner)
+        vchar_scanner.push_state()
+        try:
+            stmt = tokenizer.tokenize_assignment_statement(vchar_scanner)
+        except ParseError:
+            # if it doesn't tokenize, it's not an assignment
+            stmt = None
         if stmt:
             # found an assignment
             line_list.append(virt_line)
             continue
+        vchar_scanner.pop_state()
 
         # search for nested directive 
 
         directive_vstr = tokenizer.seek_directive(vchar_scanner, conditional_directive)
 
         if directive_vstr is None:
+            logger.debug("line block save line pos=%r", vchar_scanner.get_pos())
             # not another conditional, just plain normal everyday "something"
             # save the line into the block
             line_list.append(virt_line)
@@ -603,7 +626,7 @@ def handle_conditional_directive(directive_inst, vline_iter):
             # handle "else ifCOND"
 
             # look for a following conditional directive
-            directive_vstr = seek_word(vchar_scanner, seek=conditional_open)
+            directive_vstr = tokenizer.seek_word(vchar_scanner, seek=conditional_open)
             if directive_vstr: 
                 # found an "else ifsomething"
                 dir_str = str(directive_vstr)
@@ -644,7 +667,11 @@ def handle_conditional_directive(directive_inst, vline_iter):
     
     return cond_block
 
-def parse_export_directive(expr, directive_vstr, *ignore):
+def parse_export_directive(directive_vstr, virt_line, _):
+    # ha ha type checking
+    _ = directive_vstr.vchars
+    _ = virt_line.remain
+
     dir_str = str(directive_vstr)
     if dir_str == "export":
         klass = ExportDirective
@@ -655,14 +682,20 @@ def parse_export_directive(expr, directive_vstr, *ignore):
 
     # "If you want all variables to be exported by default, you can use export by itself"
     # We have nothing left to parse so a bare export/unexport
-    if not expr.token_list:
+    remain = virt_line.remain()
+    if not remain:
         return klass(directive_vstr)
 
-    return klass(directive_vstr, expr)
+    vchar_scanner = ScannerIterator(virt_line.remain(), remain[0].filename)
+    token_list = tokenizer.tokenize_line(vchar_scanner)
+    if not token_list:
+        return klass(directive_vstr)
 
-def error_extraneous(expr, directive_str, virt_line, vline_iter):
-    starting_pos = virt_line.get_pos()
-    errmsg = "extraneous '%s'" % directive_str
+    return klass(directive_vstr, Expression(token_list))
+
+def error_extraneous(directive_vstr, virt_line, vline_iter):
+    starting_pos = directive_vstr.get_pos()
+    errmsg = "extraneous '%s'" % directive_vstr
     raise ParseError(pos=starting_pos, msg=errmsg)
 
 def parse_directive(directive_vstr, virt_line, vline_iter):
@@ -675,9 +708,10 @@ def parse_directive(directive_vstr, virt_line, vline_iter):
     #       LineBlock et al for contents of the ifdef/ifeq directives
     #
     logger.debug("parse_directive() \"%s\" at pos=%r",
-            directive_vstr, virt_line.get_pos())
+            directive_vstr, directive_vstr.get_pos())
 
     # ha ha type checking
+    _ = directive_vstr.vchars
     _ = virt_line.remain
 
     lut = {
@@ -685,9 +719,9 @@ def parse_directive(directive_vstr, virt_line, vline_iter):
         "ifneq" : parse_ifeq_directive,
         "ifdef" : parse_ifdef_directive,
         "ifndef" : parse_ifdef_directive,
-        "define" : parse_define_directive,
-#        "export" : parse_export_directive,
-#        "unexport" : parse_export_directive,
+#        "define" : parse_define_block,
+        "export" : parse_export_directive,
+        "unexport" : parse_export_directive,
         "endif" : error_extraneous,
 #        "undefine" : parse_undefine_directive,
 #        "override" : parse_override_directive,

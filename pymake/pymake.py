@@ -95,7 +95,10 @@ def parse_vline(virt_line, vline_iter):
     vstr = tokenizer.seek_directive(vchar_scanner, set(("export","unexport")))
     if vstr:
         # TODO
-        raise NotImplementedError(str(vstr))
+        e = parsermk.parse_directive(vstr, vchar_scanner, vline_iter)
+        assert e
+        return e
+
     assert vchar_scanner.is_starting(), vchar_scanner.get_pos()
 
     # seek vpath
@@ -113,14 +116,26 @@ def parse_vline(virt_line, vline_iter):
     assert vchar_scanner.is_starting(), vchar_scanner.get_pos()
 
     # How does GNU Make decide something is a rule?
-    # (It's complicated.)
+    # (Well, it's quite complicated.)
 
-    r = parsermk.parse_rule(vchar_scanner)
-    print(r)
-    breakpoint()
+    rule = parsermk.parse_rule(vchar_scanner)
+    if rule:
+        if vchar_scanner.remain():
+            # we have a rule+recipe continuation
+            recipe = tokenizer.tokenize_recipe(vchar_scanner)
+            rule.add_recipe(recipe)
+            assert not vchar_scanner.remain()
 
-#    if isinstance(virt_line,vline.RecipeVirtualLine):
-#        recipe = parsermk.tokenize_recipe(vchar_scanner)
+        return rule
+
+    assert vchar_scanner.is_starting(), vchar_scanner.get_pos()
+
+    # TODO at this point, treat everything suspected of being a recipe as a
+    # recipe.  I do not know if this is correctly correct.
+    if isinstance(virt_line, vline.RecipeVirtualLine):
+        recipe = tokenizer.tokenize_recipe(vchar_scanner)
+        assert recipe
+        return recipe
 
     # Stuff that can't be explicitly tokenzparsed as an assignment, a
     # directive, or rule winds up being a simple Expression that needs another
@@ -140,7 +155,9 @@ def parse_vline(virt_line, vline_iter):
     # all hello.o   # this is garbage
     #
 
-    assert 0, "failed to parse line at %r" % (starting_pos,)
+    token_list = tokenizer.tokenize_line(vchar_scanner)
+    e = Expression(token_list)
+    return e
 
 
 def parse_vline_stream(virt_line, vline_iter): 
@@ -175,7 +192,7 @@ def parse_vline_stream(virt_line, vline_iter):
 
     # tokenize character by character across a VirtualLine
     vchar_scanner = iter(virt_line)
-    statement = tokenize_statement(vchar_scanner)
+    statement = tokenizer.tokenize_line(vchar_scanner)
 
     if not isinstance(statement,RuleExpression) : 
         logger.debug("statement=%s", str(statement))
@@ -254,18 +271,27 @@ def find_location(tok):
 
 def _add_internal_db(symtable):
     # grab gnu make's internal db, add to our own
-    # NOTE! this requires my code to be the same license as GNU Make (GPLv3 as of 20221002)
-    # TODO 202040927 ; confirm this ---^^^ because it sounds wrong
+    #
+    # NOTE! does this requires my code to be the same license as GNU Make (GPLv3 as of 20221002) ?
+    # TODO 202040927 ; confirm this ---^^^ because it sounds ominious
     defaults, automatics = makedb.fetch_database()
+
+    # FIXME fetch_database() only returns assignment statements based on '#
+    # default' and '# automatic' strings in the `make -p` output.
+    # I still need to capture the rules.
+    # I really should be parsing the entire output of the `make -p` as a
+    # makefile, not cherry-picking strings from it.
 
     # If I don't run this code, is my code still under GPLv3 ???
 
-    # now have a list of strings containing Make syntax.
+    # now have a list of strings containing Make syntax assignment statements
     for oneline in defaults:
-        # TODO mark these variables 'default'
+        # mark these variables 'default'
         v = vline.VirtualLine([oneline], (0,0), "@defaults")
-        stmt = tokenize_statement(iter(v))
+        stmt = tokenizer.tokenize_assignment_statement(iter(v))
         stmt.eval(symtable)
+
+    # TODO parse automatics
 
 def _execute_statement_list(stmt_list, curr_rules, rulesdb, symtable):
 
@@ -527,7 +553,8 @@ def execute(makefile, args):
     # not an Assignment is likely a target.
     for onearg in args.argslist:
         v = vline.VirtualLine([onearg], (0,0), "@commandline")
-        stmt = tokenize_statement(iter(v))
+        vchar_scanner = iter(v)
+        stmt = tokenizer.tokenize_assignment_statement(vchar_scanner)
         if isinstance(stmt,AssignmentExpression):
             symtable.command_line_start()
             stmt.eval(symtable)
@@ -637,9 +664,9 @@ def _run_it(args):
     return exit_code
 
 # FIXME ugly hack dependency injection to solve problems with circular imports
-parsermk.parse_vline_stream = parse_vline 
-symbolmk.parse_vline_stream = parse_vline 
-symbolmk.tokenize_statement = tokenizer.tokenize_line
+parsermk.parse_vline = parse_vline 
+symbolmk.parse_vline = parse_vline 
+symbolmk.tokenize_line = tokenizer.tokenize_line
 
 def main():
     args = pargs.parse_args(sys.argv[1:])

@@ -37,10 +37,12 @@ $(info foo=$(foo))
 # *** empty variable name. Stop.
 # = bar
 
-# leading whitespace is preserved
-# trailing whitespace is discarded
+# whitespace is preserved
+# leading whitespace is discarded
+# there are three spaces after BAR
 FOO:=   BAR   
 $(info FOO=>>>$(FOO)<<<)
+# output is "FOO=>>>BAR   <<<"
 
 @:;@:
 
