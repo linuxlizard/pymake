@@ -1,16 +1,19 @@
-import string
+# SPDX-License-Identifier: GPL-2.0
+# Copyright (C) 2014-2024 David Poole davep@mbuf.com david.poole@ericsson.com
 
 # can't use string.whitespace because want to preserve line endings
 whitespace = set(' \t')
 
 # davep 04-Dec-2014 ; FIXME ::= != are not in Make 3.81, 3.82 (Introduced in 4.0)
-assignment_operators = {"=", "?=", ":=", "::=", "+=", "!="}
-rule_operators = {":", "::"}
+# :::= is apparently a POSIX thing (see do_variable_definition()-src/variable.c)
+assignment_operators = {"=", "?=", ":=", "::=", "+=", "!=", ":::=" }
+rule_operators = {":", "::", "?:" }
 eol = set("\r\n")
 
 # eventually will need to port this thing to Windows' CR+LF
 platform_eol = "\n"
 
+# TODO can be changed by .RECIPEPREFIX
 recipe_prefix = "\t"
 
 backslash = '\\'
@@ -41,25 +44,32 @@ built_in_targets = {
 
 # Conditionals separate because conditionals can be multi-line and require some
 # complex handling.
-conditional_directive = {
+conditional_open = {
     "ifdef", "ifndef", 
     # newer versions of Make? (TODO verify when these appeared)
     "ifeq", "ifneq"
 }
 
-# all directives
-directive = {
-    "define", "enddef", "undefine",
+conditional_close = {
     "else", "endif",
-    "include", "-include", "sinclude",
-    "override", 
-    "export", "unexport",
-    "private", 
-    "vpath",
-} | conditional_directive
+}
 
-# directives are all lowercase and the - from "-include"
-#directive_chars = set(string.ascii_lowercase) | set("-")
+conditional_directive = conditional_open | conditional_close
+
+assignment_modifier = {
+    "export", "unexport",
+    "override", "private", "define", "undefine"
+}
+
+include_directive = {
+    "include", "-include", "sinclude",
+}
+
+# all directives (pseudo "reserved words")
+directive = {
+    "endef",
+    "vpath",
+} | conditional_directive | assignment_modifier | include_directive
 
 automatic_variables = {
     "@",

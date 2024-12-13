@@ -6,7 +6,7 @@
 
 import pytest
 
-from pymake.pymake import parse_vline_stream
+from pymake.pymake import parse_vline
 from pymake.scanner import ScannerIterator
 import pymake.source as source
 import pymake.symbolmk as symbolmk
@@ -19,7 +19,7 @@ def parse_rule_string(s):
     line_scanner = ScannerIterator(src.file_lines, src.name)
     vline_iter = vline.get_vline(src.name, line_scanner)
 
-    statement_list = [parse_vline_stream(vline, vline_iter) for vline in vline_iter] 
+    statement_list = [parse_vline(vline, vline_iter) for vline in vline_iter] 
 
     assert isinstance(statement_list[0], symbolmk.RuleExpression)
 

@@ -132,7 +132,7 @@ endif
 @:;@:
 """
     msg = run.pymake_should_fail(s)
-    assert "extraneous 'endif'" in msg
+    assert "extraneous 'endif'" in msg, msg
 
 # This is a weird corner case. Check for a directive that isn't
 # properly whitespace separated. GNU Make doesn't detect it as
@@ -168,4 +168,16 @@ ifeq
 """
     msg = run.pymake_should_fail(s)
     assert "invalid syntax in conditional" in msg
+
+def test_nested_evalutation():
+    s="""
+ifneq (0,1)
+foo:=1
+ifneq ($(foo),1)
+    $(error should not hit this)
+endif
+endif
+@:;@:
+"""
+    run.pymake_string(s)
 

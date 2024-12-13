@@ -1,7 +1,8 @@
-#!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-2.0
 
 import os
+
+import pytest
 
 import run
 
@@ -196,9 +197,79 @@ endif
     expect = ('export=a b c d',)
     run_test(makefile, expect)
 
-if __name__ == '__main__':
-    test1()
-#    test_multiple_assign()
-#    test_export_everything()
-#    test_export_environment_vars()
-#    test_command_line_export()
+def test_simple_unexport():
+    makefile = """
+CC=gcc
+export CC
+unexport CC
+all:
+	@printenv CC || echo no CC for you
+"""
+    expect=("no CC for you",)
+    run_test(makefile,expect)
+
+def test_unexport_variables():
+    # unexport variables explicitly
+    makefile = """
+CC=gcc
+CFLAGS=-g -Wall
+export CC
+export CFLAGS
+unexport CC CFLAGS
+all:
+	@printenv CC || echo no CC for you
+	@printenv CFLAGS || echo no CFLAGS for you
+"""
+    expect=("no CC for you","no CFLAGS for you")
+    run_test(makefile,expect)
+
+def test_global_export():
+    makefile = """
+export
+CC=gcc
+CFLAGS=-g -Wall
+all:
+	@printenv CC
+	@printenv CFLAGS
+"""
+    expect=("gcc","-g -Wall")
+    run_test(makefile,expect)
+
+def test_global_unexport():
+    makefile = """
+export
+CC=gcc
+CFLAGS=-g -Wall
+unexport
+all:
+	@printenv CC || echo no CC for you
+	@printenv CFLAGS || echo no CFLAGS for you
+"""
+    expect=("no CC for you","no CFLAGS for you")
+    run_test(makefile,expect)
+
+def test_specific_unexport():
+    # lone export means export everything
+    # but lone unexport will undo that
+    # lone unexport will not unexport specifically export'd vars
+    makefile = """
+export
+export CC=gcc
+CFLAGS=-g -Wall
+unexport
+all:
+	@printenv CC
+	@printenv CFLAGS || echo no CFLAGS for you
+"""
+    expect=("gcc","no CFLAGS for you")
+    run_test(makefile,expect)
+
+@pytest.mark.skip(reason="FIXME")
+def test_circular_export_bug():
+    makefile="""
+VERSION=$(shell cat /etc/os-release)
+export VERSION
+@:;@:
+"""
+    expect = ("",)
+    run_test(makefile,expect)

@@ -24,7 +24,6 @@ from pymake.printable import printable_string
 
 # turn on the big global debug flags
 import pymake.vline as vline
-vline._debug = True
 
 # GNU Make Manual section 3.1.1 Splitting Long Lines.
 # "Outside of recipe lines, backslash/newlines are converted into a single space character.
@@ -40,6 +39,7 @@ class DebugVirtualLine(vline.VirtualLine):
         super().__init__(phys_lines_list, (0,0), "/dev/null")
 
 def test_line_cont():
+    vline._debug = True
     test_list = ( 
         ( "this is a test\n",   False ),
         ( "this is a test\\\n", True ),

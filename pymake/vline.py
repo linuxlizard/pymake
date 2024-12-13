@@ -1,4 +1,5 @@
-#!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0
+# Copyright (C) 2014-2024 David Poole davep@mbuf.com david.poole@ericsson.com
 
 # "Virtual Block" -- a 2D array of characters with visible/not visible
 # attribute.
@@ -14,6 +15,7 @@ import logging
 
 logger = logging.getLogger("pymake.vline")
 
+_testing = False
 _debug = False
 
 import pymake.hexdump as hexdump
@@ -47,6 +49,7 @@ def vchars_debug_string(vchar_list):
 def validate_vchars(vchar_list):
     if not _debug:
         return            
+    breakpoint()
 
     # Super paranoid check on the validity of every character in every token.
     # Verify the position of every character in the characters' filenames.
@@ -119,7 +122,7 @@ class VChar(object):
 
         # show/hide this char (e.g., hide if in a comment or backslash with
         # weird whitespace)
-        self.hide = False
+        self._hide = False
 
         self.filename = filename
 
@@ -175,57 +178,82 @@ class VChar(object):
         # source file.
         self._char = ' '
 
+    @property
+    def hide(self):
+        return self._hide
+
+    @hide.setter
+    def hide(self, flag):
+        self._hide = bool(flag)
+
 
 class VCharString(object):
     # davep 24-Apr-2016 ;  
     # container of VChar; quack like a Python string
     # Symbols contain a VCharString contains VChar contains filename, position, real char
     def __init__(self, arg=None):
-        self.chars = list(arg) if arg else []
-        # verify we have VChar
-        if self.chars:
-            self.chars[0].pos
+        if _testing and arg and isinstance(arg,str):
+            arg = VCharString.from_string(arg)
+            
+        self.vchars = list(arg) if arg else []
+        # ha ha type checking; verify we have VChar
+        assert all( (vchar.pos for vchar in self.vchars) )
 
     def __str__(self):
-        return "".join([str(c) for c in self.chars if not c.hide])
+        return "".join([str(c) for c in self.vchars if not c.hide])
 
     def __add__(self, vchar):
         assert vchar.pos
         assert vchar.filename
-        self.chars.append(vchar)
+        self.vchars.append(vchar)
         return self
 
     def __len__(self):
-        return len(self.chars)
+        return len(self.vchars)
 
     def __getitem__(self, idx):
-        return self.chars[idx]
+        return self.vchars[idx]
 
     @classmethod
     def from_string(cls, python_string):
         # make a VCharString from a regular python string (mostly used with
         # testing so the positions and filename will be nonsense)
-        return cls([VChar(c, (0,0), "/dev/null") for c in python_string])
+        cnt = itertools.count(0)
+        return cls([VChar(c, (0,next(cnt)), "/dev/null") for c in python_string])
 
     def validate(self):
-        validate_vchars(self.chars)
+        validate_vchars(self.vchars)
 
     def printable_str(self):
         # build string from the visible characters.
         # see also printable_str() in VirtualLine
-        s = "".join([printable_char(vchar.char) for vchar in self.chars if not vchar.hide]) 
+        s = "".join([printable_char(vchar.char) for vchar in self.vchars if not vchar.hide]) 
         return s
 
     def get_pos(self):
         # XXX what about empty VCharString ?
-        return self.chars[0].filename, self.chars[0].pos
+        return self.vchars[0].filename, self.vchars[0].pos
+
+    def clear(self):
+        self.vchars = []
+
+    def python(self):
+        # note: normally I'm using __str__() for this functionality but the VCharString and VirtualLine
+        # use __str__() to return the contents as a pure python string. 
+        return "VCharString(\"{}\")".format(self)
+
+    def hide(self):
+        # hide this entire string
+        for v in self.vchars:
+            v.hide = True
+    
 
 class VirtualLine(object):
     def __init__(self, phys_lines_list, starting_pos, filename):
         logger.debug("VirtualLine pos=%r filename=%s", starting_pos, filename)
         logger.debug("lines=%s", phys_lines_list)
 
-        # ha-ha type checking
+        # ha ha type checking
         int(starting_pos[0]), int(starting_pos[1])
 
         # need an array of strings (2-D array of characters)
@@ -423,7 +451,7 @@ class VirtualLine(object):
         # code.
         s = "VirtualLine(["
         s += ", ".join( ["\"{0}\"".format(printable_string(p)) for p in self.phys_lines] )
-        s += "], {}, {})".format(self.filename, self.starting_pos)
+        s += "], {}, \"{}\")".format(self.starting_pos, self.filename)
         return s
 
     def get_code(self):

@@ -138,6 +138,7 @@ def execute(cmd_str, symbol_table, use_default_shell=True):
 
 def execute_tokens(token_list, symbol_table):
     """Runner for $(shell) and != """
+    assert len(token_list)
 
     # TODO condense these steps
     step1 = [t.eval(symbol_table) for t in token_list]

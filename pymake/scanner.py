@@ -1,5 +1,6 @@
-#!/usr/bin/env python3
-
+# SPDX-License-Identifier: GPL-2.0
+# Copyright (C) 2014-2024 David Poole davep@mbuf.com david.poole@ericsson.com
+#
 # Scanner (as in scanner for tokenizer/parser)
 # Needed an iterator that supports pushback and state save/restore.
 # (fancy shmancy https://en.wikipedia.org/wiki/Pushdown_automaton)
@@ -35,7 +36,6 @@ class ScannerIterator(object):
     def lookahead(self):
         if self.idx >= self.max_idx:
             return None
-#        print("lookahead={0}".format(self.data[self.idx]))
         return self.data[self.idx]
 
     def pushback(self):
@@ -45,11 +45,14 @@ class ScannerIterator(object):
 
     def push_state(self):
         self.state_stack.append(self.idx)
-#        print( "push stack=", self.state_stack )
 
     def pop_state(self):
-#        print( "pop stack=", self.state_stack )
         self.idx = self.state_stack.pop()
+
+    def clear_state(self):
+        # remove previous state pushed but do not restore it
+        # (we pushed but decided we didn't need to pop)
+        _ = self.state_stack.pop()
 
     def remain(self):
         # Test/debug method. Return what remains of the data.
@@ -57,4 +60,10 @@ class ScannerIterator(object):
 
     def is_empty(self):
         return self.idx >= self.max_idx
+
+    def is_starting(self):
+        return self.idx == 0
+
+    def get_pos(self):
+        return self.data[self.idx].get_pos()
 

@@ -5,12 +5,12 @@ import pytest
 logger = logging.getLogger("pymake")
 logging.basicConfig(level=logging.DEBUG)
 
-from pymake.tokenizer import tokenize_statement_LHS
 from pymake.vline import VirtualLine
-from pymake.parsermk import parse_ifeq_conditionals
+from pymake.parsermk import read_expression, parse_directive, parse_ifeq_conditionals
 from pymake.symbolmk import Expression
 from pymake.error import InvalidSyntaxInConditional
-from pymake.constants import whitespace
+from pymake.constants import *
+from pymake.tokenizer import seek_directive
 
 # Note on the weird strings e.g. s= " '$a' '$b' " without the ifeq/ifneq:
 # parse_ifeq_conditionals() parses the directive expression not the entire
@@ -22,20 +22,18 @@ from pymake.constants import whitespace
 def _run(s, expect):
     print("try %r" % s)
     virt_line = VirtualLine([s], (0,0), "/dev/null")
-    viter = iter(virt_line)
-    lhs, op = tokenize_statement_LHS(viter)
+    vchar_scanner = iter(virt_line)
+    
+    # position the scanner right after the conditional open
+    vstr = seek_directive(vchar_scanner, conditional_open)
+    assert vstr, vstr
+    print(f"vstr={vstr}")
 
-    # if expect is None, then we have a junk expression so don't validate
-    # anything 
-    # check+remove the first two tokens
-    assert lhs[0].makefile() == "ifeq"
-    del lhs[0]
-    assert lhs[0].makefile() in whitespace
-    del lhs[0]
+    expr = read_expression(vchar_scanner)
+    assert expr, expr
+    print(f"expr={expr}")
 
-    expr = Expression(lhs)
-
-    expr1, expr2 = parse_ifeq_conditionals(expr, "ifeq")
+    expr1, expr2 = parse_ifeq_conditionals(expr, vstr)
     if expect is None:
         # should have failed
         assert 0, (s, expr1.makefile(),expr2.makefile())
@@ -119,19 +117,39 @@ def test_tab():
     s = "ifeq	(1,1)"
     _should_succeed(s, ("1","1"))
 
-@pytest.mark.skip(reason="FIXME balanced parenthesis parsing")
+#
+# GNU Make demands parenthesis balance on each side of the comma.
+#
 def test_balanced_parens():
     s = "ifeq ((1),(1))"
     _should_succeed(s, ("(1)", "(1)"))
 
-@pytest.mark.skip(reason="FIXME balanced parenthesis parsing")
 def test_balanced_parens_more():
     s = "ifeq (( 1 ),( 1 ))"
     _should_succeed(s, ("( 1 )", "( 1 )"))
 
-@pytest.mark.skip(reason="FIXME balanced parenthesis parsing")
+    s = "ifeq ((),())"
+    _should_succeed(s, ("()", "()"))
+
+    s = "ifeq ((()),(()))"
+    _should_succeed(s, ("(())", "(())"))
+
+    s = "ifeq (()(),()())"
+    _should_succeed(s, ("()()", "()()"))
+
+    s = "ifeq ((foo),(bar)) "
+    _should_succeed(s, ("(foo)", "(bar)"))
+
+    # works because finds the first closing ) and the 2nd is 'extraneous text'
+    s = "ifeq ((),))"
+    _should_succeed(s, ("()", ""))
+
 def test_unbalanced_parens():
     s = "ifeq ((,() "
+    _should_fail(s)
+    s = "ifeq ((,(() "
+    _should_fail(s)
+    s = "ifeq (),)) "
     _should_fail(s)
 
 partial_expressions = (

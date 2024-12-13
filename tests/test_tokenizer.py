@@ -36,22 +36,21 @@ def test_comment():
 def test_assign_plus_comment():
     s = "foo := bar # this is a test\n"
     viter = make_viter(s)
-    lhs, assignop = tokenizer.tokenize_statement_LHS(viter)
-    assert str(assignop.string) == ":="
-    rhs = tokenizer.tokenize_assign_RHS(viter)
+    stmt = tokenizer.tokenize_assignment_statement(viter)
+    assert stmt.assign_op.makefile() == ":="
     assert not viter.remain()
 
     symbol_table = symtablemk.SymbolTable()
-    assert len(lhs)==2, len(lhs)
-    assert lhs[0].eval(symbol_table)=="foo"
-    assert lhs[1].eval(symbol_table)==" "
+    assert len(stmt.lhs)==2, len(lhs)
+    assert stmt.lhs[0].eval(symbol_table)=="foo"
+    assert stmt.lhs[1].eval(symbol_table)==" "
     # note trailing whitespace!
-    assert rhs.eval(symbol_table)=="bar "
+    assert stmt.rhs.eval(symbol_table)=="bar "
 
 def test_tokenize_assign():
     s = "foo := bar # this is a test\n"
     viter = make_viter(s)
-    expr = tokenizer.tokenize_statement(viter)
+    expr = tokenizer.tokenize_assignment_statement(viter)
 
     symbol_table = symtablemk.SymbolTable()
     s = expr.eval(symbol_table)
@@ -63,7 +62,7 @@ def test_tokenize_assign():
 def test_tokenize_assign_recursive():
     s = "foo = bar # this is a test\n"
     viter = make_viter(s)
-    expr = tokenizer.tokenize_statement(viter)
+    expr = tokenizer.tokenize_assignment_statement(viter)
 
     symbol_table = symtablemk.SymbolTable()
     s = expr.eval(symbol_table)
@@ -77,9 +76,8 @@ def test_backslash_expression():
     vline = VirtualLine(a, (0,0), "/dev/null")
     assert str(vline)=="foo = bar\n"
     viter = iter(vline)
-    lhs, assignop = tokenizer.tokenize_statement_LHS(viter)
-    assert str(assignop.string) == "="
-    rhs = tokenizer.tokenize_assign_RHS(viter)
+    stmt = tokenizer.tokenize_assignment_statement(viter)
+    assert stmt.assign_op.makefile() == "="
     assert not viter.remain()
 
 def test_tokenize_simple_recipe():

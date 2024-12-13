@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0
+# Copyright (C) 2014-2024 David Poole davep@mbuf.com david.poole@ericsson.com
 
 # davep 20-Mar-2016 ; built-in functions
 
@@ -26,46 +27,6 @@ __all__ = [ "Info",
 
             "make_function",
           ]
-
-# built-in functions GNU Make 3.81(ish?)
-#builtins = {
-#    "subst",
-#    "patsubst",
-#    "strip",
-#    "findstring",
-#    "filter",
-#    "filter-out",
-#    "sort",
-#    "word",
-#    "words",
-#    "wordlist",
-#    "firstword",
-#    "lastword",
-#    "dir",
-#    "notdir",
-#    "suffix",
-#    "basename",
-#    "addsuffix",
-#    "addprefix",
-#    "join",
-#    "wildcard",
-#    "realpath",
-#    "absname",
-#    "error",
-#    "warning",
-#    "shell",
-#    "origin",
-#    "flavor",
-#    "foreach",
-#    "if",
-#    "or",
-#    "and",
-#    "call",
-#    "eval",
-#    "file",
-#    "value",
-#    "info",
-#}
 
 class PrintingFunction(Function):
     fmt = None

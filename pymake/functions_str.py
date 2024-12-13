@@ -1,4 +1,6 @@
 # SPDX-License-Identifier: GPL-2.0
+# Copyright (C) 2014-2024 David Poole davep@mbuf.com david.poole@ericsson.com
+#
 # Functions for string substitution and analysis
 #
 # Make is very whitespace sensitive so this is a little strange.  I'm

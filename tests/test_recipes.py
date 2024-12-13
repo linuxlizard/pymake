@@ -16,7 +16,7 @@ def parse_string(s):
     src.load()
     line_scanner = ScannerIterator(src.file_lines, src.name)
     vline_iter = vline.get_vline(src.name, line_scanner)
-    statement_list = [pymake.parse_vline_stream(vline, vline_iter) for vline in vline_iter] 
+    statement_list = [pymake.parse_vline(vline, vline_iter) for vline in vline_iter] 
 
     assert not line_scanner.remain()
     return statement_list
