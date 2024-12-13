@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-2.0
 
+import sys
 import os
 import subprocess
 import sys
@@ -21,11 +22,22 @@ def _run_makefile(infilename):
     filepath = os.path.join(example_dir, infilename)
     assert os.path.exists(filepath)
 
-    m = subprocess.run(("make", "-f", filepath), 
-                        shell=False, 
-                        check=True, 
-                        stdout=subprocess.PIPE, 
-                        stderr=subprocess.PIPE)
+    fail = ()
+    try:
+        m = subprocess.run(("make", "-f", filepath), 
+                            shell=False, 
+                            check=True, 
+                            stdout=subprocess.PIPE, 
+                            stderr=subprocess.PIPE)
+    except subprocess.CalledProcessError as err:
+        fail = ( err.returncode, err.stdout, err.stderr )
+        print("make failed returncode=%d" % err.returncode, file=sys.stderr)
+        print("make failed stdout=%s" % err.stdout, file=sys.stderr)
+        print("make failed stderr=%s" % err.stderr, file=sys.stderr)
+
+    if fail:
+        assert 0, fail
+
 #    print(m.stdout)
     return m.stdout
 
