@@ -732,8 +732,13 @@ class UnExportDirective(ExportDirective):
 class IncludeDirective(Directive):
     name = "include"
 
-    def __init__(self, keyword, expression):
+    def __init__(self, keyword, expression=None):
         self.source = None
+
+        # if expression is None then we found a bar 'include' in the source.
+        # GNU Make ignores it but let's throw a warning.
+        if expression is None:
+            warning_message(keyword.get_pos(), "ignore include with no target")
 
         super().__init__(keyword, expression)
 
@@ -749,6 +754,11 @@ class IncludeDirective(Directive):
     # TODO So I'll need a way of caching the file include failures. Will need
     # to retry between execute() and running the Rules.
     def eval(self, symbol_table):
+        if self.expression is None:
+            # GNU Make strangely allows a bare 'include' which is summarily
+            # ignored.
+            return ""
+
         s = self.expression.eval(symbol_table)
 
         # GNU Make ignores an empty include

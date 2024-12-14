@@ -111,6 +111,8 @@ infilename_list = (
     "assign.mk",
     "multiline.mk",
     "ignoreandsilent.mk",
+    
+    "include.mk"
     # "automatic.mk",
 )
 

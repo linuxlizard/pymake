@@ -97,8 +97,6 @@ class Entry:
         # vs   a:=10  (evaluated immediately and "10" stored in symtable)
         #
         if isinstance(self._value, Symbol):
-            if self.name=='include':
-                breakpoint()
             logger.debug("recursive eval %r name=%s at pos=%r", self, self.name, self.get_pos())
             if self.loop > 0:
                 msg = "Recursive variable %r references itself (eventually)" % self.name
