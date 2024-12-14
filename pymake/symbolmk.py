@@ -732,8 +732,11 @@ class UnExportDirective(ExportDirective):
 class IncludeDirective(Directive):
     name = "include"
 
-    def __init__(self, keyword, expression):
-        self.source = None
+    def __init__(self, keyword, expression=None):
+        # if expression is None then we found a bar 'include' in the source.
+        # GNU Make ignores it but let's throw a warning.
+        if expression is None:
+            warning_message(keyword.get_pos(), "ignore include with no target")
 
         super().__init__(keyword, expression)
 
@@ -749,20 +752,31 @@ class IncludeDirective(Directive):
     # TODO So I'll need a way of caching the file include failures. Will need
     # to retry between execute() and running the Rules.
     def eval(self, symbol_table):
+        if self.expression is None:
+            # GNU Make strangely allows a bare 'include' which is summarily
+            # ignored.
+            return ""
+
         s = self.expression.eval(symbol_table)
 
         # GNU Make ignores an empty include
         if not s:
             return []
 
-        symbol_table.append("MAKEFILE_LIST", s, self.expression.get_pos())
+        # GNU allows multiple include files per line
+        file_list = s.split()
 
-        self.source = source.SourceFile(s)
-        self.source.load()
-        line_scanner = ScannerIterator(self.source.file_lines, self.source.name)
-        vline_iter = get_vline(self.source.name, line_scanner)
+        statement_list = []
+        for include_filename in file_list:
+            symbol_table.append("MAKEFILE_LIST", include_filename, self.expression.get_pos())
 
-        statement_list = [parse_vline(vline, vline_iter) for vline in vline_iter] 
+            src = source.SourceFile(include_filename)
+            src.load()
+            line_scanner = ScannerIterator(src.file_lines, src.name)
+            vline_iter = get_vline(src.name, line_scanner)
+
+            statement_list.extend([parse_vline(vline, vline_iter) for vline in vline_iter])
+
         return statement_list
 
 class MinusIncludeDirective(IncludeDirective):

@@ -484,17 +484,25 @@ def parse_define_block(expr, virt_line, vline_iter ):
 #    # TODO any validity checks I need to do here? (Probably)
 #    raise NotImplementedError(directive_vstr)
 
-def parse_include_directive(expr, directive_vstr, *ignore):
+def parse_include_directive(directive_vstr, virt_line, _):
     # ha ha type checking
-    _ = expr.token_list
+    _ = directive_vstr.vchars
+    _ = virt_line.remain
 
-    # TODO any validity checks I need to do here? (Probably)
+    starting_pos = directive_vstr.get_pos()
+
     dir_str = str(directive_vstr)
     
     klass = include_directive_lut[dir_str]
 
+    vchar_scanner = ScannerIterator(virt_line.remain(), starting_pos[0])
+    token_list = tokenizer.tokenize_line(vchar_scanner)
+    if not token_list:
+        # bare include is not an error (seems to be ignored)
+        return klass(directive_vstr)
+
     # note we're passing in the parse function
-    return klass(directive_vstr, expr)
+    return klass(directive_vstr, Expression(token_list))
 
 def handle_conditional_directive(directive_inst, vline_iter):
     # GNU make doesn't parse the stuff inside the conditional unless the

@@ -94,7 +94,6 @@ def parse_vline(virt_line, vline_iter):
     # seek export | unexport
     vstr = tokenizer.seek_directive(vchar_scanner, set(("export","unexport")))
     if vstr:
-        # TODO
         e = parsermk.parse_directive(vstr, vchar_scanner, vline_iter)
         assert e
         return e
@@ -111,8 +110,10 @@ def parse_vline(virt_line, vline_iter):
     # seek include
     vstr = tokenizer.seek_directive(vchar_scanner, include_directive)
     if vstr:
-        # TODO
-        raise NotImplementedError(str(vstr))
+        d = parsermk.parse_directive( vstr, vchar_scanner, vline_iter)
+        assert d
+        return d
+
     assert vchar_scanner.is_starting(), vchar_scanner.get_pos()
 
     # How does GNU Make decide something is a rule?

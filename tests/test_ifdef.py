@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-2.0
+
 import pytest
 
 import run
@@ -5,8 +7,7 @@ import run
 # run both make and pymake
 # these ifdef tests are simple enough for a pass/fail
 def run_test(makefile):
-    output = run.gnumake_string(makefile)
-    output = run.pymake_string(makefile)
+    run.simple_test(makefile)
 
 def test_ifdef_mixed_build():
     # If the value of that variable has a non-empty value, the text-if-true

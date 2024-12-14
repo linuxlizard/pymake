@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-2.0
+
 import os
 import sys
 import tempfile
@@ -134,3 +136,10 @@ def pymake_should_fail(makefile, extra_args=None, extra_env=None):
 
 def gnumake_should_fail(makefile, extra_args=None, extra_env=None):
     return _should_fail(gnumake_string, makefile, extra_args, extra_env)
+
+# run both make and pymake
+# for a test simple enough for a pass/fail
+def simple_test(makefile):
+    output = gnumake_string(makefile)
+    output = pymake_string(makefile)
+
