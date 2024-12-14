@@ -733,8 +733,6 @@ class IncludeDirective(Directive):
     name = "include"
 
     def __init__(self, keyword, expression=None):
-        self.source = None
-
         # if expression is None then we found a bar 'include' in the source.
         # GNU Make ignores it but let's throw a warning.
         if expression is None:
@@ -765,14 +763,20 @@ class IncludeDirective(Directive):
         if not s:
             return []
 
-        symbol_table.append("MAKEFILE_LIST", s, self.expression.get_pos())
+        # GNU allows multiple include files per line
+        file_list = s.split()
 
-        self.source = source.SourceFile(s)
-        self.source.load()
-        line_scanner = ScannerIterator(self.source.file_lines, self.source.name)
-        vline_iter = get_vline(self.source.name, line_scanner)
+        statement_list = []
+        for include_filename in file_list:
+            symbol_table.append("MAKEFILE_LIST", include_filename, self.expression.get_pos())
 
-        statement_list = [parse_vline(vline, vline_iter) for vline in vline_iter] 
+            src = source.SourceFile(include_filename)
+            src.load()
+            line_scanner = ScannerIterator(src.file_lines, src.name)
+            vline_iter = get_vline(src.name, line_scanner)
+
+            statement_list.extend([parse_vline(vline, vline_iter) for vline in vline_iter])
+
         return statement_list
 
 class MinusIncludeDirective(IncludeDirective):
