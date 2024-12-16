@@ -446,6 +446,18 @@ def parse_define_block(expr, virt_line, vline_iter ):
     depth = 1
 
     for virt_line in vline_iter : 
+
+        # GNU make explicitly excludes lines with a recipe prefix
+        # from checking for another 'define' or an 'endef'
+        #
+        # "If the line doesn't begin with a tab, test to see if it introduces
+        # another define, or ends one.  Stop if we find an 'endef'"
+        #  -- do_define()/src/read.c
+        #
+        if isinstance(virt_line,vline.RecipeVirtualLine):
+            vline_list.append(virt_line)
+            continue
+
         # search for endef or a nested define
         viter = iter(virt_line)
         token = tokenizer.seek_word(viter, {"endef","define"})
@@ -469,7 +481,7 @@ def parse_define_block(expr, virt_line, vline_iter ):
 
         vline_list.append(virt_line)
     else :
-        raise ParseError(pos=starting_pos, msg="missing endef")
+        raise MissingEndef(pos=starting_pos)
 
     block = DefineBlock(vline_list)
     expr.add_block(block)

@@ -12,7 +12,6 @@ import pymake.constants as constants
 import pymake.submake as submake
 
 logger = logging.getLogger("pymake.shell")
-logger.setLevel(level=logging.DEBUG)
 
 # TODO comment in GNU make src/main.c
 # "POSIX says the value of SHELL set in the makefile won't change the value of

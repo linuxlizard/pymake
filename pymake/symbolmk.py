@@ -15,6 +15,7 @@ import pymake.shell as shell
 from pymake.scanner import ScannerIterator
 import pymake.source as source
 from pymake.debug import *
+from pymake.state import ParseState
 
 _testing = False
 
@@ -489,12 +490,11 @@ class RuleExpression(Expression):
     def makefile(self):
         # rule-targets rule-op prereq-list <CR>
         #     recipes
-        s = ""
+        s = "\n"
 
         # Embed the filename+pos of the rule in the output makefile.
-        if _debug:
-            filename, pos = self.get_pos()
-            s += "# %s %s\n" % (filename, pos)
+        filename, pos = self.get_pos()
+        s += "# rule from %s at %s\n" % (filename, pos)
 
         # need spaces between targets and prerequisites
 
@@ -505,9 +505,7 @@ class RuleExpression(Expression):
         s += self.rule_op.makefile()
 
         # prerequisite(s)
-        s += self.prereqs.makefile()
-
-        s += "\n"
+        s += self.prereqs.makefile() + "\n"
 
         # recipe(s)
         s += self.recipe_list.makefile()
@@ -542,6 +540,15 @@ class RuleExpression(Expression):
         prereqs = [p for p in prereqs if p]
 
         return targets, prereqs
+
+    def get_pos(self):
+        # A Rule may have an empty targets list ("We accept and ignore rules
+        # without targets for compatibility with SunOS 4 make"). If the target
+        # list is empty, then look for the Operator which can never be empty.
+        
+        if self.targets.token_list:
+            return super().get_pos()
+        return self.rule_op.get_pos()
 
 class RuleList(Expression):
      # RuleList class used for the targets and the prerequisites. Is an array
@@ -775,7 +782,8 @@ class IncludeDirective(Directive):
             line_scanner = ScannerIterator(src.file_lines, src.name)
             vline_iter = get_vline(src.name, line_scanner)
 
-            statement_list.extend([parse_vline(vline, vline_iter) for vline in vline_iter])
+            state = ParseState()
+            statement_list.extend([parse_vline(vline, vline_iter, state) for vline in vline_iter])
 
         return statement_list
 
@@ -883,7 +891,8 @@ class LineBlock(Symbol):
     def eval(self, symbol_table):
         vline_iter = iter(self.vline_list)
 
-        statement_list = [parse_vline(vline, vline_iter) for vline in vline_iter] 
+        state = ParseState()
+        statement_list = [parse_vline(vline, vline_iter, state) for vline in vline_iter] 
         return statement_list
 
 
@@ -1172,7 +1181,8 @@ class DefineBlock(LineBlock):
         if self.statement_list is None:
             from pymake.pymake import parse_vline
             vline_iter = iter(self.vline_list)
-            self.statement_list = [parse_vline(vline, vline_iter) for vline in vline_iter]
+            state = ParseState()
+            self.statement_list = [parse_vline(vline, vline_iter, state) for vline in vline_iter]
 
         # TODO make this one list comprehension statement 
         s_list = []

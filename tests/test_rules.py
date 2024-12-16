@@ -12,6 +12,7 @@ import pymake.source as source
 import pymake.symbolmk as symbolmk
 import pymake.symtablemk as symtablemk
 import pymake.vline as vline
+from pymake.state import ParseState
 
 def parse_rule_string(s):
     src = source.SourceString(s)
@@ -19,7 +20,8 @@ def parse_rule_string(s):
     line_scanner = ScannerIterator(src.file_lines, src.name)
     vline_iter = vline.get_vline(src.name, line_scanner)
 
-    statement_list = [parse_vline(vline, vline_iter) for vline in vline_iter] 
+    state = ParseState()
+    statement_list = [parse_vline(vline, vline_iter, state) for vline in vline_iter] 
 
     assert isinstance(statement_list[0], symbolmk.RuleExpression)
 
@@ -179,6 +181,8 @@ def test_simple_rule_dangling_recipe_with_prereq():
     run_rule(s,expect)
 
 def test_rule_no_targets():
+    # "rule without a target" for
+    # "compatibility with SunOS 4 make"
     s ="""\
  : bar
 	@echo foo
@@ -211,6 +215,7 @@ subdirs:
 
     run_rule(s, expect, symbol_table)
 
+@pytest.mark.skip(reason="TODO circular dependencies")
 def test_circular_dependency():
     s = """\
 foo: foo

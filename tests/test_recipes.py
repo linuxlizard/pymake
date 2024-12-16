@@ -10,13 +10,15 @@ import pymake.symbolmk as symbolmk
 import pymake.symtablemk as symtablemk
 from pymake.constants import backslash
 import pymake.vline as vline
+from pymake.state import ParseState
 
 def parse_string(s):
     src = source.SourceString(s)
     src.load()
     line_scanner = ScannerIterator(src.file_lines, src.name)
     vline_iter = vline.get_vline(src.name, line_scanner)
-    statement_list = [pymake.parse_vline(vline, vline_iter) for vline in vline_iter] 
+    state = ParseState()
+    statement_list = [pymake.parse_vline(vline, vline_iter, state) for vline in vline_iter] 
 
     assert not line_scanner.remain()
     return statement_list
