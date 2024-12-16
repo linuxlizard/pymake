@@ -12,9 +12,9 @@ import sys
 import logging
 import os
 import os.path
+from enum import Enum
 
-logger = logging.getLogger("pymake")
-#logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger("pymake.pymake")
 
 from pymake.scanner import ScannerIterator
 import pymake.vline as vline
@@ -32,6 +32,9 @@ import pymake.shell as shell
 import pymake.pargs as pargs
 import pymake.submake as submake
 from pymake.debug import *
+from pymake.state import ParseState
+
+_debug = False
 
 def get_basename( filename ) : 
     return os.path.splitext( os.path.split( filename )[1] )[0]
@@ -40,14 +43,14 @@ def get_basename( filename ) :
 def _view(token_list):
     return "".join([str(t) for t in token_list])
 
-def parse_vline(virt_line, vline_iter): 
+def parse_vline(virt_line, vline_iter, state): 
     # pull apart a single line into token/symbol(s)
     #
     # virt_line - the current line we need to tokenize (a VirtualLine)
     #
     # vline_iter - <generator> across the entire file (returns VirtualLine instances) 
     #
-    logger.debug("parse_vline()")
+    logger.debug("parse_vline() state=%d", state.rules)
 
     # save the starting position for error reporting
     starting_pos = virt_line.get_pos()
@@ -55,15 +58,39 @@ def parse_vline(virt_line, vline_iter):
     # tokenize character by character across a VirtualLine
     vchar_scanner = iter(virt_line)
 
-    # closely follow GNU Make's behavior eval() src/read.c
+    # Closely follow GNU Make's behavior in eval() src/read.c
+    # Because GNU Make doesn't have a defined grammar, parsing is very context
+    # sensitive.
     #
-    # 1. try assignment expressions
+    # 0. Check for recipe prefix aka <tab>. 
+    #   0.1. if we've seen a Rule, then this is a Recipe line. Otherwise, continue.
+    #   0.2. Rule without a Target aka ":foo"
+    #
+    #   TODO there are a lot of subtle conditions in eval() I need to study
+    #   further.
+    #   
+    # 1. if not (0) then try assignment expressions
     # 2. if not (1) then try conditional line
     # 3. if not (2) then try export/unxport
     # 4. if not (3) then try vpath
     # 5. if not (4) then try include/sinclude/-include
     # 6. if not (5) then try 'load'  (NOT IMPLEMENTED IN PYMAKE)
     # 7. if not (6) then try rule+recipe
+
+    if isinstance(virt_line, vline.RecipeVirtualLine):
+        # FIXME 20241215 corner case. Had a horrible horrible thought about my
+        # RecipeVirtualLine false positive. The backslash collapsing rules are
+        # different for regular lines and recipe lines. At some point, I'll
+        # need to convert the RecipeVirtualLine to a regular VirtualLine. TODO
+        # find an example where this might happen.
+
+        if state.rules:
+            # we've seen a Rule previously
+            recipe = tokenizer.tokenize_recipe(vchar_scanner)
+            assert recipe
+            return recipe
+
+        # fall through and attempt to parse it another way
 
     a = tokenizer.tokenize_assignment_statement(vchar_scanner)
     if a:
@@ -127,6 +154,7 @@ def parse_vline(virt_line, vline_iter):
             rule.add_recipe(recipe)
             assert not vchar_scanner.remain()
 
+        state.rules += 1
         return rule
 
     assert vchar_scanner.is_starting(), vchar_scanner.get_pos()
@@ -160,82 +188,6 @@ def parse_vline(virt_line, vline_iter):
     e = Expression(token_list)
     return e
 
-
-def parse_vline_stream(virt_line, vline_iter): 
-    assert 0, "OBSOLETE DO NOT USE use parse_vline() instead"
-
-    # pull apart a single line into token/symbol(s)
-    #
-    # virt_line - the current line we need to tokenize (a VirtualLine)
-    #
-    # vline_iter - <generator> across the entire file (returns VirtualLine instances) 
-    #
-
-    logger.debug("tokenize()")
-
-    # A line with a leading RP (RECIPEPREFIX) aka <tab> by will FOR NOW always
-    # tokenize to a Recipe. Will later add a step to dig deeper into the line
-    # to determine if it should be treated as a statement instead. GNU-Make has
-    # several cases where it allows RP lines to plain statements.
-    if isinstance(virt_line,vline.RecipeVirtualLine):
-        # This is where we need test the line to see if the RP falls under one
-        # of several GNU Make exceptions to the recipeprefix rule.
-        # Using GNU Make 4.1 eval() - src/read.c as baseline behavior.
-        # 
-        # TODO test for assignment before first recipe omg why do you do this
-        # to me, GNU Make?
-        if not tokenizer.seek_directive(iter(virt_line)):
-            recipe = parsermk.tokenize_recipe(iter(virt_line))
-            return recipe
-
-#    if get_line_number(virt_line) > 150:
-#        breakpoint()
-
-    # tokenize character by character across a VirtualLine
-    vchar_scanner = iter(virt_line)
-    statement = tokenizer.tokenize_line(vchar_scanner)
-
-    if not isinstance(statement,RuleExpression) : 
-        logger.debug("statement=%s", str(statement))
-
-        # we found a bare Expression that needs a second pass
-        assert isinstance(statement,Expression), type(statement)
-        return parsermk.parse_expression(statement, virt_line, vline_iter)
-
-    # At this point we have a Rule.
-    # rule line can contain a recipe following a ; 
-    # for example:
-    # foo : bar ; @echo baz
-    #
-    # The rule parser should stop at the semicolon. Will leave the
-    # semicolon as the first char of iterator
-
-#    logger.debug("rule=%s", str(statement))
-
-    # truncate the virtual line that precedes the recipe (cut off
-    # at a ";" that might be lurking)
-    #
-    # foo : bar ; @echo baz
-    #          ^--- truncate here
-    #
-    # I have to parse the full line as a rule to know where the rule ends and
-    # the recipe(s) begin.  A backslash makes me crazy. For example:
-    #
-    # foo : bar ; @echo baz\
-    # I am more recipe hur hur hur
-    #
-    # The recipe is "@echo baz\\\nI am more recipe hur hur hur\n"
-    # and that's what needs to exec'd.
-    if not vchar_scanner.is_empty():
-        # truncate at position of first char of whatever is
-        # leftover from the rule
-        recipe = parsermk.tokenize_recipe(vchar_scanner)
-        # attach the recipe to the rule
-        statement.add_recipe(recipe)
-
-    logger.debug("statement=%s", str(statement))
-    return statement
-
 def parse_makefile_from_src(src):
     # file_lines is an array of Python strings.
     # The newlines must be preserved.
@@ -253,7 +205,8 @@ def parse_makefile_from_src(src):
     # lines, joining backslashed lines into VirtualLine instances.
     vline_iter = vline.get_vline(src.name, line_scanner)
 
-    statement_list = [parse_vline(vline, vline_iter) for vline in vline_iter] 
+    state = ParseState()
+    statement_list = [parse_vline(vline, vline_iter, state) for vline in vline_iter] 
 
     # good time for some sanity checks
     for t in statement_list:
@@ -298,20 +251,41 @@ def _execute_statement_list(stmt_list, curr_rules, rulesdb, symtable):
 
     exit_code = 0
 
+    def _is_recipe_comment(tok):
+        # corner case to handle a line with leading <tab> and a comment
+        # which will be a Recipe if we're inside a Rule but is ignored 
+        # before we've seen a Rule
+        try:
+            tok = tok.token_list[0]
+            lit = tok.literal
+        except AttributeError:
+            # not a literal therefore definitely can't be a comment
+            return False
+        return tokenizer.seek_comment(iter(tok.string))
+
     for tok in stmt_list:
         # sanity check; everything has to have a successful get_pos()
+        if _debug:
+            print("execute tok=",tok)
         _ = tok.get_pos()
 
         logger.debug("execute %r from %r", tok, tok.get_pos())
 
         if isinstance(tok, Recipe):
-            if not curr_rules:
-                # We're confused. 
+            # We've found a recipe. Have we seen a rule yet?
+            # If this is just a comment line, ignore it
+            # But if we haven't seen a rule, throw the infamous error.
+
+            if not curr_rules and not _is_recipe_comment(tok):
+                # So We're confused. 
                 raise RecipeCommencesBeforeFirstTarget(pos=tok.get_pos())
+
             [rule.add_recipe(tok) for rule in curr_rules]
 
         elif isinstance(tok,RuleExpression):
             # restart the rules list but maintain the same ref!
+            # (need the same ref because this array is passed by the caller and
+            # we need to track the values across calls to this function)
             curr_rules.clear()
 
             rule_expr = tok
@@ -322,9 +296,20 @@ def _execute_statement_list(stmt_list, curr_rules, rulesdb, symtable):
             # All other eval() returns a string.
             target_list, prereq_list = rule_expr.eval(symtable)
                
-            for t in target_list:
-                rule = rules.Rule(t, prereq_list, rule_expr.recipe_list, rule_expr.get_pos())
-                rulesdb.add(rule)
+            if target_list:
+                for t in target_list:
+                    rule = rules.Rule(t, prereq_list, rule_expr.recipe_list, rule_expr.get_pos())
+                    rulesdb.add(rule)
+                    curr_rules.append(rule)
+            else:
+                # "We accept and ignore rules without targets for
+                #  compatibility with SunOS 4 make." -- GNU Make src/read.c
+                # grumble grumble grumble
+                # We need to have a Rule in curr_rules to correctly parse
+                # ambiguous statements with have a leading Recipe Prefix 
+                # (aka <tab>)
+                rule = rules.Rule(None, prereq_list, rule_expr.recipe_list, rule_expr.get_pos())
+                # don't add this Rule to the DB but do let the world know we are in a Rule
                 curr_rules.append(rule)
 
         else:
@@ -601,6 +586,7 @@ def execute(makefile, args):
     # At this point, we start executing the makefile Rules.
     #
     logger.info("Starting run of %s", makefile.get_pos()[0])
+
     for target in target_list:
         try:
             rule = rulesdb.get(target)
@@ -612,10 +598,11 @@ def execute(makefile, args):
         if args.dotfile:
             rule.graphviz_graph()
 
-#        print("rule=",rule)
-#        print("target=",rule.target)
-#        print("recipe=",rule.recipe_list)
-#        print("prereqs=",rule.prereq_list)
+        if _debug:
+            print("rule=",rule)
+            print("target=",rule.target)
+            print("recipe=",rule.recipe_list)
+            print("prereqs=",rule.prereq_list)
 
         # walk a dependency tree
         for rule in rulesdb.walk_tree(target):
@@ -656,10 +643,12 @@ def _run_it(args):
 
     # regenerate the makefile
     if args.output:
-        print("# start makefile %s" % args.output)
         with open(args.output,"w") as outfile:
             print(makefile.makefile(), file=outfile)
-        print("# end makefile %s" % args.output)
+        print("wrote makefile %s" % args.output)
+
+    if args.s_expr or args.output:
+        return 0
 
     exit_code = execute(makefile, args)
     return exit_code

@@ -42,145 +42,6 @@ def _pushtoken(token_list, t):
     return vline.VCharString()
 
 
-def tokenize_define_directive(directive_token, vchar_scanner):
-    # seek a multi-line macro's name.
-    # terminate on end of line or optional '='
-    #
-    # macro name can be var ref as well
-    #
-    # BAR:=bar
-    # define $(BAR)=
-    # qqq
-    # endef
-   
-    assert 0, "can't use this because doesn't handle all AssignOp"
-
-    # ha ha type checking
-    _ = vchar_scanner.pushback
-
-    logger.debug("tokenize_define_directive()")
-
-    state_start = 1
-    state_name = 2
-    state_seek_equal = 3
-    state_seek_eol = 4
-    state_dollar = 5
-    state_done = 6
-
-    state = state_start
-    token_list = []
-    token = vline.VCharString()
-
-    # 3.81 treats the = as part of the name
-    # 3.82 and beyond introduced the "=" after the macro name
-    if Version.major<=3 and Version.minor<=81: 
-        raise NotImplementedError()
-
-    # get the starting position of this scanner (for error reporting)
-    starting_pos = vchar_scanner.get_pos()
-
-    pushtoken = functools.partial(_pushtoken, token_list)
-
-    for vchar in vchar_scanner : 
-        c = vchar.char
-        logger.debug("d c={0} state={1} pos={2} ".format( 
-                printable_char(c), state, vchar.pos))
-
-        # literal backslash; I just don't want to deal with this right now
-        if c=='\\':
-            raise NotImplementedError(c)
-
-        if state==state_start:
-            # always eat whitespace while in the starting state
-            if c in whitespace : 
-                # eat whitespace
-                pass
-            elif c=='$':
-                state = state_dollar
-            else:
-                vchar_scanner.pushback()
-                state = state_name
-
-        elif state==state_dollar:
-            if c=='$':
-                # literal $
-                token += vchar 
-            else:
-                # save token so far (if any)
-                # also starts new token
-                token = pushtoken(token)
-                
-                # jump to variable_ref tokenizer
-                # restore "$" + current char in the scanner
-                vchar_scanner.pushback()
-                vchar_scanner.pushback()
-
-                # jump to var_ref tokenizer
-                token_list.append( tokenize_variable_ref(vchar_scanner) )
-
-            state=state_name
-
-        elif state==state_name : 
-            # save the name until EOL (we'll strip off the trailing RHS
-            # whitespace later)
-            #
-            # TODO only if Version > 3.81 then add support for "="
-            if c in whitespace:
-                state = state_seek_equal
-            elif c in eol or c == '=':
-                # done!
-                state = state_done
-            elif c == '#':
-                comment(vchar_scanner)
-                state = state_done
-            elif c=='$':
-                state = state_dollar
-            else:
-                token += vchar
-
-        elif state==state_seek_equal :
-            # eat whitespace until we find an '=' or end-of-line
-            # anything else is an error
-            if c in whitespace : 
-                # eat whitespace
-                pass
-            elif c in eol:
-                # done!
-                state = state_done
-            elif c == '=':
-                state = state_seek_eol
-            elif c == '#':
-                comment(vchar_scanner)
-                state = state_done
-            else:
-                warning_message(starting_pos, "extraneous text after '%s' directive" % str(directive_token))
-                state = state_done
-
-        elif state==state_seek_eol:
-            if c in eol or c in whitespace:
-                pass
-            elif c == '#':
-                comment(vchar_scanner)
-                state = state_done
-            else:
-                warning_message(starting_pos, "extraneous text after '%s' directive" % str(directive_token))
-                state = state_done
-
-        else:
-            # wtf?
-            assert 0, state
-
-        if state==state_done:
-            break
-
-    pushtoken(token)
-
-    if not token_list:
-        raise ParseError("missing multi-line macro name", pos=starting_pos)
-
-    return token_list
-
-
 def tokenize_line(vchar_scanner):
 
     # empty line
@@ -1375,4 +1236,19 @@ def tokenize_assignment_statement(vchar_scanner, target_var=False):
 
         logger.debug("assignment_modifier \"%s\" found", m)
         modifier_list.append(token)
+
+def seek_comment(vchar_scanner):
+    # check if this line is whitespace then a comment
+    #
+    # (if we have a recipe prefix line, sometimes we need to ignore it)
+
+    for vchar in vchar_scanner :
+        c = vchar.char
+        if c == '#':
+            return True
+
+        if c not in whitespace:
+            return False
+            
+    return False
 

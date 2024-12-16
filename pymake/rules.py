@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0
 
 import logging
 import os
@@ -17,11 +17,16 @@ class Rule:
     # Rule contains a RecipeList from the Symbol hierarchy but don't want to 
     # pull symbol.py in here (to keep pymake.py a little more clean).
     def __init__(self, target, prereq_list, recipe_list, pos):
+        # ha ha type checking
         # target is string and prereq_list[] is array of strings
-        assert ' ' not in target
-        assert '\t' not in target
-        assert target
-        logger.debug("create rule target=%r", target)
+        # target can be None to handle rules without a target which GNU Make allows
+        if target is not None:
+            assert ' ' not in target
+            assert '\t' not in target
+            assert target
+        assert all( (isinstance(s,str) for s in prereq_list) )
+
+        logger.debug("create rule target=%r at %r", target, pos)
         self.target = target
         self.prereq_list = prereq_list
         self.recipe_list = recipe_list
@@ -31,7 +36,8 @@ class Rule:
         self.pos = pos
 
     def __str__(self):
-        return "%s <- %s" % (self.target, ",".join(self.prereq_list))
+        target = "" if self.target is None else self.target
+        return "%s <- %s" % (target, ",".join(self.prereq_list))
 
     def get_pos(self):
         return self.pos
@@ -41,6 +47,9 @@ class Rule:
         self.recipe_list.append(recipe)
 
     def graphviz_graph(self):
+        if self.target is None:
+            raise ValueError("cannot build a graphviz for rule without targets at pos=%r" % self.pos)
+
         title = self.target.replace("/","_").replace(".","_")
         dotfilename = self.target + ".dot"
 

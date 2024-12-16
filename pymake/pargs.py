@@ -59,7 +59,7 @@ Options not in GNU Make:
 class Args:
     # names from logging.getLogger("pymake.NAME")
     valid_debug_flags = ( "functions", "parser", "rules", "scanner", "shell", 
-        "symbol", "symtable", "tokenize", "vline")
+        "symbol", "symtable", "tokenize", "vline", "pymake")
 
     def __init__(self):
         # -d 

@@ -12,6 +12,7 @@ __all__ = [ "ParseError",
             "EmptyVariableName",
             "NoMakefileFound",
             "InternalError",
+            "MissingEndef",
 
             "warning_message",
             "error_message",
@@ -96,6 +97,9 @@ class NoMakefileFound(MakeError):
 
 class InternalError(MakeError):
     default_msg = "INTERNAL ERROR! Something went wrong inside pymake itself."
+
+class MissingEndef(ParseError):
+    default_msg = "missing 'endef', unterminated 'define'"
 
 #class VersionError(MakeError):
 #    """Feature not in this version"""
