@@ -158,7 +158,7 @@ foo:
 	@echo foo
 	endif
 """
-    run_fail_test(makefile, ('No such file or directory', 'command not found'))
+    run_fail_test(makefile, ('No such file or directory', 'not found'))
 
 def test_tab_before_recipe():
     makefile="""
