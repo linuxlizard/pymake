@@ -57,9 +57,20 @@ class Entry:
         # check for recursive variable expansion attempting to expand itself
         self.loop = 0
 
+        self._export_stack = []
+
     @property
     def export(self):
         return (not self.never_export) and (self._export != Export.NOEXPORT.value)
+
+    def push_export(self, flag):
+#        logger.info("push_export %s %r %r" % (self.name, flag, self._export_stack))
+        self._export_stack.append(self._export)
+        self._export = flag.value
+
+    def pop_export(self):
+#        logger.info("pop_export %s %r" % (self.name, self._export_stack))
+        self._export = self._export_stack.pop()
 
     def set_export(self, flag):
         if self.never_export:
@@ -97,14 +108,18 @@ class Entry:
         # vs   a:=10  (evaluated immediately and "10" stored in symtable)
         #
         if isinstance(self._value, Symbol):
-            logger.debug("recursive eval %r name=%s at pos=%r", self, self.name, self.get_pos())
+            logger.debug("recursive eval %r loop=%d name=%s at pos=%r", self, self.loop, self.name, self.get_pos())
             if self.loop > 0:
+#                breakpoint()
+                return ""
                 msg = "Recursive variable %r references itself (eventually)" % self.name
                 raise MakeError(msg=msg, pos=self.get_pos())
+            logger.debug("recursive eval %r %s loop+=1", self, self.name)
             self.loop += 1
             step1 = [ self._value.eval(symbol_table) ]
             step1.extend( [t.eval(symbol_table) for t in self._appends] )
             self.loop -= 1
+            logger.debug("recursive eval %r %s loop-=1", self, self.name)
             return " ".join(step1)
 
         return self._value
@@ -366,8 +381,13 @@ class SymbolTable(object):
 #            pass
 
         try:
-#            print("fetch value=\"%r\"" % self.symbols[key])
-            return self.symbols[key].eval(self)
+            entry = self.symbols[key]
+            entry.push_export(Export.NOEXPORT)
+            v = entry.eval(self)
+#            print("key={} value={}".format(key,v))
+            entry.pop_export()
+            return v
+#            return self.symbols[key].eval(self)
         except KeyError:
             if self.warn_undefined:
                 warning_message(pos, "undefined variable '%s'" % key)
@@ -581,7 +601,21 @@ class SymbolTable(object):
         self.export_stop()
 
     def get_exports(self):
-        return { name:entry.eval(self) for name,entry in self.symbols.items() if entry.export }
+        logger.debug("get_exports")
+        exports = {}
+        for name,entry in self.symbols.items():
+            if entry.export:
+                logger.debug("get_exports handle %s", entry.name)
+                # push/pop prevents self-exporting a var during eval
+                # TODO only required for recursive variables that launch a
+                # shell. Could filter this better vs unconditional push/pop.
+                entry.push_export(Export.NOEXPORT)
+                value = entry.eval(self)
+                entry.pop_export()
+                exports[name] = value
+
+        return exports
+#        return { name:entry.eval(self) for name,entry in self.symbols.items() if entry.export }
 
     def export_start(self):
         # The export start/stop allows us to separate the "export" and

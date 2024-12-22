@@ -170,8 +170,12 @@ def execute_tokens(token_list, symbol_table):
     if exe_result.errmsg:
         error_message(pos, exe_result.errmsg)
     else:
-        # otherwise report stderr
-        error_message(pos, exe_result.stderr)
+        # otherwise report stderr (if any)
+        if exe_result.stderr:
+            logger.error("command at %r failed with exit_code=%d", pos, exe_result.exit_code)
+            error_message(pos, exe_result.stderr)
+        else:
+            logger.error("command at %r failed with exit_code=%d (but stderr empty)", pos, exe_result.exit_code)
 
-    return ""
+    return exe_result.stdout
 

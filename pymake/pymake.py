@@ -33,6 +33,7 @@ import pymake.pargs as pargs
 import pymake.submake as submake
 from pymake.debug import *
 from pymake.state import ParseState
+import pymake.constants as constants
 
 _debug = False
 
@@ -265,11 +266,10 @@ def _execute_statement_list(stmt_list, curr_rules, rulesdb, symtable):
 
     for tok in stmt_list:
         # sanity check; everything has to have a successful get_pos()
-        if _debug:
-            print("execute tok=",tok)
         _ = tok.get_pos()
 
         logger.debug("execute %r from %r", tok, tok.get_pos())
+#        logger.info("execute tok=%r from %r", tok, tok.get_pos())
 
         if isinstance(tok, Recipe):
             # We've found a recipe. Have we seen a rule yet?
@@ -516,6 +516,10 @@ def execute(makefile, args):
     symtable.add("MAKE", submake.create_helper())
     logger.debug("submake helper=%s", symtable.fetch("MAKE"))
 
+    # need this to exist so we don't modify the symbol table while iterating
+    # over the symbols dict (see symbol table get_exports())
+    symtable.add(constants.SHELLSTATUS, "")
+
     # "Contains the name of each makefile that is parsed by make, in the order
     # in which it was parsed. The name is appended just before make begins to
     # parse the makefile."
@@ -588,6 +592,8 @@ def execute(makefile, args):
     logger.info("Starting run of %s", makefile.get_pos()[0])
 
     for target in target_list:
+        exit_code = 0
+
         try:
             rule = rulesdb.get(target)
         except KeyError:
