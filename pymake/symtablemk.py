@@ -63,15 +63,6 @@ class Entry:
     def export(self):
         return (not self.never_export) and (self._export != Export.NOEXPORT.value)
 
-    def push_export(self, flag):
-#        logger.info("push_export %s %r %r" % (self.name, flag, self._export_stack))
-        self._export_stack.append(self._export)
-        self._export = flag.value
-
-    def pop_export(self):
-#        logger.info("pop_export %s %r" % (self.name, self._export_stack))
-        self._export = self._export_stack.pop()
-
     def set_export(self, flag):
         if self.never_export:
             return
@@ -110,16 +101,22 @@ class Entry:
         if isinstance(self._value, Symbol):
             logger.debug("recursive eval %r loop=%d name=%s at pos=%r", self, self.loop, self.name, self.get_pos())
             if self.loop > 0:
-#                breakpoint()
-                return ""
                 msg = "Recursive variable %r references itself (eventually)" % self.name
-                raise MakeError(msg=msg, pos=self.get_pos())
+                logger.debug("%s", msg)
+                if symbol_table.env_recursion > 0:
+                    # if we're expanding a recursive variable for a shell
+                    # command, just return an empty string
+                    return ""
+                
+                raise RecursiveVariableError(msg=msg, pos=self.get_pos())
+
             logger.debug("recursive eval %r %s loop+=1", self, self.name)
             self.loop += 1
             step1 = [ self._value.eval(symbol_table) ]
             step1.extend( [t.eval(symbol_table) for t in self._appends] )
             self.loop -= 1
             logger.debug("recursive eval %r %s loop-=1", self, self.name)
+            assert self.loop >= 0, self.loop
             return " ".join(step1)
 
         return self._value
@@ -235,6 +232,24 @@ class SymbolTable(object):
         # When evaluating command line statements, we'll set this flag which
         # will mark the incoming variables as from the command line.
         self.command_line_flag = False
+
+        # Copy GNU Make's method of handling recursive variable expansion for
+        # shell exports. When we launch a shell, vars marked 'export' must be
+        # put into the environment. However, we can run into variable expansion
+        # loops. For example:
+        #
+        # DATE=$(shell date)
+        # export DATE
+        #
+        # DATE is exported so DATE needs to be in the environment. But DATE's
+        # value comes from a $(shell) execution which needs DATE's value as an
+        # env var. When env_recursion is set, a recursive variable returns an
+        # empty string instead of throwing the "recurisve variable references
+        # itself" error.
+        #
+        # (In GNU Make this is a global variable)
+        #
+        self.env_recursion = 0
 
     def _init_builtins(self):
         # key: var name
@@ -381,13 +396,7 @@ class SymbolTable(object):
 #            pass
 
         try:
-            entry = self.symbols[key]
-            entry.push_export(Export.NOEXPORT)
-            v = entry.eval(self)
-#            print("key={} value={}".format(key,v))
-            entry.pop_export()
-            return v
-#            return self.symbols[key].eval(self)
+            return self.symbols[key].eval(self)
         except KeyError:
             if self.warn_undefined:
                 warning_message(pos, "undefined variable '%s'" % key)
@@ -602,20 +611,11 @@ class SymbolTable(object):
 
     def get_exports(self):
         logger.debug("get_exports")
-        exports = {}
-        for name,entry in self.symbols.items():
-            if entry.export:
-                logger.debug("get_exports handle %s", entry.name)
-                # push/pop prevents self-exporting a var during eval
-                # TODO only required for recursive variables that launch a
-                # shell. Could filter this better vs unconditional push/pop.
-                entry.push_export(Export.NOEXPORT)
-                value = entry.eval(self)
-                entry.pop_export()
-                exports[name] = value
-
+        self.env_recursion += 1
+        exports = { name:entry.eval(self) for name,entry in self.symbols.items() if entry.export }
+        self.env_recursion -= 1
+        assert self.env_recursion >= 0
         return exports
-#        return { name:entry.eval(self) for name,entry in self.symbols.items() if entry.export }
 
     def export_start(self):
         # The export start/stop allows us to separate the "export" and

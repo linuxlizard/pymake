@@ -264,31 +264,31 @@ def _execute_statement_list(stmt_list, curr_rules, rulesdb, symtable):
             return False
         return tokenizer.seek_comment(iter(tok.string))
 
-    for tok in stmt_list:
+    for statement in stmt_list:
         # sanity check; everything has to have a successful get_pos()
-        _ = tok.get_pos()
+        _ = statement.get_pos()
 
-        logger.debug("execute %r from %r", tok, tok.get_pos())
+        logger.debug("execute %r from %r", statement, statement.get_pos())
 #        logger.info("execute tok=%r from %r", tok, tok.get_pos())
 
-        if isinstance(tok, Recipe):
+        if isinstance(statement, Recipe):
             # We've found a recipe. Have we seen a rule yet?
             # If this is just a comment line, ignore it
             # But if we haven't seen a rule, throw the infamous error.
 
-            if not curr_rules and not _is_recipe_comment(tok):
+            if not curr_rules and not _is_recipe_comment(statement):
                 # So We're confused. 
-                raise RecipeCommencesBeforeFirstTarget(pos=tok.get_pos())
+                raise RecipeCommencesBeforeFirstTarget(pos=statement.get_pos())
 
-            [rule.add_recipe(tok) for rule in curr_rules]
+            [rule.add_recipe(statement) for rule in curr_rules]
 
-        elif isinstance(tok,RuleExpression):
+        elif isinstance(statement,RuleExpression):
             # restart the rules list but maintain the same ref!
             # (need the same ref because this array is passed by the caller and
             # we need to track the values across calls to this function)
             curr_rules.clear()
 
-            rule_expr = tok
+            rule_expr = statement
 
             # Note a RuleExpression.eval() is very different from all other
             # eval() methods (so far).  A RuleExpression.eval() returns two
@@ -314,8 +314,8 @@ def _execute_statement_list(stmt_list, curr_rules, rulesdb, symtable):
 
         else:
             try:
-                result = tok.eval(symtable)
-                logger.debug("execute result=\"%s\"", result)
+                result = statement.eval(symtable)
+                logger.debug("execute 0x%x result=\"%s\"", id(statement), result)
                 #   - eval can return a string
                 # or
                 #   - eval can return an array of Expression|Rule which needs to be
@@ -327,7 +327,7 @@ def _execute_statement_list(stmt_list, curr_rules, rulesdb, symtable):
                         # makefile rules, statements, etc.
                         # GNU Make itself seems to interpret raw text as a rule and
                         # will print a "missing separator" error
-                        raise MissingSeparator(tok.get_pos())
+                        raise MissingSeparator(statement.get_pos())
                 else:
                     # A conditional block or include eval returns an array
                     # of parsed Symbols ready for eval.  
@@ -337,20 +337,20 @@ def _execute_statement_list(stmt_list, curr_rules, rulesdb, symtable):
             except MakeError as err:
                 # Catch our own Error exceptions. Report, break out of our execute loop and leave.
                 logger.exception(err)
-                error_message(tok.get_pos(), err.msg)
+                error_message(statement.get_pos(), err.msg)
                 # check cmdline arg to dump err.description for a more detailed error message
 #                if detailed_error_explain:
-#                    error_message(tok.get_pos(), err.description)
+#                    error_message(statement.get_pos(), err.description)
                 exit_code = 1
             except SystemExit:
                 raise
             except Exception as err:
                 # My code crashed. For shame!
                 logger.exception(err)
-                logger.error("INTERNAL ERROR eval exception during token makefile=\"\"\"\n%s\n\"\"\"", tok.makefile())
-                logger.error("INTERNAL ERROR eval exception during token string=%s", str(tok))
-                filename,pos = tok.get_pos()
-                logger.error("eval failed tok=%r file=%s pos=%s", tok, filename, pos)
+                logger.error("INTERNAL ERROR eval exception during token makefile=\"\"\"\n%s\n\"\"\"", statement.makefile())
+                logger.error("INTERNAL ERROR eval exception during token string=%s", str(statement))
+                filename,pos = statement.get_pos()
+                logger.error("eval failed statement=%r file=%s pos=%s", statement, filename, pos)
                 exit_code = 1
     
         # leave early on error

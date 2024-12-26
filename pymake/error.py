@@ -13,6 +13,7 @@ __all__ = [ "ParseError",
             "NoMakefileFound",
             "InternalError",
             "MissingEndef",
+            "RecursiveVariableError",
 
             "warning_message",
             "error_message",
@@ -100,6 +101,9 @@ class InternalError(MakeError):
 
 class MissingEndef(ParseError):
     default_msg = "missing 'endef', unterminated 'define'"
+
+class RecursiveVariableError(MakeError):
+    default_msg = "Recursive variable <name> references itself eventually"
 
 #class VersionError(MakeError):
 #    """Feature not in this version"""
