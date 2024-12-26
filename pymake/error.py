@@ -103,7 +103,7 @@ class MissingEndef(ParseError):
     default_msg = "missing 'endef', unterminated 'define'"
 
 class RecursiveVariableError(MakeError):
-    default_msg = "Recursive variable <name> references itself eventually"
+    default_msg = "Recursive variable <name> references itself eventually."
 
 #class VersionError(MakeError):
 #    """Feature not in this version"""

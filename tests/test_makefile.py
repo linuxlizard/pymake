@@ -112,6 +112,7 @@ infilename_list = (
     "multiline.mk",
     "ignoreandsilent.mk",
     "rule_without_target.mk",
+    "env_recursion.mk",
     
     "include.mk",
     # "automatic.mk",

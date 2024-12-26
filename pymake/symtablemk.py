@@ -101,7 +101,7 @@ class Entry:
         if isinstance(self._value, Symbol):
             logger.debug("recursive eval %r loop=%d name=%s at pos=%r", self, self.loop, self.name, self.get_pos())
             if self.loop > 0:
-                msg = "Recursive variable %r references itself (eventually)" % self.name
+                msg = "Recursive variable %r references itself (eventually)." % self.name
                 logger.debug("%s", msg)
                 if symbol_table.env_recursion > 0:
                     # if we're expanding a recursive variable for a shell
