@@ -611,9 +611,8 @@ class SymbolTable(object):
 
     def get_exports(self):
         logger.debug("get_exports")
-        self.env_recursion += 1
+        assert self.env_recursion >= 0
         exports = { name:entry.eval(self) for name,entry in self.symbols.items() if entry.export }
-        self.env_recursion -= 1
         assert self.env_recursion >= 0
         return exports
 
@@ -640,4 +639,12 @@ class SymbolTable(object):
 
     def command_line_stop(self):
         self.command_line_flag = False
+
+    def ignore_recursion(self):
+        assert self.env_recursion >= 0
+        self.env_recursion += 1
+
+    def allow_recursion(self):
+        self.env_recursion -= 1
+        assert self.env_recursion >= 0
 

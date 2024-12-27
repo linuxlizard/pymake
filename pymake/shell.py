@@ -151,8 +151,12 @@ def execute_tokens(token_list, symbol_table):
     # before exec'ing the shell cmd
     step2 = "".join(step1).strip()
 
+    symbol_table.ignore_recursion()
+
     # see comments in execute() about use_default_shell
     exe_result = execute(step2, symbol_table, use_default_shell=False)
+
+    symbol_table.allow_recursion()
 
     # GNU Make returns one whitespace separated string, no CR/LF
     # "all other newlines are replaced by spaces." gnu_make.pdf

@@ -105,14 +105,18 @@ $(info FOO=$(FOO))
     s_list = s.split("\n")
     assert expect in s_list[-1]
 
-@pytest.mark.skip(reason="FIXME")
 def test_self_reference_rule():
     makefile="""
 export FOO=$(FOO)
 
 all: ; @printenv FOO
 """
-    p = run.gnumake_should_fail(makefile)
+    expect = "Recursive variable 'FOO' references itself (eventually)."
 
-    p = run.pymake_should_fail(makefile)
+    s = run.gnumake_should_fail(makefile)
+    assert expect in s, s
+
+    s = run.pymake_should_fail(makefile)
+    s_list = s.split("\n")
+    assert expect in s_list[-1]
 
