@@ -57,6 +57,8 @@ class Entry:
         # check for recursive variable expansion attempting to expand itself
         self.loop = 0
 
+        self._export_stack = []
+
     @property
     def export(self):
         return (not self.never_export) and (self._export != Export.NOEXPORT.value)
@@ -97,14 +99,24 @@ class Entry:
         # vs   a:=10  (evaluated immediately and "10" stored in symtable)
         #
         if isinstance(self._value, Symbol):
-            logger.debug("recursive eval %r name=%s at pos=%r", self, self.name, self.get_pos())
+            logger.debug("recursive eval %r loop=%d name=%s at pos=%r", self, self.loop, self.name, self.get_pos())
             if self.loop > 0:
-                msg = "Recursive variable %r references itself (eventually)" % self.name
-                raise MakeError(msg=msg, pos=self.get_pos())
+                msg = "Recursive variable %r references itself (eventually)." % self.name
+                logger.debug("%s", msg)
+                if symbol_table.env_recursion > 0:
+                    # if we're expanding a recursive variable for a shell
+                    # command, just return an empty string
+                    return ""
+                
+                raise RecursiveVariableError(msg=msg, pos=self.get_pos())
+
+            logger.debug("recursive eval %r %s loop+=1", self, self.name)
             self.loop += 1
             step1 = [ self._value.eval(symbol_table) ]
             step1.extend( [t.eval(symbol_table) for t in self._appends] )
             self.loop -= 1
+            logger.debug("recursive eval %r %s loop-=1", self, self.name)
+            assert self.loop >= 0, self.loop
             return " ".join(step1)
 
         return self._value
@@ -220,6 +232,24 @@ class SymbolTable(object):
         # When evaluating command line statements, we'll set this flag which
         # will mark the incoming variables as from the command line.
         self.command_line_flag = False
+
+        # Copy GNU Make's method of handling recursive variable expansion for
+        # shell exports. When we launch a shell, vars marked 'export' must be
+        # put into the environment. However, we can run into variable expansion
+        # loops. For example:
+        #
+        # DATE=$(shell date)
+        # export DATE
+        #
+        # DATE is exported so DATE needs to be in the environment. But DATE's
+        # value comes from a $(shell) execution which needs DATE's value as an
+        # env var. When env_recursion is set, a recursive variable returns an
+        # empty string instead of throwing the "recurisve variable references
+        # itself" error.
+        #
+        # (In GNU Make this is a global variable)
+        #
+        self.env_recursion = 0
 
     def _init_builtins(self):
         # key: var name
@@ -366,7 +396,6 @@ class SymbolTable(object):
 #            pass
 
         try:
-#            print("fetch value=\"%r\"" % self.symbols[key])
             return self.symbols[key].eval(self)
         except KeyError:
             if self.warn_undefined:
@@ -581,7 +610,11 @@ class SymbolTable(object):
         self.export_stop()
 
     def get_exports(self):
-        return { name:entry.eval(self) for name,entry in self.symbols.items() if entry.export }
+        logger.debug("get_exports")
+        assert self.env_recursion >= 0
+        exports = { name:entry.eval(self) for name,entry in self.symbols.items() if entry.export }
+        assert self.env_recursion >= 0
+        return exports
 
     def export_start(self):
         # The export start/stop allows us to separate the "export" and
@@ -606,4 +639,12 @@ class SymbolTable(object):
 
     def command_line_stop(self):
         self.command_line_flag = False
+
+    def ignore_recursion(self):
+        assert self.env_recursion >= 0
+        self.env_recursion += 1
+
+    def allow_recursion(self):
+        self.env_recursion -= 1
+        assert self.env_recursion >= 0
 

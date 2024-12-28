@@ -6,6 +6,7 @@ import logging
 import os.path
 import errno
 import subprocess
+import time
 
 from pymake.error import *
 import pymake.constants as constants
@@ -30,7 +31,9 @@ class ShellReturn:
 def execute(cmd_str, symbol_table, use_default_shell=True):
     """execute a string with the shell, returning a bunch of useful info"""
 
-    logger.debug("execute \"%r\"", cmd_str)
+    # capture a timestamp so we can match shell debug messages
+    ts = time.monotonic()
+    logger.debug("execute \"%r\" ts=%f", cmd_str, ts)
 
     return_status = ShellReturn()
 
@@ -115,14 +118,14 @@ def execute(cmd_str, symbol_table, use_default_shell=True):
                 check=False, # we'll check returncode ourselves
                 env=env
             )
-        logger.debug("shell exit status=%r", p.returncode)
+        logger.debug("shell ts=%f exit status=%r", ts, p.returncode)
 #        if p.returncode != 0:
 #            breakpoint()
         return_status.exit_code = p.returncode
         return_status.stdout = p.stdout
         return_status.stderr = p.stderr
     except OSError as err:
-        logger.error("%s", err)
+        logger.error("shell ts=%f error=\"%s\"", ts, err)
         return_status.exit_code = 127
         return_status.stdout = ""
         # match gnu make's output
@@ -139,6 +142,8 @@ def execute_tokens(token_list, symbol_table):
     """Runner for $(shell) and != """
     assert len(token_list)
 
+    logger.debug("execute_tokens len=%d", len(token_list))
+
     # TODO condense these steps
     step1 = [t.eval(symbol_table) for t in token_list]
 
@@ -146,8 +151,12 @@ def execute_tokens(token_list, symbol_table):
     # before exec'ing the shell cmd
     step2 = "".join(step1).strip()
 
+    symbol_table.ignore_recursion()
+
     # see comments in execute() about use_default_shell
     exe_result = execute(step2, symbol_table, use_default_shell=False)
+
+    symbol_table.allow_recursion()
 
     # GNU Make returns one whitespace separated string, no CR/LF
     # "all other newlines are replaced by spaces." gnu_make.pdf
@@ -170,8 +179,12 @@ def execute_tokens(token_list, symbol_table):
     if exe_result.errmsg:
         error_message(pos, exe_result.errmsg)
     else:
-        # otherwise report stderr
-        error_message(pos, exe_result.stderr)
+        # otherwise report stderr (if any)
+        if exe_result.stderr:
+            logger.error("command at %r failed with exit_code=%d", pos, exe_result.exit_code)
+            error_message(pos, exe_result.stderr)
+        else:
+            logger.error("command at %r failed with exit_code=%d (but stderr empty)", pos, exe_result.exit_code)
 
-    return ""
+    return exe_result.stdout
 

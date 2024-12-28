@@ -13,6 +13,7 @@ __all__ = [ "ParseError",
             "NoMakefileFound",
             "InternalError",
             "MissingEndef",
+            "RecursiveVariableError",
 
             "warning_message",
             "error_message",
@@ -101,17 +102,26 @@ class InternalError(MakeError):
 class MissingEndef(ParseError):
     default_msg = "missing 'endef', unterminated 'define'"
 
+class RecursiveVariableError(MakeError):
+    default_msg = "Recursive variable <name> references itself eventually."
+
 #class VersionError(MakeError):
 #    """Feature not in this version"""
 #    pass
 
 def warning_message(pos, msg):
+    # don't allow an empty message because it's super confusing
+    assert msg
+
     if pos:
         print("%s %r warning: %s" % (pos[0], pos[1], msg), file=sys.stderr)
     else:
         print("(pos unknown): %s" % (msg,), file=sys.stderr)
 
 def error_message(pos, msg):
+    # don't allow an empty message because it's super confusing
+    assert msg
+
     if pos:
         print("%s %r: *** %s" % (pos[0], pos[1], msg), file=sys.stderr)
     else:
