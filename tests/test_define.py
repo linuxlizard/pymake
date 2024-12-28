@@ -8,15 +8,14 @@ import pytest
 from pymake.vline import get_vline, VirtualLine, VCharString
 from pymake.scanner import ScannerIterator
 import pymake.tokenizer as tokenizer
-import pymake.symbolmk
-from pymake.symbolmk import *
+import pymake.symbol
+from pymake.symbol import *
 import pymake.pymake as pymake
 import pymake.source as source
 from pymake.error import *
-from pymake.state import ParseState
 
 # turn on some extra code paths that allow normally incorrect types to work
-pymake.symbolmk._testing = True
+pymake.symbol._testing = True
 pymake.vline._testing = True
 
 def _run_tokenize(s,name):
@@ -119,9 +118,9 @@ endef
     name = "test-define-block"
     vline_iter = _prepare_parser(s,name)
 
-    state = ParseState()
-    for vline in vline_iter:
-        d = pymake.parse_vline(vline, vline_iter, state)
+    defines_list = [v for v in pymake.parse_vline(vline_iter)]
+
+    for d in defines_list:
         assert d
         assert isinstance(d,DefineDirective)
         assert d.name == "define"
@@ -143,9 +142,9 @@ echo $(bar)
     name = "test-missing-endef"
     vline_iter = _prepare_parser(s,name)
 
-    state = ParseState()
+    pv = pymake.parse_vline(vline_iter)
     with pytest.raises(ParseError):
-        d = pymake.parse_vline(next(vline_iter), vline_iter, state)
+        d = next(pv)
 
     with pytest.raises(StopIteration):
         s = next(vline_iter)
@@ -160,8 +159,7 @@ endef two-lines
     name = "test-extraneous-text-after-endef"
     vline_iter = _prepare_parser(s,name)
 
-    state = ParseState()
-    d = pymake.parse_vline(next(vline_iter), vline_iter, state)
+    d = [ v for v in pymake.parse_vline(vline_iter)]
     print("d=",d)
 
     with pytest.raises(StopIteration):
@@ -182,8 +180,7 @@ endef
     name = "test-fake-endef"
     vline_iter = _prepare_parser(s,name)
 
-    state = ParseState()
-    d = pymake.parse_vline(next(vline_iter), vline_iter, state)
+    d = [v for v in pymake.parse_vline(vline_iter)]
     print("d=",d)
 
     with pytest.raises(StopIteration):
@@ -199,8 +196,7 @@ endef#end of two-lines-2
     name = "test-endef-commend"
     vline_iter = _prepare_parser(s,name)
 
-    state = ParseState()
-    d = pymake.parse_vline(next(vline_iter), vline_iter, state)
+    d = [v for v in pymake.parse_vline(vline_iter)]
     print("d=",d)
 
     with pytest.raises(StopIteration):
@@ -223,8 +219,7 @@ endef
     name = "test-nested-define"
     vline_iter = _prepare_parser(s,name)
 
-    state = ParseState()
-    d = pymake.parse_vline(next(vline_iter), vline_iter, state)
+    d = [v for v in pymake.parse_vline(vline_iter)]
     print("d=",d)
 
     with pytest.raises(StopIteration):

@@ -18,21 +18,20 @@ logger = logging.getLogger("pymake.pymake")
 
 from pymake.scanner import ScannerIterator
 import pymake.vline as vline
-import pymake.symbolmk as symbolmk
-from pymake.symbolmk import *
+import pymake.symbol as symbol
+from pymake.symbol import *
 from pymake.constants import *
 from pymake.error import *
 import pymake.tokenizer as tokenizer
-import pymake.parsermk as parsermk
+import pymake.parser as parser
 import pymake.source as source
-from pymake.symtablemk import SymbolTable
+from pymake.symtable import SymbolTable
 import pymake.makedb as makedb
 import pymake.rules as rules
 import pymake.shell as shell
 import pymake.pargs as pargs
 import pymake.submake as submake
 from pymake.debug import *
-from pymake.state import ParseState
 import pymake.constants as constants
 
 _debug = False
@@ -44,14 +43,8 @@ def get_basename( filename ) :
 def _view(token_list):
     return "".join([str(t) for t in token_list])
 
-def parse_vline(virt_line, vline_iter, state): 
-    # pull apart a single line into token/symbol(s)
-    #
-    # virt_line - the current line we need to tokenize (a VirtualLine)
-    #
-    # vline_iter - <generator> across the entire file (returns VirtualLine instances) 
-    #
-    logger.debug("parse_vline() state=%d", state.rules)
+def _parse_one_vline(virt_line, vline_iter, rules):
+    logger.debug("parse_vline() rules=%d", rules[0])
 
     # save the starting position for error reporting
     starting_pos = virt_line.get_pos()
@@ -85,7 +78,7 @@ def parse_vline(virt_line, vline_iter, state):
         # need to convert the RecipeVirtualLine to a regular VirtualLine. TODO
         # find an example where this might happen.
 
-        if state.rules:
+        if rules[0]:
             # we've seen a Rule previously
             recipe = tokenizer.tokenize_recipe(vchar_scanner)
             assert recipe
@@ -97,7 +90,7 @@ def parse_vline(virt_line, vline_iter, state):
     if a:
         if isinstance(a, DefineDirective):
             # we found an define block
-            d = parsermk.parse_define_block(a, virt_line, vline_iter)
+            d = parser.parse_define_block(a, virt_line, vline_iter)
             return d
 
         # Is an assignment statement not a conditional.
@@ -112,7 +105,7 @@ def parse_vline(virt_line, vline_iter, state):
     # by looking for a directive in this line
     vstr = tokenizer.seek_directive(vchar_scanner, conditional_directive )
     if vstr:
-        d = parsermk.parse_directive( vstr, vchar_scanner, vline_iter)
+        d = parser.parse_directive( vstr, vchar_scanner, vline_iter)
         if d:   
             # we found a conditional block.
             # We're done here.
@@ -122,7 +115,7 @@ def parse_vline(virt_line, vline_iter, state):
     # seek export | unexport
     vstr = tokenizer.seek_directive(vchar_scanner, set(("export","unexport")))
     if vstr:
-        e = parsermk.parse_directive(vstr, vchar_scanner, vline_iter)
+        e = parser.parse_directive(vstr, vchar_scanner, vline_iter)
         assert e
         return e
 
@@ -138,7 +131,7 @@ def parse_vline(virt_line, vline_iter, state):
     # seek include
     vstr = tokenizer.seek_directive(vchar_scanner, include_directive)
     if vstr:
-        d = parsermk.parse_directive( vstr, vchar_scanner, vline_iter)
+        d = parser.parse_directive( vstr, vchar_scanner, vline_iter)
         assert d
         return d
 
@@ -147,7 +140,7 @@ def parse_vline(virt_line, vline_iter, state):
     # How does GNU Make decide something is a rule?
     # (Well, it's quite complicated.)
 
-    rule = parsermk.parse_rule(vchar_scanner)
+    rule = parser.parse_rule(vchar_scanner)
     if rule:
         if vchar_scanner.remain():
             # we have a rule+recipe continuation
@@ -155,7 +148,7 @@ def parse_vline(virt_line, vline_iter, state):
             rule.add_recipe(recipe)
             assert not vchar_scanner.remain()
 
-        state.rules += 1
+        rules[0] += 1
         return rule
 
     assert vchar_scanner.is_starting(), vchar_scanner.get_pos()
@@ -189,6 +182,32 @@ def parse_vline(virt_line, vline_iter, state):
     e = Expression(token_list)
     return e
 
+
+def parse_vline(vline_iter): 
+    # 
+    # Generator
+    #
+
+    # pull apart a single line into token/symbol(s)
+    #
+    # virt_line - the current line we need to tokenize (a VirtualLine)
+    #
+    # vline_iter - <generator> across the entire file (returns VirtualLine instances) 
+    #
+
+    # I tried hard to make the parser context free but that's not going to
+    # work.  How <tab> (cmd prefix) is interpretted depends on whether a Rule
+    # has been seen or not. A line with <tab> is treated as a regular line if a
+    # Rule hasn't been seen yet. Once a Rule has been seen, a <tab> line
+    # *might* be a Recipe. So need to preserve context across parse_vline
+    # calls.
+    rules_counter = [0]
+
+    for vline in vline_iter:
+        tok = _parse_one_vline(vline, vline_iter, rules_counter)
+        yield tok
+        
+
 def parse_makefile_from_src(src):
     # file_lines is an array of Python strings.
     # The newlines must be preserved.
@@ -206,8 +225,7 @@ def parse_makefile_from_src(src):
     # lines, joining backslashed lines into VirtualLine instances.
     vline_iter = vline.get_vline(src.name, line_scanner)
 
-    state = ParseState()
-    statement_list = [parse_vline(vline, vline_iter, state) for vline in vline_iter] 
+    statement_list = [v for v in parse_vline(vline_iter)] 
 
     # good time for some sanity checks
     for t in statement_list:
@@ -655,9 +673,9 @@ def _run_it(args):
     return exit_code
 
 # FIXME ugly hack dependency injection to solve problems with circular imports
-parsermk.parse_vline = parse_vline 
-symbolmk.parse_vline = parse_vline 
-symbolmk.tokenize_line = tokenizer.tokenize_line
+parser.parse_vline = parse_vline 
+symbol.parse_vline = parse_vline 
+symbol.tokenize_line = tokenizer.tokenize_line
 
 def main():
     args = pargs.parse_args(sys.argv[1:])

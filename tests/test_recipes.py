@@ -4,21 +4,19 @@
 
 from pymake import pymake
 from pymake.scanner import ScannerIterator
-import pymake.parsermk as parsermk
+import pymake.parser as parser
 import pymake.source as source
-import pymake.symbolmk as symbolmk
-import pymake.symtablemk as symtablemk
+import pymake.symbol as symbol
+import pymake.symtable as symtable
 from pymake.constants import backslash
 import pymake.vline as vline
-from pymake.state import ParseState
 
 def parse_string(s):
     src = source.SourceString(s)
     src.load()
     line_scanner = ScannerIterator(src.file_lines, src.name)
     vline_iter = vline.get_vline(src.name, line_scanner)
-    state = ParseState()
-    statement_list = [pymake.parse_vline(vline, vline_iter, state) for vline in vline_iter] 
+    statement_list = [v for v in pymake.parse_vline(vline_iter)]
 
     assert not line_scanner.remain()
     return statement_list
@@ -26,7 +24,7 @@ def parse_string(s):
 def make_recipelist(s):
     # everything in 's' should be a recipe
     statement_list = parse_string(s)
-    return symbolmk.RecipeList(statement_list)
+    return symbol.RecipeList(statement_list)
 
 def test_parse_recipes_simple():
     s = """\
@@ -37,7 +35,7 @@ def test_parse_recipes_simple():
     recipe_list = make_recipelist(s)
     assert len(recipe_list)==3
 
-    symbol_table = symtablemk.SymbolTable()
+    symbol_table = symtable.SymbolTable()
     for recipe in recipe_list:
         s = recipe.eval(symbol_table)
         assert s.startswith("@echo ")
@@ -56,7 +54,7 @@ def test_parse_recipes_comments():
     assert len(recipe_list)==4
 
     expect_list = ( "@echo foo", "@echo bar", "# this is a shell comment", "@echo baz" )
-    symbol_table = symtablemk.SymbolTable()
+    symbol_table = symtable.SymbolTable()
     for (recipe, expect_str) in zip(recipe_list, expect_list):
         s = recipe.eval(symbol_table)
         assert s == expect_str
@@ -76,7 +74,7 @@ space
     recipe_list = make_recipelist(s)
 
     assert len(recipe_list)==4
-    symbol_table = symtablemk.SymbolTable()
+    symbol_table = symtable.SymbolTable()
     for recipe in recipe_list:
         s = recipe.eval(symbol_table)
         # backslash is preserved
@@ -92,11 +90,11 @@ def test_parse_end_of_recipes():
 $(info this should be end of recipes)
 """
     statement_list = parse_string(s)
-    recipe_list = symbolmk.RecipeList(statement_list[0:2])
+    recipe_list = symbol.RecipeList(statement_list[0:2])
 
     # last statement should be an Expression
     last = statement_list[-1]
-    assert isinstance(last, symbolmk.Expression)
+    assert isinstance(last, symbol.Expression)
     assert str(last) == 'Expression([Info([Literal("this should be end of recipes")])])'
 
 def test_trailing_recipes():
@@ -112,10 +110,10 @@ foo: ; @echo foo
     rule.add_recipe(statement_list[1])
     rule.add_recipe(statement_list[2])
 
-    symbol_table = symtablemk.SymbolTable()
+    symbol_table = symtable.SymbolTable()
   
     expect_list = ( "@echo foo", "@echo bar", "@echo baz" )
-    symbol_table = symtablemk.SymbolTable()
+    symbol_table = symtable.SymbolTable()
     for (recipe, expect_str) in zip(rule.recipe_list, expect_list):
         s = recipe.eval(symbol_table)
         assert s == expect_str
@@ -129,7 +127,7 @@ endif # FOO
 	@echo bar
 """
     statement_list = parse_string(s)
-    assert isinstance(statement_list[0], symbolmk.Recipe)
-    assert isinstance(statement_list[2], symbolmk.Recipe)
+    assert isinstance(statement_list[0], symbol.Recipe)
+    assert isinstance(statement_list[2], symbol.Recipe)
 
     # TODO add eval of the ifdef block to peek at the Recipe within

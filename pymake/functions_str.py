@@ -25,7 +25,7 @@ from pymake.error import *
 from pymake.functions_base import Function, FunctionWithArguments
 from pymake.flatten import flatten
 from pymake.wildcard import wildcard_replace, wildcard_match_list
-from pymake.symbolmk import Literal
+from pymake.symbol import Literal
 from pymake.constants import whitespace
 
 __all__ = [ "FilterClass", "FilterOutClass", "FindString", "FirstWord", 

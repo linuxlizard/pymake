@@ -2,7 +2,7 @@
 from pymake.vline import VirtualLine, RecipeVirtualLine
 from pymake.scanner import ScannerIterator
 import pymake.tokenizer as tokenizer
-import pymake.symtablemk as symtablemk
+import pymake.symtable as symtable
 import pymake.source as source
 from pymake.constants import backslash, eol
 import pymake.shell as shell
@@ -40,7 +40,7 @@ def test_assign_plus_comment():
     assert stmt.assign_op.makefile() == ":="
     assert not viter.remain()
 
-    symbol_table = symtablemk.SymbolTable()
+    symbol_table = symtable.SymbolTable()
     assert len(stmt.lhs)==2, len(lhs)
     assert stmt.lhs[0].eval(symbol_table)=="foo"
     assert stmt.lhs[1].eval(symbol_table)==" "
@@ -52,7 +52,7 @@ def test_tokenize_assign():
     viter = make_viter(s)
     expr = tokenizer.tokenize_assignment_statement(viter)
 
-    symbol_table = symtablemk.SymbolTable()
+    symbol_table = symtable.SymbolTable()
     s = expr.eval(symbol_table)
     assert not s
 
@@ -64,7 +64,7 @@ def test_tokenize_assign_recursive():
     viter = make_viter(s)
     expr = tokenizer.tokenize_assignment_statement(viter)
 
-    symbol_table = symtablemk.SymbolTable()
+    symbol_table = symtable.SymbolTable()
     s = expr.eval(symbol_table)
     assert not s
 
@@ -97,7 +97,7 @@ def test_tokenize_varref_recipe():
     viter = make_viter(s)
     r = tokenizer.tokenize_recipe(viter)
 
-    symbol_table = symtablemk.SymbolTable()
+    symbol_table = symtable.SymbolTable()
     symbol_table.add("foo", "bar")
     s = r.eval(symbol_table)
 
@@ -110,7 +110,7 @@ def test_tokenize_single_letter_varref_recipe():
     viter = make_viter(s)
     r = tokenizer.tokenize_recipe(viter)
 
-    symbol_table = symtablemk.SymbolTable()
+    symbol_table = symtable.SymbolTable()
     symbol_table.add("f", "bar")
     s = r.eval(symbol_table)
 
@@ -124,7 +124,7 @@ def test_recipe_with_backslash():
     viter = make_viter(s)
     r = tokenizer.tokenize_recipe(viter)
 
-    symbol_table = symtablemk.SymbolTable()
+    symbol_table = symtable.SymbolTable()
     s = r.eval(symbol_table)
     assert s == '@print "%s\\n%s\\n" $PWD $PWD'
 
@@ -134,7 +134,7 @@ def test_tokenize_bash_var_recipe():
     viter = make_viter(s)
     r = tokenizer.tokenize_recipe(viter)
 
-    symbol_table = symtablemk.SymbolTable()
+    symbol_table = symtable.SymbolTable()
     s = r.eval(symbol_table)
 
     assert r.makefile() == "@echo $$PATH"
@@ -148,7 +148,7 @@ def test_tokenize_double_dollar_recipe():
     viter = make_viter(s)
     r = tokenizer.tokenize_recipe(viter)
 
-    symbol_table = symtablemk.SymbolTable()
+    symbol_table = symtable.SymbolTable()
     s = r.eval(symbol_table)
 
     assert r.makefile() == "@echo pid=$$$$"
@@ -172,7 +172,7 @@ def test_rules_backslash_nospace():
 space
 """
     r = tokenize_recipe_str(s)
-    symbol_table = symtablemk.SymbolTable()
+    symbol_table = symtable.SymbolTable()
     recipe_str = r.eval(symbol_table)
     print("recipe=\n%r" % recipe_str)
     p = shell.execute(recipe_str, symbol_table)
@@ -186,7 +186,7 @@ def test_rules_backslash_one_space_1():
 	space
 """
     r = tokenize_recipe_str(s)
-    symbol_table = symtablemk.SymbolTable()
+    symbol_table = symtable.SymbolTable()
     recipe_str = r.eval(symbol_table)
     print("recipe=\n%r" % recipe_str)
     p = shell.execute(recipe_str, symbol_table)
@@ -200,7 +200,7 @@ def test_rules_backslash_one_space_2():
 	 space
 """
     r = tokenize_recipe_str(s)
-    symbol_table = symtablemk.SymbolTable()
+    symbol_table = symtable.SymbolTable()
     recipe_str = r.eval(symbol_table)
     print("recipe=\n%r" % recipe_str)
     p = shell.execute(recipe_str, symbol_table)
@@ -222,7 +222,7 @@ def test_rules_backslashes_linux_kernel_makefile():
     r = tokenize_recipe_str(s)
 
     target = "include/config/auto.conf"
-    symbol_table = symtablemk.SymbolTable()
+    symbol_table = symtable.SymbolTable()
     symbol_table.add("@", target)
 
     recipe_str = r.eval(symbol_table)

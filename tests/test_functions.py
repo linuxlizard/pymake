@@ -9,16 +9,16 @@ logger = logging.getLogger("pymake")
 logging.basicConfig(level=logging.DEBUG)
 
 from pymake.error import *
-from pymake.symbolmk import *
+from pymake.symbol import *
 import pymake.functions_str as functions_str
-import pymake.symtablemk as symtablemk
+import pymake.symtable as symtable
 
 # turn on internal behaviors that allow us to create literals without VCharString
-import pymake.symbolmk as symbolmk
-symbolmk._testing = True
+import pymake.symbol as symbol
+symbol._testing = True
 
 def test1():
-    symbol_table = symtablemk.SymbolTable()
+    symbol_table = symtable.SymbolTable()
     expr = Literal('1,foo bar baz qux')
 
     word_fn = functions_str.Word( [expr] )
@@ -26,7 +26,7 @@ def test1():
     assert result=="foo"
     
 def test_word_invalid_index():
-    symbol_table = symtablemk.SymbolTable()
+    symbol_table = symtable.SymbolTable()
     expr = Literal('q,foo bar baz qux')
 
     word_fn = functions_str.Word( [expr] )
@@ -38,7 +38,7 @@ def test_word_invalid_index():
         assert 0, "should have failed"
 
 def test_word_bad_index():
-    symbol_table = symtablemk.SymbolTable()
+    symbol_table = symtable.SymbolTable()
     expr = Literal('-1,foo bar baz qux')
 
     word_fn = functions_str.Word( [expr] )
