@@ -7,6 +7,10 @@ I want to debug my GNU Makefiles.
 
 Ultimate long-term goal is a GNU Make visual debugger. I want breakpoints on variables changing. I want to single step through the rules. I want to put a breakpoint on a rule.
 
+## Update 20241228.  The Linux Kernel Make Update. Again.
+
+The tokenzparser has been successfully rewritten. We can now successfully parse the Linux Kernel Makefile! I am now focusing on being able to run the simple 'help' target.
+
 ## Update 20241124.  The Rewrite Update.
 
 I'm rewriting the tokenzparser almost entirely from scratch. I found some problems with assignment statements that I couldn't patch around. Make doesn't have a formal grammar, reserved words, lexical structure. It's an organically grown set of conventions that have been added to over the years. No formal structure makes it very hard to parse. The only grammar documentation is the GNU Make source itself. So I'm digging deep into the GNU Make source to mimic how they're parsing.
