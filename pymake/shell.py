@@ -37,6 +37,9 @@ def execute(cmd_str, symbol_table, use_default_shell=True):
 
     return_status = ShellReturn()
 
+    with open("shell.log","a") as outfile:
+        outfile.write("%s\n" % cmd_str)
+
     # "If this variable is not set in your makefile, the program /bin/sh is
     # used as the shell." -- 5.3.2 Choosing the Shell
     # GNU Make Manual Version 4.3 January 2020
@@ -166,7 +169,7 @@ def execute_tokens(token_list, symbol_table):
     # save shell status
     pos = token_list[0].get_pos()
     assert pos
-    symbol_table.add(constants.SHELLSTATUS, str(exe_result.exit_code), pos)
+    symbol_table.update_builtin(constants.SHELLSTATUS, str(exe_result.exit_code), pos)
 
     if exe_result.exit_code == 0:
         # success!
