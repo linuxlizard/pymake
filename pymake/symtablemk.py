@@ -208,6 +208,14 @@ class AutomaticEntry(Entry):
         super().__init__(name, value, pos)
 
 
+class BuiltInEntry(Entry):
+    origin = "override"
+    next_export = True
+
+    def __init__(self, name, value, pos):
+        assert name in constants.builtin_variables, name
+        super().__init__(name, value, pos)
+
 
 class SymbolTable(object):
     def __init__(self, **kwargs):
@@ -612,7 +620,14 @@ class SymbolTable(object):
     def get_exports(self):
         logger.debug("get_exports")
         assert self.env_recursion >= 0
-        exports = { name:entry.eval(self) for name,entry in self.symbols.items() if entry.export }
+
+        # cannot eval() during the self.symbols iteration because we could
+        # store something in the symbol table that will throw a "dictionary
+        # changed during iteration" error (for example, .SHELLSTATUS is updated
+        # internally every time a shell is run)
+        exports = { name:entry for name,entry in self.symbols.items() if entry.export }
+        exports = { name:entry.eval(self) for name,entry in exports.items() }
+
         assert self.env_recursion >= 0
         return exports
 
@@ -647,4 +662,17 @@ class SymbolTable(object):
     def allow_recursion(self):
         self.env_recursion -= 1
         assert self.env_recursion >= 0
+
+    def update_builtin(self, name, value, pos=None):
+        # update a known built-in variable (fewer checks)
+        assert name in constants.builtin_variables, name
+
+        try:
+            return self.symbols[name].set_value(value, pos)
+        except KeyError:
+            pass
+
+        new_entry = BuiltInEntry(name, value, pos)
+        self._add_entry(new_entry)
+
 

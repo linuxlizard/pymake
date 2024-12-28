@@ -242,7 +242,7 @@ def _add_internal_db(symtable):
     # now have a list of strings containing Make syntax assignment statements
     for oneline in defaults:
         # mark these variables 'default'
-        v = vline.VirtualLine([oneline], (0,0), "@defaults")
+        v = vline.VirtualLine([oneline], (-1,-1), "@defaults")
         stmt = tokenizer.tokenize_assignment_statement(iter(v))
         stmt.eval(symtable)
 
@@ -512,13 +512,8 @@ def execute(makefile, args):
         _add_internal_db(symtable)
 
     # aim sub-makes at my helper script
-#    symtable.add("MAKE", "py-submake")
-    symtable.add("MAKE", submake.create_helper())
+    symtable.update_builtin("MAKE", submake.create_helper())
     logger.debug("submake helper=%s", symtable.fetch("MAKE"))
-
-    # need this to exist so we don't modify the symbol table while iterating
-    # over the symbols dict (see symbol table get_exports())
-    symtable.add(constants.SHELLSTATUS, "")
 
     # "Contains the name of each makefile that is parsed by make, in the order
     # in which it was parsed. The name is appended just before make begins to
@@ -533,7 +528,7 @@ def execute(makefile, args):
     # is never touched by make again:"
     # GNU Make 4.3 2020 
     # The -C option will be handled before this function is called.
-    symtable.add("CURDIR", os.getcwd())
+    symtable.update_builtin("CURDIR", os.getcwd())
 
     target_list = []
 

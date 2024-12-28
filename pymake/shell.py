@@ -14,6 +14,8 @@ import pymake.submake as submake
 
 logger = logging.getLogger("pymake.shell")
 
+_debug = False
+
 # TODO comment in GNU make src/main.c
 # "POSIX says the value of SHELL set in the makefile won't change the value of
 # SHELL given to subprocesses."
@@ -36,6 +38,10 @@ def execute(cmd_str, symbol_table, use_default_shell=True):
     logger.debug("execute \"%r\" ts=%f", cmd_str, ts)
 
     return_status = ShellReturn()
+
+    if _debug:
+        with open("shell.log","a") as outfile:
+            outfile.write("%s\n" % cmd_str)
 
     # "If this variable is not set in your makefile, the program /bin/sh is
     # used as the shell." -- 5.3.2 Choosing the Shell
@@ -166,7 +172,7 @@ def execute_tokens(token_list, symbol_table):
     # save shell status
     pos = token_list[0].get_pos()
     assert pos
-    symbol_table.add(constants.SHELLSTATUS, str(exe_result.exit_code), pos)
+    symbol_table.update_builtin(constants.SHELLSTATUS, str(exe_result.exit_code), pos)
 
     if exe_result.exit_code == 0:
         # success!
