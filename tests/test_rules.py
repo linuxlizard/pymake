@@ -12,7 +12,6 @@ import pymake.source as source
 import pymake.symbol as symbol
 import pymake.symtable as symtable
 import pymake.vline as vline
-from pymake.state import ParseState
 
 def parse_rule_string(s):
     src = source.SourceString(s)
@@ -20,8 +19,7 @@ def parse_rule_string(s):
     line_scanner = ScannerIterator(src.file_lines, src.name)
     vline_iter = vline.get_vline(src.name, line_scanner)
 
-    state = ParseState()
-    statement_list = [parse_vline(vline, vline_iter, state) for vline in vline_iter] 
+    statement_list = [s for s in parse_vline(vline_iter)]
 
     assert isinstance(statement_list[0], symbol.RuleExpression)
 

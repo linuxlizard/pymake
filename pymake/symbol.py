@@ -15,7 +15,6 @@ import pymake.shell as shell
 from pymake.scanner import ScannerIterator
 import pymake.source as source
 from pymake.debug import *
-from pymake.state import ParseState
 
 _testing = False
 
@@ -782,8 +781,7 @@ class IncludeDirective(Directive):
             line_scanner = ScannerIterator(src.file_lines, src.name)
             vline_iter = get_vline(src.name, line_scanner)
 
-            state = ParseState()
-            statement_list.extend([parse_vline(vline, vline_iter, state) for vline in vline_iter])
+            statement_list.extend([s for s in parse_vline(vline_iter)])
 
         return statement_list
 
@@ -891,8 +889,7 @@ class LineBlock(Symbol):
     def eval(self, symbol_table):
         vline_iter = iter(self.vline_list)
 
-        state = ParseState()
-        statement_list = [parse_vline(vline, vline_iter, state) for vline in vline_iter] 
+        statement_list = [s for s in parse_vline(vline_iter)]
         return statement_list
 
 
@@ -1181,8 +1178,7 @@ class DefineBlock(LineBlock):
         if self.statement_list is None:
             from pymake.pymake import parse_vline
             vline_iter = iter(self.vline_list)
-            state = ParseState()
-            self.statement_list = [parse_vline(vline, vline_iter, state) for vline in vline_iter]
+            self.statement_list = [s for s in parse_vline(vline_iter)]
 
         # TODO make this one list comprehension statement 
         s_list = []
