@@ -16,7 +16,7 @@ from pymake.scanner import ScannerIterator
 from pymake import tokenizer
 from pymake.constants import *
 from pymake.tokenizer import seek_directive
-from pymake.parsermk import parse_directive
+from pymake.parser import parse_directive
 
 from gnu_make import run_gnu_make, debug_save
 

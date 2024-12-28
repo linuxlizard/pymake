@@ -15,8 +15,8 @@ import pymake.source as source
 import pymake.vline as vline
 from pymake.scanner import ScannerIterator
 from pymake import tokenizer
-from pymake import parsermk
-from pymake.symtablemk import SymbolTable
+from pymake import parser
+from pymake.symtable import SymbolTable
 
 from gnu_make import run_gnu_make, debug_save
 
