@@ -3,24 +3,24 @@ import logging
 logger = logging.getLogger("pymake")
 logging.basicConfig(level=logging.DEBUG)
 
-from pymake.symbolmk import *
-import pymake.symtablemk as symtablemk
+from pymake.symbol import *
+import pymake.symtable as symtable
 
 # turn on internal behaviors that allow us to create literals without VCharString
-import pymake.symbolmk as symbolmk
-symbolmk._testing = True
+import pymake.symbol as symbol
+symbol._testing = True
 
 import run
 
 def test_simply_expanded():
-    symbol_table = symtablemk.SymbolTable()
+    symbol_table = symtable.SymbolTable()
     # simply expanded
     symbol_table.add("CC", "gcc")
     value = symbol_table.fetch("CC")
     assert value=="gcc", value
 
 def test_recursively_expanded():
-    symbol_table = symtablemk.SymbolTable()
+    symbol_table = symtable.SymbolTable()
 
     # recursively expanded
     symbol_table.add("CFLAGS", Expression([Literal("-g -Wall")]))
@@ -28,7 +28,7 @@ def test_recursively_expanded():
     assert value=="-g -Wall", value
 
 def test_simple_push_pop():
-    symbol_table = symtablemk.SymbolTable()
+    symbol_table = symtable.SymbolTable()
     symbol_table.add("target", ["abcdefghijklmnopqrstuvwxyz"])
 
     symbol_table.push("target")
@@ -41,7 +41,7 @@ def test_simple_push_pop():
     assert value == ["abcdefghijklmnopqrstuvwxyz"]
 
 def test_push_push_pop_pop():
-    symbol_table = symtablemk.SymbolTable()
+    symbol_table = symtable.SymbolTable()
     symbol_table.add("target", ["abcdefghijklmnopqrstuvwxyz"])
 
     symbol_table.push("target")
@@ -63,7 +63,7 @@ def test_push_push_pop_pop():
 
 def test_push_pop_undefined():
     # "If var was undefined before the foreach function call, it is undefined after the call."
-    symbol_table = symtablemk.SymbolTable()
+    symbol_table = symtable.SymbolTable()
 
     symbol_table.push("target")
     symbol_table.add("target", ["12345"])
@@ -76,7 +76,7 @@ def test_push_pop_undefined():
 
 def test_push_pop_pop():
     # too many pops
-    symbol_table = symtablemk.SymbolTable()
+    symbol_table = symtable.SymbolTable()
     symbol_table.add("target", ["abcdefghijklmnopqrstuvwxyz"])
 
     symbol_table.push("target")
@@ -98,7 +98,7 @@ def test_push_pop_pop():
         
 def test_env_var():
     # environment variables should act like regular vars
-    symbol_table = symtablemk.SymbolTable()
+    symbol_table = symtable.SymbolTable()
 
     save_path = symbol_table.fetch("PATH")
     assert save_path
@@ -115,7 +115,7 @@ def test_env_var():
 
 def test_is_defined():
     # verify we check all the ways a symbol can be defined
-    symbol_table = symtablemk.SymbolTable()
+    symbol_table = symtable.SymbolTable()
 
     # env var
     assert symbol_table.is_defined("PATH")
@@ -130,7 +130,7 @@ def test_is_defined():
     assert symbol_table.is_defined("FOO")
 
 def test_maybe_add():
-    symbol_table = symtablemk.SymbolTable()
+    symbol_table = symtable.SymbolTable()
 
     # test method used by ?= assignment which won't replace a value if it
     # already exists.
@@ -146,7 +146,7 @@ def test_maybe_add():
     assert symbol_table.fetch("CFLAGS") == "-g -Wall"
 
 def test_builtin_VARIABLES():
-    symbol_table = symtablemk.SymbolTable()
+    symbol_table = symtable.SymbolTable()
     value = symbol_table.fetch(".VARIABLES")
     assert value
     assert symbol_table.origin(".VARIABLES")=="default"
@@ -160,7 +160,7 @@ def test_builtin_VARIABLES():
 
 def test_builtin_overwrite():
     # built-in variables have no special meaning so we can change them
-    symbol_table = symtablemk.SymbolTable()
+    symbol_table = symtable.SymbolTable()
     value = symbol_table.fetch(".VARIABLES")
     assert value
     assert symbol_table.origin(".VARIABLES")=="default"
@@ -171,7 +171,7 @@ def test_builtin_overwrite():
     assert symbol_table.origin(".VARIABLES")=="file"
 
 def test_builtin_MAKE_VERSION():
-    symbol_table = symtablemk.SymbolTable()
+    symbol_table = symtable.SymbolTable()
     value = symbol_table.fetch("MAKE_VERSION")
     assert value
     
@@ -199,18 +199,18 @@ $(info FOO=$(FOO))
     else:
         assert 0
     
-#    symbol_table = symtablemk.SymbolTable(warn_undefined_variables=True)
+#    symbol_table = symtable.SymbolTable(warn_undefined_variables=True)
 #    value = symbol_table.fetch("CC")
 
 def test_append_simple():
-    symbol_table = symtablemk.SymbolTable()
+    symbol_table = symtable.SymbolTable()
     symbol_table.add("FOO", "foo")
     symbol_table.append("FOO", Literal("bar"))
     value = symbol_table.fetch("FOO")
     assert value=="foo bar"
 
 def test_append_recursive():
-    symbol_table = symtablemk.SymbolTable()
+    symbol_table = symtable.SymbolTable()
     symbol_table.add("CFLAGS", Expression([Literal("-g -Wall")]))
     value = symbol_table.fetch("CFLAGS")
     assert value == "-g -Wall"

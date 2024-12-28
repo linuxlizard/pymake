@@ -7,7 +7,7 @@ import logging
 
 logger = logging.getLogger("pymake.functions")
 
-from pymake.symbolmk import VarRef, Literal
+from pymake.symbol import VarRef, Literal
 from pymake.vline import VCharString, whitespace
 
 class Function(VarRef):

@@ -5,7 +5,7 @@ import logging
 
 from pymake.constants import *
 from pymake.error import *
-from pymake.symbolmk import *
+from pymake.symbol import *
 from pymake.printable import printable_char
 from pymake.scanner import ScannerIterator
 import pymake.tokenizer as tokenizer

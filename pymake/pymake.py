@@ -18,14 +18,14 @@ logger = logging.getLogger("pymake.pymake")
 
 from pymake.scanner import ScannerIterator
 import pymake.vline as vline
-import pymake.symbolmk as symbolmk
-from pymake.symbolmk import *
+import pymake.symbol as symbol
+from pymake.symbol import *
 from pymake.constants import *
 from pymake.error import *
 import pymake.tokenizer as tokenizer
-import pymake.parsermk as parsermk
+import pymake.parser as parser
 import pymake.source as source
-from pymake.symtablemk import SymbolTable
+from pymake.symtable import SymbolTable
 import pymake.makedb as makedb
 import pymake.rules as rules
 import pymake.shell as shell
@@ -97,7 +97,7 @@ def parse_vline(virt_line, vline_iter, state):
     if a:
         if isinstance(a, DefineDirective):
             # we found an define block
-            d = parsermk.parse_define_block(a, virt_line, vline_iter)
+            d = parser.parse_define_block(a, virt_line, vline_iter)
             return d
 
         # Is an assignment statement not a conditional.
@@ -112,7 +112,7 @@ def parse_vline(virt_line, vline_iter, state):
     # by looking for a directive in this line
     vstr = tokenizer.seek_directive(vchar_scanner, conditional_directive )
     if vstr:
-        d = parsermk.parse_directive( vstr, vchar_scanner, vline_iter)
+        d = parser.parse_directive( vstr, vchar_scanner, vline_iter)
         if d:   
             # we found a conditional block.
             # We're done here.
@@ -122,7 +122,7 @@ def parse_vline(virt_line, vline_iter, state):
     # seek export | unexport
     vstr = tokenizer.seek_directive(vchar_scanner, set(("export","unexport")))
     if vstr:
-        e = parsermk.parse_directive(vstr, vchar_scanner, vline_iter)
+        e = parser.parse_directive(vstr, vchar_scanner, vline_iter)
         assert e
         return e
 
@@ -138,7 +138,7 @@ def parse_vline(virt_line, vline_iter, state):
     # seek include
     vstr = tokenizer.seek_directive(vchar_scanner, include_directive)
     if vstr:
-        d = parsermk.parse_directive( vstr, vchar_scanner, vline_iter)
+        d = parser.parse_directive( vstr, vchar_scanner, vline_iter)
         assert d
         return d
 
@@ -147,7 +147,7 @@ def parse_vline(virt_line, vline_iter, state):
     # How does GNU Make decide something is a rule?
     # (Well, it's quite complicated.)
 
-    rule = parsermk.parse_rule(vchar_scanner)
+    rule = parser.parse_rule(vchar_scanner)
     if rule:
         if vchar_scanner.remain():
             # we have a rule+recipe continuation
@@ -655,9 +655,9 @@ def _run_it(args):
     return exit_code
 
 # FIXME ugly hack dependency injection to solve problems with circular imports
-parsermk.parse_vline = parse_vline 
-symbolmk.parse_vline = parse_vline 
-symbolmk.tokenize_line = tokenizer.tokenize_line
+parser.parse_vline = parse_vline 
+symbol.parse_vline = parse_vline 
+symbol.tokenize_line = tokenizer.tokenize_line
 
 def main():
     args = pargs.parse_args(sys.argv[1:])

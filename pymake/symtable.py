@@ -10,7 +10,7 @@ from enum import Enum
 
 import pymake.version as version
 import pymake.constants as constants
-from pymake.symbolmk import Symbol
+from pymake.symbol import Symbol
 from pymake.error import *
 
 logger = logging.getLogger("pymake.symtable")

@@ -8,15 +8,15 @@ import pytest
 from pymake.vline import get_vline, VirtualLine, VCharString
 from pymake.scanner import ScannerIterator
 import pymake.tokenizer as tokenizer
-import pymake.symbolmk
-from pymake.symbolmk import *
+import pymake.symbol
+from pymake.symbol import *
 import pymake.pymake as pymake
 import pymake.source as source
 from pymake.error import *
 from pymake.state import ParseState
 
 # turn on some extra code paths that allow normally incorrect types to work
-pymake.symbolmk._testing = True
+pymake.symbol._testing = True
 pymake.vline._testing = True
 
 def _run_tokenize(s,name):

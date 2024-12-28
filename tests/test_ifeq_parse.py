@@ -6,8 +6,8 @@ logger = logging.getLogger("pymake")
 logging.basicConfig(level=logging.DEBUG)
 
 from pymake.vline import VirtualLine
-from pymake.parsermk import read_expression, parse_directive, parse_ifeq_conditionals
-from pymake.symbolmk import Expression
+from pymake.parser import read_expression, parse_directive, parse_ifeq_conditionals
+from pymake.symbol import Expression
 from pymake.error import InvalidSyntaxInConditional
 from pymake.constants import *
 from pymake.tokenizer import seek_directive

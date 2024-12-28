@@ -1078,7 +1078,7 @@ class IfdefDirective(ConditionalDirective):
     def _parse(self):
         # FIXME this ugly and slow and ugly and I'd like to fix it
         # (circular imports are circular)
-        from pymake.parsermk import read_expression, parse_ifeq_conditionals
+        from pymake.parser import read_expression, parse_ifeq_conditionals
         self.expression = read_expression(ScannerIterator(self.vcstring.vchars, self.get_pos()[0] ))
         
     def _eval(self, symbol_table):
@@ -1134,7 +1134,7 @@ class IfeqDirective(ConditionalDirective):
         #
         # FIXME this ugly and slow and ugly and I'd like to fix it
         # (circular imports are circular)
-        from pymake.parsermk import read_expression, parse_ifeq_conditionals
+        from pymake.parser import read_expression, parse_ifeq_conditionals
         expr = read_expression(ScannerIterator(self.vcstring.vchars, self.get_pos()[0] ))
         self.expr1, self.expr2 = parse_ifeq_conditionals(expr, self.name)
 

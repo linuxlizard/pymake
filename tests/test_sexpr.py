@@ -5,13 +5,13 @@ import logging
 logger = logging.getLogger("pymake")
 #logging.basicConfig(level=logging.DEBUG)
 
-from pymake.symbolmk import *
+from pymake.symbol import *
 from pymake.functions_str import *
-from pymake.symtablemk import SymbolTable
+from pymake.symtable import SymbolTable
 
 # turn on internal behaviors that allow us to create literals without VCharString
-import pymake.symbolmk as symbolmk
-symbolmk._testing = True
+import pymake.symbol as symbol
+symbol._testing = True
 
 def test1():
     # test some S Expression execution

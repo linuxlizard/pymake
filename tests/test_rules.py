@@ -9,8 +9,8 @@ import pytest
 from pymake.pymake import parse_vline
 from pymake.scanner import ScannerIterator
 import pymake.source as source
-import pymake.symbolmk as symbolmk
-import pymake.symtablemk as symtablemk
+import pymake.symbol as symbol
+import pymake.symtable as symtable
 import pymake.vline as vline
 from pymake.state import ParseState
 
@@ -23,16 +23,16 @@ def parse_rule_string(s):
     state = ParseState()
     statement_list = [parse_vline(vline, vline_iter, state) for vline in vline_iter] 
 
-    assert isinstance(statement_list[0], symbolmk.RuleExpression)
+    assert isinstance(statement_list[0], symbol.RuleExpression)
 
     for s in statement_list[1:]:
-        assert isinstance(s, symbolmk.Recipe)
+        assert isinstance(s, symbol.Recipe)
 
     return statement_list[0], statement_list[1:]
 
 def run_rule(s, expect, symbol_table=None):
     if symbol_table is None:
-        symbol_table = symtablemk.SymbolTable()
+        symbol_table = symtable.SymbolTable()
 
     rule, statement_list = parse_rule_string(s)
     target_list, prereq_list = rule.eval(symbol_table)
@@ -95,7 +95,7 @@ $a $b $c : $d $e $f
         "prereqs" : ["bar1","bar2","bar3"],
         "recipes"   : ["@echo foo", "@echo bar"],
     }
-    symbol_table = symtablemk.SymbolTable()
+    symbol_table = symtable.SymbolTable()
     symbol_table.add("a", "foo1")
     symbol_table.add("b", "foo2")
     symbol_table.add("c", "foo3")
@@ -116,7 +116,7 @@ $a $b $c : $d  $e $f
         "prereqs" : [],
         "recipes"   : ["@echo foo", "@echo bar"],
     }
-    symbol_table = symtablemk.SymbolTable()
+    symbol_table = symtable.SymbolTable()
     symbol_table.add("a", "foo1")
     symbol_table.add("b", "foo2")
     symbol_table.add("c", "foo3")
@@ -134,7 +134,7 @@ $a$b$c : $d$e$f
         "prereqs" : ["bar"],
         "recipes"   : ["@echo foo", "@echo bar"],
     }
-    symbol_table = symtablemk.SymbolTable()
+    symbol_table = symtable.SymbolTable()
     symbol_table.add("a","f")
     symbol_table.add("b","o")
     symbol_table.add("c","o")
@@ -209,7 +209,7 @@ subdirs:
         "recipes"   : ["for dir in foo"],
     }
 
-    symbol_table = symtablemk.SymbolTable()
+    symbol_table = symtable.SymbolTable()
     symbol_table.add("SUBDIRS", "foo")
     symbol_table.add("MAKE", "i-am-make")
 

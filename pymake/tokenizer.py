@@ -15,7 +15,7 @@ from pymake.constants import *
 from pymake.error import *
 from pymake.printable import printable_char, printable_string
 import pymake.vline as vline
-from pymake.symbolmk import *
+from pymake.symbol import *
 import pymake.functions as functions
 from pymake.version import Version
 
