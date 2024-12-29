@@ -82,6 +82,7 @@ class Entry:
 
     def set_value(self, value, pos):
         # TODO add a stack where the values get changed
+        logger.debug("overwrite value name=%s at pos=%r", self.name, pos)
         self.pos = pos
         self._value = value
 
@@ -151,9 +152,21 @@ class FileEntry(Entry):
 # -- GNU Make manual  Version 4.3 Jan 2020
 class DefaultEntry(Entry):
     origin = "default"
-    never_export = True
 
-class CallbackEntry(DefaultEntry):
+# An Immutable Entry is one where we cannot change the value BUT we can
+# completely change the entry. For example, .VARIABLES has a special meaning in
+# Make (a string containing names of all the defined variables) BUT we can do something bone-headed like:
+#
+# .VARIABLES:=foo  # kill the .VARIABLES variable
+#
+# When am Immutable Entry is updated, the set_value() will throw an exception.
+# The Symbol Table add() method will then create a new entry instead.
+#
+class ImmutablemixIn:
+    def set_value(self, value, pos):
+        raise ValueError("cannot update CallbackEntry name=%s" % self.name)
+
+class CallbackEntry(ImmutablemixIn, DefaultEntry):
     # Some built-in variables have complex requirements that can't be stored as
     # a simple string in the symbol table. For example .VARIABLES returns a
     # list of the variables currently defined.
@@ -167,12 +180,13 @@ class CallbackEntry(DefaultEntry):
     def eval(self, symbol_table):
         return self._value(symbol_table)
 
+
 # Environment Variables are higher precedence than File variables.  But Command
 # Line args are higher precedence than Environment Variables.
 # "By default, only variables that came from the environment or the
 # command line are passed to recursive invocations."
 # -- GNU Make manual  Version 4.3 Jan 2020
-class EnvVarEntry(Entry):
+class EnvVarEntry(ImmutablemixIn, Entry):
     origin = "environment"
 
     def __init__(self, name, value):
@@ -188,15 +202,12 @@ class EnvVarEntry(Entry):
 # "By default, only variables that came from the environment or the
 # command line are passed to recursive invocations."
 # -- GNU Make manual  Version 4.3 Jan 2020
-class CommandLineEntry(Entry):
+class CommandLineEntry(ImmutablemixIn, Entry):
     origin = "command line"
 
     def __init__(self, name, value):
         super().__init__(name,value)
         self.set_export(Export.SUBMAKE)
-
-    def set_value(self, value, pos):
-        pass
 
 
 class AutomaticEntry(Entry):
@@ -312,29 +323,49 @@ class SymbolTable(object):
 
         try:
             entry = self.symbols[name]
-            logger.debug("overwrite value name=%s at pos=%r", entry.name, pos)
         except KeyError:
-            entry = None
+            entry = None 
 
-        # if we didn't find it, make it
-        if self.command_line_flag:
-            # this flag is a weird hack to support vars created by eval()'ing
-            # expressions from the command line
-            new_entry = CommandLineEntry(name, value)
-            # command line vars are always exported until explicitly unexported
+        if entry is None:
+            # easy case: if we didn't find it, make it
+            if self.command_line_flag:
+                # this flag is a weird hack to support vars created by eval()'ing
+                # expressions from the command line
+                # - command line vars are always exported until explicitly
+                #   marked 'unexport'
+                # - command line vars cannot be overwritten by file variables
+                #   except by the 'override' directive (not yet implemented)
+                entry = CommandLineEntry(name, value)
+            else:
+                if pos and pos[0] == "@defaults":
+                    entry = DefaultEntry(name, value, pos)
+                else:
+                    entry = FileEntry(name, value, pos)
+                entry.set_export(self.export_default_value)
+
+            self._add_entry(entry)
         else:
-            # command line > file
-            if isinstance(entry,CommandLineEntry):
-                return
+            overwrite = False
+            try:
+                entry.set_value(value, pos)
+            except ValueError:
+                overwrite = True
 
-            new_entry = FileEntry(name, value, pos)
-            new_entry.set_export(self.export_default_value)
+            if overwrite:
+                # Found an immutable variable that refuses to be overwritten.
+                # So (maybe) create a new one.
+                overwrite_entry = None
+                if self.command_line_flag:
+                    # command line entry can happily override command line entry
+                    overwrite_entry = CommandLineEntry(name, value)
+                else:
+                    # do not overwrite a command line entry when we're
+                    # no longer processing command line variables
+                    if not isinstance(entry, CommandLineEntry):
+                        overwrite_entry = FileEntry(name, value, pos)
 
-        # XXX not sure read-only is a good idea yet
-#        if entry.read_only:
-#            raise PermissionDenied(name)
-
-        self._add_entry(new_entry)
+                if overwrite_entry:
+                    self._add_entry(overwrite_entry)
 
     def add_automatic(self, name, value, pos):
         entry = AutomaticEntry(name, value, pos)

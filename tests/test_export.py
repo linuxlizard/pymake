@@ -264,12 +264,35 @@ all:
     expect=("gcc","no CFLAGS for you")
     run_test(makefile,expect)
 
-@pytest.mark.skip(reason="FIXME")
-def test_circular_export_bug():
+def test_circular_export():
     makefile="""
-VERSION=$(shell cat /etc/os-release)
-export VERSION
-@:;@:
+FOO=$(shell echo foo)
+export FOO
+@:; @printenv FOO
 """
-    expect = ("",)
+    expect = ("foo",)
     run_test(makefile,expect)
+
+def test_export_commandline_var():
+    # command line variable assignments always override export status of file
+    # variables
+    makefile="""
+export FOO:=foo
+@:; @echo $(FOO)
+"""
+    expect = ("bar",)
+    run_test(makefile, expect, extra_args=("FOO=bar",))
+    
+
+def test_export_commandline_var_explicit():
+    # command line variable assignments always override export status of file
+    # variables
+    makefile="""
+export FOO:=foo
+@:; @echo $(FOO)
+"""
+    expect = ("bar",)
+    # use explicity assign instead of recursive assign
+    run_test(makefile, expect, extra_args=("FOO:=bar",))
+    
+

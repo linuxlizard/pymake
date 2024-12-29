@@ -87,3 +87,13 @@ $(info $(origin FOO))
     output = run.gnumake_string(makefile, extra_args=("FOO=BAR",))
     assert output.strip() == "command line", output
 
+def test_default():
+    makefile="""
+ifneq ($(origin CC),default)
+$(error CC origin should be 'default' not '$(origin CC)')
+endif
+
+@:;@:
+"""
+    run.simple_test(makefile)
+

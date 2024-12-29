@@ -639,6 +639,7 @@ def execute(makefile, args):
     return exit_status["error"] if exit_code else exit_status["success"] 
     
 def _run_it(args):
+    logger.debug("run_it args=\"%s\"", args)
     # -C option
     if args.directory:
         os.chdir(os.path.join(*args.directory))
