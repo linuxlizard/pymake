@@ -9,7 +9,7 @@ Ultimate long-term goal is a GNU Make visual debugger. I want breakpoints on var
 
 ## Update 20241228.  The Linux Kernel Make Update. Again.
 
-The tokenzparser has been successfully rewritten. We can now successfully parse the Linux Kernel Makefile! I am now focusing on being able to run the simple 'help' target.
+The tokenzparser has been successfully rewritten. We can now amost parse the Linux Kernel Makefile! (Just need to implement the $(eval) function.) I will then focus on being able to run the simple 'help' target.
 
 ## Update 20241124.  The Rewrite Update.
 
