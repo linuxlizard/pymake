@@ -144,8 +144,7 @@ class Literal(Symbol):
     def __init__(self, vstring):
         # catch bugs where I create empty Literals
         if not len(vstring):
-            breakpoint()
-        assert len(vstring)
+            raise InternalError("attempt to create empty vstring")
 
         # cache the literal string
         self._str = str(vstring)
@@ -349,7 +348,12 @@ class AssignmentExpression(Expression):
         pos = lhs.get_pos()
 
         logger.debug("assignment rhs=%s", rhs)
-#        breakpoint()
+
+        if flags & AssignmentExpression.FLAG_OVERRIDE:
+            raise NotImplementedError("override")
+
+        if flags & AssignmentExpression.FLAG_PRIVATE:
+            raise NotImplementedError("private")
 
         if op_str == "?=":
             symbol_table.maybe_add(key, rhs, pos)
@@ -422,7 +426,6 @@ class AssignmentExpression(Expression):
                 self.modifier_flags |= self.FLAG_OVERRIDE
             else:
                 assert 0, s
-            
         self.sanity()
 
     def __str__(self):

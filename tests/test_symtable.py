@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: GPL-2.0
+# Copyright (C) 2014-2024 David Poole davep@mbuf.com david.poole@ericsson.com
+#
 import logging
 
 logger = logging.getLogger("pymake")
@@ -101,7 +104,9 @@ def test_env_var():
     symbol_table = symtable.SymbolTable()
 
     save_path = symbol_table.fetch("PATH")
+    # should always find PATH in the env no matter the test environment
     assert save_path
+    assert symbol_table.origin("PATH") == "environment"
 
     symbol_table.push("PATH")
     symbol_table.add("PATH", "a:b:c:")
@@ -112,6 +117,9 @@ def test_env_var():
 
     path = symbol_table.fetch("PATH")
     assert path==save_path
+
+    symbol_table.add("PATH", Literal("/bin"))
+    assert symbol_table.origin("PATH") == "file"
 
 def test_is_defined():
     # verify we check all the ways a symbol can be defined
@@ -215,7 +223,57 @@ def test_append_recursive():
     value = symbol_table.fetch("CFLAGS")
     assert value == "-g -Wall"
     symbol_table.append("CFLAGS", Expression([Literal("-Wextra")]))
+    value = symbol_table.fetch("CFLAGS")
+    assert value == "-g -Wall -Wextra"
 
-if __name__ == '__main__':
-#    test_push_push_pop_pop()
-    test_maybe_add()
+def test_update():
+    # I had a bug where I was creating a new entry for every 'add'
+    # so let's make sure I'm actually _UPDATING_ the dang thing now.
+    symbol_table = symtable.SymbolTable()
+    # CFLAGS=-g -Wall
+    symbol_table.add("FOO", Literal("foo"))
+    value = symbol_table.fetch("FOO")
+    assert value == "foo"
+    id1 = id(symbol_table.symbols["FOO"])
+    symbol_table.add("FOO", Literal("oof"))
+    value = symbol_table.fetch("FOO")
+    assert value == "oof"
+    id2 = id(symbol_table.symbols["FOO"])
+    assert id1==id2
+
+def test_command_line():
+    # variable from command line, for example:
+    # make FOO:=foo
+    symbol_table = symtable.SymbolTable()
+    symbol_table.command_line_start()
+    symbol_table.add("FOO", Literal("foo"))
+    symbol_table.command_line_stop()
+    value = symbol_table.fetch("FOO")
+    assert value == "foo"
+    assert symbol_table.origin("FOO") == "command line"
+
+    # command line vars are always marked for export
+    exports = symbol_table.get_exports()
+    assert exports["FOO"] == "foo"
+    
+    # should not be able to update a command line var
+    symbol_table.add("FOO", Literal("oof"))
+    value = symbol_table.fetch("FOO")
+    assert value == "foo"  # unchanged
+    assert symbol_table.origin("FOO") == "command line"
+
+def test_command_line_multiple_var():
+    # multiple variable with same name from command line, for example:
+    # make FOO:=foo FOO:=bar FOO:=baz
+    # These can update the value.
+    symbol_table = symtable.SymbolTable()
+    symbol_table.command_line_start()
+    symbol_table.add("FOO", Literal("foo"))
+    symbol_table.add("FOO", Literal("bar"))
+    symbol_table.add("FOO", Literal("baz"))
+    symbol_table.command_line_stop()
+    value = symbol_table.fetch("FOO")
+    # last value wins
+    assert value == "baz"
+    assert symbol_table.origin("FOO") == "command line"
+    

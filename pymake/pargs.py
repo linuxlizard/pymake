@@ -113,15 +113,16 @@ class Args:
 
     def __str__(self):
         # useful for debugging the sub-make
-        s = ""
-        s += "-B " if self.always_make else ""
-        s += "-C %s " % self.directory if self.directory else ""
-        s += "-d " if self.debug else ""
-        s += "-f %s " % self.filename if self.filename else ""
-        s += "-n " if self.dry_run else ""
-        s += "-s " if self.silent else ""
-        s += " ".join(self.argslist)
-        return s
+        a = [
+            "-B" if self.always_make else "",
+            "-C %s" % self.directory if self.directory else "",
+            "-d" if self.debug else "",
+            "-f %s" % self.filename if self.filename else "",
+            "-n" if self.dry_run else "",
+            "-s" if self.silent else "",
+            *self.argslist
+        ]
+        return " ".join( [s for s in a if s] )
 
 def _parse_debug_flags(s):
     flags = s.split(',')

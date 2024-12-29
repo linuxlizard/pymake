@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: GPL-2.0
+# Copyright (C) 2014-2024 David Poole davep@mbuf.com david.poole@ericsson.com
+
 import run
 
 # Test all the ways we can assign a variable
@@ -35,5 +38,16 @@ $(info FOO=$(FOO))
 @:;@:
 """
     expect = "FOO=foo bar"
+    run_test(makefile, expect)
+
+def test_update():
+    makefile = """
+FOO:=foo
+FOO:=$(FOO) foo
+FOO:=bar $(FOO)
+
+@:; @echo $(FOO)
+"""
+    expect = "bar foo foo"
     run_test(makefile, expect)
 
