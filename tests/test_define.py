@@ -14,6 +14,8 @@ import pymake.pymake as pymake
 import pymake.source as source
 from pymake.error import *
 
+import run
+
 # turn on some extra code paths that allow normally incorrect types to work
 pymake.symbol._testing = True
 pymake.vline._testing = True
@@ -224,4 +226,22 @@ endef
 
     with pytest.raises(StopIteration):
         s = next(vline_iter)
+
+@pytest.mark.skip(reason="spaces handling in multi-line shell assign is broken")
+def test_shell_define():
+    makefile = """
+define shell_example !=
+    echo foo
+    echo bar
+endef
+$(info >>$(shell_example)<<)
+@:;@:
+"""
+    s1 = run.gnumake_string(makefile)
+    print("make=",s1)
+
+    s2 = run.pymake_string(makefile)
+    print("pymake=",s2)
+
+    assert s1==s2
 
