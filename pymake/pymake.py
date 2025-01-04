@@ -33,6 +33,7 @@ import pymake.pargs as pargs
 import pymake.submake as submake
 from pymake.debug import *
 import pymake.constants as constants
+import pymake.functions as functions
 
 _debug = False
 
@@ -266,7 +267,7 @@ def _add_internal_db(symtable):
 
     # TODO parse automatics
 
-def _execute_statement_list(stmt_list, curr_rules, rulesdb, symtable):
+def execute_statement_list(stmt_list, curr_rules, rulesdb, symtable):
 
     exit_code = 0
 
@@ -345,12 +346,16 @@ def _execute_statement_list(stmt_list, curr_rules, rulesdb, symtable):
                         # makefile rules, statements, etc.
                         # GNU Make itself seems to interpret raw text as a rule and
                         # will print a "missing separator" error
+                        #
+                        # Update 20260101 NOPE. The $(eval) function is
+                        # completely different and cannot be handled in the way
+                        # I originally hoped.
                         raise MissingSeparator(statement.get_pos())
                 else:
                     # A conditional block or include eval returns an array
                     # of parsed Symbols ready for eval.  
                     assert isinstance(result,list), type(result)
-                    exit_code = _execute_statement_list(result, curr_rules, rulesdb, symtable)
+                    exit_code = execute_statement_list(result, curr_rules, rulesdb, symtable)
                         
             except MakeError as err:
                 # Catch our own Error exceptions. Report, break out of our execute loop and leave.
@@ -523,7 +528,6 @@ def execute(makefile, args):
     # ha ha type checking
     assert isinstance(args, pargs.Args)
 
-    # tinkering with how to evaluate
     symtable = SymbolTable(warn_undefined_variables=args.warn_undefined_variables)
 
     if not args.no_builtin_rules:
@@ -555,7 +559,7 @@ def execute(makefile, args):
     # so the arglist must be parsed and assignment statements saved. Anything
     # not an Assignment is likely a target.
     for onearg in args.argslist:
-        v = vline.VirtualLine([onearg], (0,0), "@commandline")
+        v = vline.VirtualLine([onearg], (-1,-1), "@commandline")
         vchar_scanner = iter(v)
         stmt = tokenizer.tokenize_assignment_statement(vchar_scanner)
         if isinstance(stmt,AssignmentExpression):
@@ -576,7 +580,11 @@ def execute(makefile, args):
     # Basically, we have context sensitive evaluation.
     curr_rules = []
 
-    exit_code = _execute_statement_list(makefile.token_list, curr_rules, rulesdb, symtable)
+    # XXX experimental for handling $(eval)
+    symtable.curr_rules = curr_rules
+    symtable.rulesdb = rulesdb
+
+    exit_code = execute_statement_list(makefile.token_list, curr_rules, rulesdb, symtable)
 
     if exit_code:
         return exit_code
@@ -677,6 +685,8 @@ def _run_it(args):
 parser.parse_vline = parse_vline 
 symbol.parse_vline = parse_vline 
 symbol.tokenize_line = tokenizer.tokenize_line
+functions.parse_makefile_from_src = parse_makefile_from_src
+functions.execute_statement_list = execute_statement_list
 
 def main():
     args = pargs.parse_args(sys.argv[1:])

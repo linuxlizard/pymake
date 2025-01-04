@@ -281,6 +281,7 @@ class AssignmentExpression(Expression):
     FLAG_EXPORT = 1<<1
     FLAG_PRIVATE = 1<<2
     FLAG_OVERRIDE = 1<<3
+    FLAG_DEFINE_BLOCK = 1<<31
 
     def __init__(self, token_list, modifier_list=None):
         super().__init__(token_list)
@@ -316,7 +317,8 @@ class AssignmentExpression(Expression):
 
         if op_str == ":=" or op_str == "::=":
             # simply expanded
-            rhs = rhs.eval(symbol_table)
+            if not (flags & AssignmentExpression.FLAG_DEFINE_BLOCK):
+                rhs = rhs.eval(symbol_table)
         elif op_str == "=":
             # recursively expanded
             # store the expression in the symbol table without evaluating
@@ -325,6 +327,10 @@ class AssignmentExpression(Expression):
             # != seems to be a > 3.81 feature so add a version check here
             if Version.major < 4:
                 raise VersionError("!= not in this version of make")
+
+            if flags & AssignmentExpression.FLAG_DEFINE_BLOCK:
+                assert isinstance(rhs,DefineBlock), type(rhs)
+                rhs = [rhs,]
 
             # execute RHS as shell
             rhs = shell.execute_tokens(rhs, symbol_table )
@@ -375,29 +381,11 @@ class AssignmentExpression(Expression):
         # pyfiles := $(wildcard foo*.py) $(wildcard bar*.py) $(wildcard baz*.py)
         assert len(self.token_list) == 3
 
-#        lhs = self.token_list[0]
-#        op = self.token_list[1]
-#        rhs = self.token_list[2]
-#
-        return self.assign(self.lhs, self.assign_op, self.rhs, symbol_table, self.modifier_flags)
+        lhs = self.token_list[0]
+        assign_op = self.token_list[1]
+        rhs = self.token_list[2]
 
-    @property 
-    def lhs(self):
-        # convenience method to get the LHS (left hand side)
-        assert isinstance(self.token_list[0], Expression), type(self.token_list[0])
-        return self.token_list[0]
-
-    @property
-    def assign_op(self):
-        # convenience method to get the assignment operator
-        assert isinstance(self.token_list[1], AssignOp), type(self.token_list[1])
-        return self.token_list[1]
-
-    @property 
-    def rhs(self):
-        # convenience method to get the RHS (right hand side)
-        assert isinstance(self.token_list[2], Expression), type(self.token_list[2])
-        return self.token_list[2]
+        return self.assign(lhs, assign_op, rhs, symbol_table, self.modifier_flags)
 
     def sanity(self):
         # AssignmentExpression :=  Expression AssignOp Expression
@@ -1246,13 +1234,19 @@ class DefineDirective(Directive):
     def eval(self, symbol_table):
         # self.expression contains the directive's name
 
+        # TODO 'define' variable modifier flags
+
+        # silly hack
+        flags = AssignmentExpression.FLAG_DEFINE_BLOCK
+
         # use AssignmentExpression so all the variable type and assignment type
         # special cases are in one place
         return AssignmentExpression.assign(
                     self.expression.token_list[0],  # LHS
                     self.expression.token_list[1],  # assignment operator
                     self.block, 
-                    symbol_table)
+                    symbol_table, 
+                    flags )
 
 
 class UnDefineDirective(Directive):

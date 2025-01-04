@@ -7,7 +7,7 @@ define foo =
 endef # foo foo foo
 
 # The following are from the GNU Make manual
-define two-lines 
+define two-lines :=
 	@echo two-lines foo
 	@echo two-lines $(bar)
 endef
@@ -146,6 +146,39 @@ $(info cdr=$a)
 
 # override previous bar so two-lines should now have qux
 bar=qux
+
+define shell_example !=
+    echo `date +%N`
+    echo bar
+endef
+# output should be identical (only evaluated once)
+$(info 1 shell_example=$(shell_example))
+$(info 2 shell_example=$(shell_example))
+
+define silly_example :=
+    FOO:=foo
+    BAR:=bar
+endef
+ifdef FOO
+$(error dave code is stupid)
+endif
+
+$(eval $(silly_example))
+$(info FOO=$(FOO) BAR=$(BAR))
+
+ifneq ($(FOO),foo)
+$(error FOO missing)
+endif
+
+define shell_example !=
+   echo `date +%N`
+   echo bar
+endef
+
+$(info $(shell_example))
+$(info $(shell_example))
+
+@:;@:
 
 .PHONY: all
 all : 

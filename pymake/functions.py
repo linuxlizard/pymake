@@ -16,17 +16,12 @@ from pymake.functions_base import Function, FunctionWithArguments
 from pymake.functions_fs import *
 from pymake.functions_cond import *
 from pymake.functions_str import *
-from pymake.todo import TODOMixIn
-
 import pymake.shell as shell
+from pymake.source import SourceString
 
-__all__ = [ "Info", 
-            "WarningClass",
-            "Error",
-            "Shell", 
-
-            "make_function",
-          ]
+# FIXME ugly hack dependency injection to solve problems with circular imports
+parse_makefile_from_src = None
+execute_statement_list = None
 
 class PrintingFunction(Function):
     fmt = None
@@ -151,8 +146,21 @@ class Call(FunctionWithArguments):
         return s
 
 
-class Eval(TODOMixIn, Function):
+class Eval(Function):
     name = "eval"
+
+    def eval(self, symbol_table):
+        # call responsible to re-interpret this result
+        s = "".join([a.eval(symbol_table) for a in self.token_list])
+        src = SourceString(s)
+        makefile = parse_makefile_from_src(src)
+
+        exit_code = execute_statement_list(makefile.token_list, symbol_table.curr_rules, symbol_table.rulesdb, symbol_table)
+
+        # TODO what should I do about exit_code ?
+        assert exit_code==0, exit_code
+
+        return ""
 
 class Flavor(Function):
     name = "flavor"
