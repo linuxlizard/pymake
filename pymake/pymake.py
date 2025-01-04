@@ -370,10 +370,10 @@ def execute_statement_list(stmt_list, curr_rules, rulesdb, symtable):
             except Exception as err:
                 # My code crashed. For shame!
                 logger.exception(err)
-                logger.error("INTERNAL ERROR eval exception during token makefile=\"\"\"\n%s\n\"\"\"", statement.makefile())
-                logger.error("INTERNAL ERROR eval exception during token string=%s", str(statement))
+                logger.error("INTERNAL ERROR exception during token makefile=\"\"\"\n%s\n\"\"\"", statement.makefile())
+                logger.error("INTERNAL ERROR exception during token string=%s", str(statement))
                 filename,pos = statement.get_pos()
-                logger.error("eval failed statement=%r file=%s pos=%s", statement, filename, pos)
+                logger.error("execute failed pos=%r file=%s statement=%r", pos, filename, statement)
                 exit_code = 1
     
         # leave early on error
@@ -580,7 +580,20 @@ def execute(makefile, args):
     # Basically, we have context sensitive evaluation.
     curr_rules = []
 
-    # XXX experimental for handling $(eval)
+    # For handling $(eval)  This is not my proudest moment.  I originally
+    # designed my make function implementations to be truly functional (no side
+    # effects). My plan was for $(eval) to return a string of Make code that
+    # would be re-interpretted. But now I'm deep enough into implementation to
+    # understand that won't work.  The $(eval) function is entirely a side
+    # effect. The $(eval) function can add rules, execute other functions,
+    # anything.  And the $(eval) has to happen exactly in the place where it's
+    # called. 
+    # $(info $(eval foo:bar))  # add a rule; $(info) would consume the string
+    # if I simply returned "foo:bar" from $(eval)
+    #
+    # I need a way to send down the current state of the make (specifically,
+    # rules). The symbol table is the only argument passed between make
+    # functions.
     symtable.curr_rules = curr_rules
     symtable.rulesdb = rulesdb
 

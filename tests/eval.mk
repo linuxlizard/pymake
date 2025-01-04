@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: GPL-2.0
+# Copyright (C) 2024-2025 David Poole david.poole@ericsson.com
+#
 # test the eval function
 
 $(eval FOO:=foo)

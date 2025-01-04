@@ -381,11 +381,25 @@ class AssignmentExpression(Expression):
         # pyfiles := $(wildcard foo*.py) $(wildcard bar*.py) $(wildcard baz*.py)
         assert len(self.token_list) == 3
 
-        lhs = self.token_list[0]
-        assign_op = self.token_list[1]
-        rhs = self.token_list[2]
+        return self.assign(self.lhs, self.assign_op, self.rhs, symbol_table, self.modifier_flags)
 
-        return self.assign(lhs, assign_op, rhs, symbol_table, self.modifier_flags)
+    @property 
+    def lhs(self):
+        # convenience method to get the LHS (left hand side)
+        assert isinstance(self.token_list[0], Expression), type(self.token_list[0])
+        return self.token_list[0]
+
+    @property
+    def assign_op(self):
+        # convenience method to get the assignment operator
+        assert isinstance(self.token_list[1], AssignOp), type(self.token_list[1])
+        return self.token_list[1]
+ 
+    @property 
+    def rhs(self):
+        # convenience method to get the RHS (right hand side)
+        assert isinstance(self.token_list[2], Expression), type(self.token_list[2])
+        return self.token_list[2]
 
     def sanity(self):
         # AssignmentExpression :=  Expression AssignOp Expression

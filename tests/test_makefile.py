@@ -93,7 +93,7 @@ infilename_list = (
     # "file.mk",
     "call.mk",
 #        "value.mk",  # FIXME my .makefile() surrounds single letter varrefs with () even if not in the original
-    # "eval.mk",
+    "eval.mk",
     # "origin.mk",
     # "flavor.mk",
     # "shell.mk",
