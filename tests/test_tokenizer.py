@@ -84,13 +84,13 @@ def test_tokenize_simple_recipe():
     s = "	@echo foo\n"
     viter = make_viter(s)
     r = tokenizer.tokenize_recipe(viter)
-    assert r.makefile() == "@echo foo"
+    assert r.makefile() == "\t@echo foo"
 
 def test_tokenize_simple_whitespace_recipe():
     s = "			@echo foo\n"
     viter = make_viter(s)
     r = tokenizer.tokenize_recipe(viter)
-    assert r.makefile() == "@echo foo"
+    assert r.makefile() == "\t@echo foo"
 
 def test_tokenize_varref_recipe():
     s = "	@echo $(foo)\n"
@@ -101,7 +101,7 @@ def test_tokenize_varref_recipe():
     symbol_table.add("foo", "bar")
     s = r.eval(symbol_table)
 
-    assert r.makefile() == "@echo $(foo)"
+    assert r.makefile() == "\t@echo $(foo)"
     assert s == "@echo bar"
 
 def test_tokenize_single_letter_varref_recipe():
@@ -115,7 +115,7 @@ def test_tokenize_single_letter_varref_recipe():
     s = r.eval(symbol_table)
 
     # my round trip code will always add () around varrefs
-    assert r.makefile() == "@echo $(f)"
+    assert r.makefile() == "\t@echo $(f)"
     assert s == "@echo bar"
 
 def test_recipe_with_backslash():
@@ -137,7 +137,7 @@ def test_tokenize_bash_var_recipe():
     symbol_table = symtable.SymbolTable()
     s = r.eval(symbol_table)
 
-    assert r.makefile() == "@echo $$PATH"
+    assert r.makefile() == "\t@echo $$PATH"
     assert s == "@echo $PATH"
 
 def test_tokenize_double_dollar_recipe():
@@ -151,7 +151,7 @@ def test_tokenize_double_dollar_recipe():
     symbol_table = symtable.SymbolTable()
     s = r.eval(symbol_table)
 
-    assert r.makefile() == "@echo pid=$$$$"
+    assert r.makefile() == "\t@echo pid=$$$$"
     assert s == "@echo pid=$$"
 
 # 5.1.1 Splitting Recipe Lines

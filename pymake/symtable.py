@@ -10,7 +10,6 @@ from enum import Enum
 
 import pymake.version as version
 import pymake.constants as constants
-from pymake.symbol import Symbol
 from pymake.error import *
 
 logger = logging.getLogger("pymake.symtable")
@@ -19,6 +18,17 @@ logger = logging.getLogger("pymake.symtable")
 
 #_fail_on_undefined = True
 _fail_on_undefined = False
+
+def _value_is_recursive(v):
+    # test if a value is something with its own eval method which would
+    # indicate it's a recursive variable 
+    # for example:
+    # FOO=foo  <-- stored as a Symbol
+    # FOO:=foo <-- stored as a Python string (no eval method)
+    try:
+        return True if v.eval else False
+    except AttributeError:
+        return False
 
 class Export(Enum):
     # by default, var not exported
@@ -99,7 +109,7 @@ class Entry:
         # e.g.,  a=10  (evaluated whenever $a is used)
         # vs   a:=10  (evaluated immediately and "10" stored in symtable)
         #
-        if isinstance(self._value, Symbol):
+        if _value_is_recursive(self._value):
             logger.debug("recursive eval %r loop=%d name=%s at pos=%r", self, self.loop, self.name, self.get_pos())
             if self.loop > 0:
                 msg = "Recursive variable %r references itself (eventually)." % self.name
@@ -123,8 +133,8 @@ class Entry:
         return self._value
 
     def append_recursive(self, value):
-        # ha ha type checking
-        assert isinstance(value,Symbol), type(value)
+        # ha ha type checking; require a Symbol-ish thing
+        assert _value_is_recursive(value), type(value)
 
         return self._appends.append(value)
 
@@ -227,11 +237,10 @@ class BuiltInEntry(Entry):
         assert name in constants.builtin_variables, name
         super().__init__(name, value, pos)
 
-
 class SymbolTable(object):
     def __init__(self, **kwargs):
         # key: variable name
-        # value: _entry_template dict instance
+        # value: Entry instance
         self.symbols = {}
 
         # push/pop a name/value so $(foreach) (and other functions) can re-use
@@ -446,18 +455,16 @@ class SymbolTable(object):
         return ""
 
     def append(self, name, value, pos=None):
-
         # "When the variable in question has not been defined before, ‘+=’ acts
         # just like normal ‘=’: it defines a recursively-expanded variable."
         # GNU Make 4.3 January 2020
         if name not in self.symbols:
             # ha ha type checking
-            assert isinstance(value,Symbol), type(value)
-
+            assert _value_is_recursive(value), type(value)
             return self.add(name, value, pos)
 
         entry = self.symbols[name]
-        if isinstance(entry.value, Symbol):
+        if _value_is_recursive(entry.value):
             return entry.append_recursive(value)
 
         # simple string append, space separated

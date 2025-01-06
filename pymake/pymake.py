@@ -308,18 +308,29 @@ def execute_statement_list(stmt_list, curr_rules, rulesdb, symtable):
             curr_rules.clear()
 
             rule_expr = statement
+            m = rule_expr.makefile()
 
             # Note a RuleExpression.eval() is very different from all other
             # eval() methods (so far).  A RuleExpression.eval() returns two
             # arrays of strings: targets, prereqs
             # All other eval() returns a string.
             target_list, prereq_list = rule_expr.eval(symtable)
-               
+
+            if rule_expr.assignment:
+                # Have a target-specific assignment expression.
+                # There will be no prereqs or attached recipes.
+                #
+                # The assignments will not be eval'd here but rather stored in
+                # the Rule and eval'd when the Rule is used.
+                assert not prereq_list
+
             if target_list:
                 for t in target_list:
-                    rule = rules.Rule(t, prereq_list, rule_expr.recipe_list, rule_expr.get_pos())
-                    rulesdb.add(rule)
+                    rule = rulesdb.add(t, prereq_list, rule_expr.recipe_list, 
+                            rule_expr.assignment, rule_expr.get_pos())
                     curr_rules.append(rule)
+                    # we're in a big confusing loop so get rid of a name I re-use
+                    del rule
             else:
                 # "We accept and ignore rules without targets for
                 #  compatibility with SunOS 4 make." -- GNU Make src/read.c
@@ -327,7 +338,7 @@ def execute_statement_list(stmt_list, curr_rules, rulesdb, symtable):
                 # We need to have a Rule in curr_rules to correctly parse
                 # ambiguous statements with have a leading Recipe Prefix 
                 # (aka <tab>)
-                rule = rules.Rule(None, prereq_list, rule_expr.recipe_list, rule_expr.get_pos())
+                rule = rules.Rule(None, prereq_list, rule_expr.recipe_list, rule_expr.assignment, rule_expr.get_pos())
                 # don't add this Rule to the DB but do let the world know we are in a Rule
                 curr_rules.append(rule)
 
@@ -432,7 +443,7 @@ def execute_recipe(rule, recipe, symtable, args):
                 s = s[1:]
 
             elif s[0] == '+':
-                raise NotImplementedError
+                raise NotImplementedError()
 
             else:
                 break
