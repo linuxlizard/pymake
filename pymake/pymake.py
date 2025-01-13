@@ -451,22 +451,18 @@ def execute_recipe(rule, recipe, symtable, args):
         return s, ignore_failure, silent
 
     # TODO many more automatic variables
-    symtable.push("@")
-    symtable.push("^")
-    symtable.push("+")
-    symtable.push("<")
+    symtable.push_layer()
     symtable.add_automatic("@", rule.target, recipe.get_pos())
     symtable.add_automatic("^", " ".join(remove_duplicates(rule.prereq_list)), rule.get_pos())
     symtable.add_automatic("+", " ".join(rule.prereq_list), rule.get_pos())
     symtable.add_automatic("<", rule.prereq_list[0] if len(rule.prereq_list) else "", rule.get_pos())
 
+    # TODO target specific variables
+
     cmd_s = recipe.eval(symtable)
 #    print("execute_recipe \"%r\"" % cmd_s)
 
-    symtable.pop("@")
-    symtable.pop("^")
-    symtable.pop("+")
-    symtable.pop("<")
+    symtable.pop_layer()
         
     # Defining Multi-Line Variables.
     # "However, note that using two separate lines means make will invoke the shell twice, running

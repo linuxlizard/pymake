@@ -239,9 +239,18 @@ class BuiltInEntry(Entry):
 
 class SymbolTable(object):
     def __init__(self, **kwargs):
+        # Stack of dictionary to support "hiding" variable definitions. For
+        # example, foreach loop variables and target specific variables must
+        # not change existing definitions
+        #
+        # The topmost layer will be [0]
+        # New layers are added using .insert(0) and removed using [1:]
+        #
+        # In some places, I skip search layers if the len()==1
+        #
         # key: variable name
         # value: Entry instance
-        self.symbols = {}
+        self.layers = [{},]
 
         # push/pop a name/value so $(foreach) (and other functions) can re-use
         # the var name (and we don't have to make a complete new copy of a
@@ -306,12 +315,55 @@ class SymbolTable(object):
         # GNU Make Manual Version 4.3 January 2020
         [ self._add_entry(EnvVarEntry(k,v)) for k,v in os.environ.items() if k != "SHELL" ]
 
+    def push_layer(self):
+        # push top, pop top
+        self.layers.insert(0, {})
+
+    def pop_layer(self):
+        # push top, pop top
+        self.layers = self.layers[1:]
+
+    def find(self, name, layer_idx=None):
+        # search the layers for a variable; throw KeyError on failure 
+        if len(self.layers)==1:
+            return self.layers[0][name]
+
+        if layer_idx is not None:
+            # only search a specific layer
+            return self.layers[layer_idx][name]
+
+        # search layers from top to bottom (forward iterator)
+        for symbols in self.layers:
+            try:
+                return symbols[name]
+            except KeyError:
+                pass
+        raise KeyError(name)
+
+    def _get_entries(self, filter_fn=None):
+        # Build a dict name:entry of entire symbol table contents taking layers
+        # into account. Created originally to fetch all exported vars and to
+        # handle global 'export'/'unexport' directives.
+        entries = {}
+
+        # walk layers bottom to top so higher entries replace lower
+        # (reverse iterator)
+        if filter_fn:
+            for symbols in self.layers[::-1]:
+                entries.update({ name:entry for name,entry in symbols.items() if filter_fn(entry) })
+        else:
+            for symbols in self.layers[::-1]:
+                entries.update({ name:entry for name,entry in symbols.items() })
+
+        return entries        
+
     def _add_entry(self, entry):
 
         # sanity check the entry fields
         entry.sanity()
 
-        self.symbols[entry.name] = entry
+        # always add to the top layer
+        self.layers[0][entry.name] = entry
 
     def add(self, name, value, pos=None):
         logger.debug("store \"%s\"=\"%s\"", name, value)
@@ -330,8 +382,10 @@ class SymbolTable(object):
         if name in constants.builtin_variables:
             warning_message(pos, "overwriting built-in variable \"%s\"" % name)
 
+        # only search top layer; if not there, we'll add it to mask the
+        # layer(s) below
         try:
-            entry = self.symbols[name]
+            entry = self.find(name, 0)
         except KeyError:
             entry = None 
 
@@ -384,7 +438,7 @@ class SymbolTable(object):
         # If name already exists in the table, don't overwrite.
         # Used with ?= assignments.
         try:
-            self.symbols[name]
+            self.find(name)
             return
         except KeyError:
             pass
@@ -444,7 +498,7 @@ class SymbolTable(object):
 #            pass
 
         try:
-            return self.symbols[key].eval(self)
+            return self.find(key).eval(self)
         except KeyError:
             if self.warn_undefined:
                 warning_message(pos, "undefined variable '%s'" % key)
@@ -458,12 +512,16 @@ class SymbolTable(object):
         # "When the variable in question has not been defined before, ‘+=’ acts
         # just like normal ‘=’: it defines a recursively-expanded variable."
         # GNU Make 4.3 January 2020
-        if name not in self.symbols:
-            # ha ha type checking
+
+        entry = None
+        try:
+            entry = self.find(name)
+        except KeyError:
+            pass
+        if entry is None:
             assert _value_is_recursive(value), type(value)
             return self.add(name, value, pos)
-
-        entry = self.symbols[name]
+        
         if _value_is_recursive(entry.value):
             return entry.append_recursive(value)
 
@@ -472,60 +530,6 @@ class SymbolTable(object):
             entry.append(value.eval(self), pos)
         except AttributeError:
             entry.append(value, pos)
-
-    def push(self, name):
-        # save current value of 'name' in secure, undisclosed location
-
-        logger.debug("push name=%s", name)
-
-        # don't use self.fetch() because will eval the var which could lead to
-        # side effects
-        if name not in self.symbols:
-            # nothing to save
-            return
-
-        entry = self.symbols[name]
-        # remove the other reference (otherwise 'add' will just update the
-        # self.symbols[name] entry which also points to our stack entry)
-        del self.symbols[name]
-            
-        # create the dequeue if doesn't exist
-        if not name in self.stack:
-            self.stack[name] = collections.deque()
-
-        # push right, pop right (stack)
-        logger.debug("push entry=%s", entry.name)
-        self.stack[name].append(entry)
-
-    def pop(self, name):
-        # restore previous value of 'name' from the secure, undisclosed location
-
-        # push right, pop right (stack)
-        # allow KeyError and IndexError to propagate (indicates a bug in the
-        # calling code)
-        logger.debug("pop name=%s", name)
-
-        # The stack will contain values previously in the symbol table.
-        # If there was no previous value in the symbol table, there will be no
-        # entry for it in the stack. In this case, just delete the value from
-        # the symbol table.
-        # For example, the $(call) function will push each arg $1 $2 $3 $4 etc
-        # then pop them after the call.  Very likely $1 $2 $3, etc, are not in
-        # the symbol table originally.
-        try:
-            entry = self.stack[name].pop()
-        except KeyError:
-            # if the name doesn't exist in the self.symbols{}, we push/popped a
-            # name but didn't use it between the push/pop (perfectly acceptable)
-            if name in self.symbols:
-                del self.symbols[name]
-            return
-
-        # TODO future memory optimization would be to delete the dequeue from
-        # self.stack when empty
-
-        # restore previous value
-        self.symbols[name] = entry
 
     def flavor(self, name):
         # Support for the $(flavor) function
@@ -537,7 +541,7 @@ class SymbolTable(object):
         # don't use self.fetch() because will eval the var which could lead to
         # side effects
         try :
-            value = self.symbols[name]
+            value = self.find(name)
         except KeyError:
             return "undefined"
 
@@ -566,7 +570,7 @@ class SymbolTable(object):
         # automatic -- defined in a rule e.g., $@ TODO
 
         try :
-            entry = self.symbols[name]
+            entry = self.find(name)
             assert entry.origin is not None, name
             return entry.origin
         except KeyError:
@@ -579,7 +583,7 @@ class SymbolTable(object):
         # side effects
 
         try :
-            entry = self.symbols[name]
+            entry = self.find(name)
             value = entry.value
             if isinstance(value,Symbol):
                 return value.makefile()
@@ -589,21 +593,32 @@ class SymbolTable(object):
 
     def variables(self, _):
         # return $(.VARIABLES)
-        return " ".join(self.symbols.keys())
+        # walk the layers, bottom to top, gathering the key strings
+
+        if len(self.layers)==1:
+            return " ".join(self.layers[0].keys())
+        raise NotImplementedError("variables")
+#        return " ".join(self.symbols.keys())
 
     def is_defined(self, name):
         # is this varname in our symbol table (or other mechanisms)
-        return name in self.symbols
+        try:
+            _ = self.find(name)
+            return True
+        except KeyError:
+            return False
         
     def ifdef(self, name):
-        if not name in self.symbols:
+        entry = None
+        try:
+            entry = self.find(name)
+        except KeyError:
             return False
 
         # it's in our table but does it have a value?
-        value = self.symbols[name]
-        assert value._value is not None
+        assert entry._value is not None
 
-        if not len(value._value):
+        if not len(entry._value):
             return False
 
         return True
@@ -615,7 +630,7 @@ class SymbolTable(object):
             return
 
         try:
-            value = self.symbols[name].set_export(Export.EXPLICIT)
+            value = self.find(name).set_export(Export.EXPLICIT)
         except KeyError:
             # no such entry
             pass
@@ -627,32 +642,42 @@ class SymbolTable(object):
             return
 
         try:
-            self.symbols[name].set_unexport(Export.EXPLICIT)
+            self.find(name).set_unexport(Export.EXPLICIT)
         except KeyError:
             # no such entry
             pass
 
     def undefine(self, name):
         # support the undefine directive
-        try:
-            entry = self.symbols[name]
-        except KeyError:
-            # does not exist. no harm, no foul.
-            return
+        if len(self.layers)==1:
+            try:
+                del self.layers[0][name]
+            except KeyError:
+                # does not exist. no harm, no foul.
+                return
 
         # TODO any variables that GNU Make considers an error to undefine?
 
-        del self.symbols[name]
+        # Try in layer order. If we don't find it in a layer, we're done (leave
+        # lower layers intact)
+        for symbols in self.layers:
+            try:
+                del symbols[name]
+            except KeyError:
+                return
 
     def _export_all(self):
-        for k,v in self.symbols.items():
+        entries = self._get_entries()
+        for k,v in entries.items():
             v.set_export( Export.IMPLICIT )
         # new vars from this point on will be marked as export
         self.export_start()
 
     def _unexport_all(self):
-        for k,v in self.symbols.items():
+        entries = self._get_entries()
+        for k,v in entries.items():
             v.set_unexport(Export.IMPLICIT)
+        # turn off global export flag
         self.export_stop()
 
     def get_exports(self):
@@ -663,8 +688,9 @@ class SymbolTable(object):
         # store something in the symbol table that will throw a "dictionary
         # changed during iteration" error (for example, .SHELLSTATUS is updated
         # internally every time a shell is run)
-        exports = { name:entry for name,entry in self.symbols.items() if entry.export }
-        exports = { name:entry.eval(self) for name,entry in exports.items() }
+        entries = self._get_entries(lambda e:e.export )
+
+        exports = { name:entry.eval(self) for name,entry in entries.items() }
 
         assert self.env_recursion >= 0
         return exports
@@ -706,7 +732,7 @@ class SymbolTable(object):
         assert name in constants.builtin_variables, name
 
         try:
-            return self.symbols[name].set_value(value, pos)
+            return self.find(name).set_value(value, pos)
         except KeyError:
             pass
 
