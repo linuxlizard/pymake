@@ -11,7 +11,7 @@ BAZ:=baz
 all:CC:=clang
 all:FOO!=echo foo
 all:CFLAGS+=-g
-all:PREREQ:=a.txt
+all:export PREREQ:=a.txt
 
 # PREREQ isn't eval'd so 'all' has no prereqs (the var only applies to the
 # recipe apparently)
@@ -20,7 +20,7 @@ all: $(PREREQ)
 	@printenv CC
 	@printenv FOO
 	@printenv CFLAGS
-	@echo PREREQ=$(PREREQ)
+	@printenv PREREQ
 all:BAR=$(BAZ)
 
 BAZ:=zab

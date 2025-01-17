@@ -32,80 +32,75 @@ def test_recursively_expanded():
     value = symbol_table.fetch("CFLAGS")
     assert value=="-g -Wall", value
 
-@pytest.mark.skip(reason="FIXME push/pop")
-def test_simple_push_pop():
+def test_simple_layer():
     symbol_table = symtable.SymbolTable()
-    symbol_table.add("target", ["abcdefghijklmnopqrstuvwxyz"])
+    symbol_table.add("target", "abcdefghijklmnopqrstuvwxyz")
 
-    symbol_table.push("target")
-    symbol_table.add("target", ["12345"])
+    symbol_table.push_layer()
+    symbol_table.add("target", "12345")
     value = symbol_table.fetch("target")
-    assert value == ["12345"]
+    assert value == "12345"
 
-    symbol_table.pop("target")
+    symbol_table.pop_layer()
     value = symbol_table.fetch("target")
-    assert value == ["abcdefghijklmnopqrstuvwxyz"]
+    assert value == "abcdefghijklmnopqrstuvwxyz"
 
-@pytest.mark.skip(reason="FIXME push/pop")
 def test_push_push_pop_pop():
     symbol_table = symtable.SymbolTable()
-    symbol_table.add("target", ["abcdefghijklmnopqrstuvwxyz"])
+    symbol_table.add("target", "abcdefghijklmnopqrstuvwxyz")
 
-    symbol_table.push("target")
-    symbol_table.add("target", ["12345"])
+    symbol_table.push_layer()
+    symbol_table.add("target", "12345")
 
-    symbol_table.push("target")
-    symbol_table.add("target", ["67890"])
+    symbol_table.push_layer()
+    symbol_table.add("target", "67890")
 
     value = symbol_table.fetch("target")
-    assert value == ["67890"]
+    assert value == "67890"
 
-    symbol_table.pop("target")
+    symbol_table.pop_layer()
     value = symbol_table.fetch("target")
-    assert value == ["12345"]
+    assert value == "12345"
 
-    symbol_table.pop("target")
+    symbol_table.pop_layer()
     value = symbol_table.fetch("target")
-    assert value == ["abcdefghijklmnopqrstuvwxyz"]
+    assert value == "abcdefghijklmnopqrstuvwxyz"
 
-@pytest.mark.skip(reason="FIXME push/pop")
 def test_push_pop_undefined():
     # "If var was undefined before the foreach function call, it is undefined after the call."
     symbol_table = symtable.SymbolTable()
 
-    symbol_table.push("target")
-    symbol_table.add("target", ["12345"])
+    symbol_table.push_layer()
+    symbol_table.add("target", "12345")
     value = symbol_table.fetch("target")
-    assert value == ["12345"]
+    assert value == "12345"
 
-    symbol_table.pop("target")
+    symbol_table.pop_layer()
     value = symbol_table.fetch("target")
     assert value==""
 
-@pytest.mark.skip(reason="FIXME push/pop")
 def test_push_pop_pop():
     # too many pops
     symbol_table = symtable.SymbolTable()
-    symbol_table.add("target", ["abcdefghijklmnopqrstuvwxyz"])
+    symbol_table.add("target", "abcdefghijklmnopqrstuvwxyz")
 
-    symbol_table.push("target")
-    symbol_table.add("target", ["12345"])
+    symbol_table.push_layer()
+    symbol_table.add("target", "12345")
     value = symbol_table.fetch("target")
-    assert value == ["12345"]
+    assert value == "12345"
 
-    symbol_table.pop("target")
+    symbol_table.pop_layer()
     value = symbol_table.fetch("target")
-    assert value == ["abcdefghijklmnopqrstuvwxyz"]
+    assert value == "abcdefghijklmnopqrstuvwxyz"
 
     try:
-        symbol_table.pop("target")
+        symbol_table.pop_layer()
     except IndexError:
         pass
     else:
         # expected IndexError
         assert 0
         
-@pytest.mark.skip(reason="FIXME push/pop")
 def test_env_var():
     # environment variables should act like regular vars
     symbol_table = symtable.SymbolTable()
@@ -115,12 +110,12 @@ def test_env_var():
     assert save_path
     assert symbol_table.origin("PATH") == "environment"
 
-    symbol_table.push("PATH")
+    symbol_table.push_layer()
     symbol_table.add("PATH", "a:b:c:")
     value = symbol_table.fetch("PATH")
     assert value == "a:b:c:"
 
-    symbol_table.pop("PATH")
+    symbol_table.pop_layer()
 
     path = symbol_table.fetch("PATH")
     assert path==save_path
@@ -143,6 +138,13 @@ def test_is_defined():
 
     symbol_table.add("FOO", "BAR")
     assert symbol_table.is_defined("FOO")
+
+    assert not symbol_table.is_defined("DAVE")
+    symbol_table.push_layer()
+    symbol_table.add("DAVE","dave")
+    assert symbol_table.is_defined("DAVE")
+    symbol_table.pop_layer()
+    assert not symbol_table.is_defined("DAVE")
 
 def test_maybe_add():
     symbol_table = symtable.SymbolTable()
@@ -286,5 +288,58 @@ def test_command_line_multiple_var():
     assert symbol_table.origin("FOO") == "command line"
     
 def test_layers():
-    pass
+    symbol_table = symtable.SymbolTable()
+    symbol_table.add("FOO", Literal("foo"))
+    symbol_table.push_layer()
+    value = symbol_table.fetch("FOO")
+    assert value == "foo"  # unchanged
+
+def test_layers_variables():
+    symbol_table = symtable.SymbolTable()
+
+    symbol_table.add("FOO", Literal("foo"))
+    varlist = symbol_table.variables(None)
+    assert "FOO" in varlist
+
+    symbol_table.push_layer()
+    varlist = symbol_table.variables(None)
+    assert "FOO" in varlist
+
+@pytest.mark.skip("undefine FIXME")
+def test_layers_undefine():
+    symbol_table = symtable.SymbolTable()
+
+    symbol_table.add("FOO", Literal("foo"))
+    symbol_table.push_layer()
+    symbol_table.add("FOO", Literal("bar"))
+
+    symbol_table.undefine("FOO")
+    varlist = symbol_table.variables(None)
+    assert "FOO" not in varlist
+    symbol_table.pop_layer()
+    varlist = symbol_table.variables(None)
+    assert "FOO" in varlist
+
+@pytest.mark.skip("foo")
+def test_layer_append():
+    symbol_table = symtable.SymbolTable()
+
+    symbol_table.add("FOO", Literal("foo"))
+    symbol_table.push_layer()
+    symbol_table.append("FOO", Literal("bar"))
+    value = symbol_table.fetch("FOO")
+#    assert value=="foobar"
+    symbol_table.pop_layer()
+    value = symbol_table.fetch("FOO")
+#    assert value=="foo"
+
+def test_global_export_layers():
+    makefile="""
+export
+
+all:FOO:=bar
+all:
+	printenv FOO
+"""
+    run.simple_test(makefile)
 

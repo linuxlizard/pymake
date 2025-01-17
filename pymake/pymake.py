@@ -457,13 +457,9 @@ def execute_recipe(rule, recipe, symtable, args):
     symtable.add_automatic("+", " ".join(rule.prereq_list), rule.get_pos())
     symtable.add_automatic("<", rule.prereq_list[0] if len(rule.prereq_list) else "", rule.get_pos())
 
-    # TODO target specific variables
-
     cmd_s = recipe.eval(symtable)
 #    print("execute_recipe \"%r\"" % cmd_s)
 
-    symtable.pop_layer()
-        
     # Defining Multi-Line Variables.
     # "However, note that using two separate lines means make will invoke the shell twice, running
     # an independent sub-shell for each line. See Section 5.3 [Recipe Execution], page 46."
@@ -529,6 +525,8 @@ def execute_recipe(rule, recipe, symtable, args):
                 break
             exit_code = 0
 
+    symtable.pop_layer()
+        
     return exit_status["error"] if exit_code else exit_status["success"] 
 
 def execute(makefile, args):
@@ -657,10 +655,18 @@ def execute(makefile, args):
                 # this warning catches where I fail to find an implicit rule
                 logger.warning("I didn't find a recipe to build target=\"%s\"", target)
 
+            # target specific variables
+            if rule.assignment_list:
+                symtable.push_layer()
+                for asn in rule.assignment_list:
+                    asn.eval(symtable)
+
             for recipe in rule.recipe_list:
                 exit_code = execute_recipe(rule, recipe, symtable, args)
                 if exit_code != 0:
                     break
+            if rule.assignment_list:
+                symtable.pop_layer()
             if exit_code != 0:
                 break
 

@@ -259,6 +259,11 @@ class SymbolTable(object):
 
         self.export_default_value = Export.NOEXPORT
 
+        # A name can be marked export before it's been defined. For example,
+        # export FOO
+        # FOO:=bar
+        self.exported_names = set()
+
         self.warn_undefined = kwargs.get("warn_undefined_variables", False)
 
         self._init_builtins()
@@ -321,6 +326,9 @@ class SymbolTable(object):
 
     def pop_layer(self):
         # push top, pop top
+        if len(self.layers)==1:
+            # don't allow pop of last layer
+            raise IndexError(1)
         self.layers = self.layers[1:]
 
     def find(self, name, layer_idx=None):
@@ -404,7 +412,12 @@ class SymbolTable(object):
                     entry = DefaultEntry(name, value, pos)
                 else:
                     entry = FileEntry(name, value, pos)
-                entry.set_export(self.export_default_value)
+
+                # check if the name was exported before a variable was defined
+                if name in self.exported_names:
+                    entry.set_export(Export.EXPLICIT)
+                else:
+                    entry.set_export(self.export_default_value)
 
             self._add_entry(entry)
         else:
@@ -597,8 +610,9 @@ class SymbolTable(object):
 
         if len(self.layers)==1:
             return " ".join(self.layers[0].keys())
-        raise NotImplementedError("variables")
-#        return " ".join(self.symbols.keys())
+
+        entries = self._get_entries()
+        return " ".join(entries.keys())
 
     def is_defined(self, name):
         # is this varname in our symbol table (or other mechanisms)
@@ -630,10 +644,12 @@ class SymbolTable(object):
             return
 
         try:
-            value = self.find(name).set_export(Export.EXPLICIT)
+            self.find(name).set_export(Export.EXPLICIT)
         except KeyError:
             # no such entry
             pass
+
+        self.exported_names.update((name,))
 
     def unexport(self, name=None):
         if name is None:
@@ -645,6 +661,12 @@ class SymbolTable(object):
             self.find(name).set_unexport(Export.EXPLICIT)
         except KeyError:
             # no such entry
+            pass
+
+        try:
+            self.exported_names.remove(name)
+        except KeyError:
+            # no such entry, no big deal
             pass
 
     def undefine(self, name):
@@ -681,14 +703,20 @@ class SymbolTable(object):
         self.export_stop()
 
     def get_exports(self):
+        # Fetch all the exported variables and their values.
+        # Used when launching shell commands so need to eval() the expressions
+        # to get their actual value.
+
         logger.debug("get_exports")
         assert self.env_recursion >= 0
 
-        # cannot eval() during the self.symbols iteration because we could
-        # store something in the symbol table that will throw a "dictionary
-        # changed during iteration" error (for example, .SHELLSTATUS is updated
-        # internally every time a shell is run)
-        entries = self._get_entries(lambda e:e.export )
+        # Separate key:value fetch from .eval() because we could store
+        # something in the symbol table during eval. For example, .SHELLSTATUS
+        # is updated internally every time a shell is run.
+        #
+        # The .eval() during iteration will throw a "dictionary changed during
+        # iteration" error.
+        entries = self._get_entries(lambda e:e.export)
 
         exports = { name:entry.eval(self) for name,entry in entries.items() }
 
