@@ -3,8 +3,8 @@ CC:=gcc
 CFLAGS:=-Wall
 export CC FOO CFLAGS
 
-$(info $(shell echo $$CC))
-$(info $(shell printenv CC))
+#$(info $(shell echo $$CC))
+#$(info $(shell printenv CC))
 
 BAZ:=baz
 
