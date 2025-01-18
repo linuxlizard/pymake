@@ -121,27 +121,21 @@ class Call(FunctionWithArguments):
     def eval(self, symbol_table):
         var = "".join([a.eval(symbol_table) for a in self.args[0]])
 
+        symbol_table.push_layer()
+
         arg_stack = []
         for idx, arg_list in enumerate(self.args[1:]):
             arg = "".join([a.eval(symbol_table) for a in arg_list])
             varname = "%d" % (idx+1)
-            symbol_table.push(varname)
             symbol_table.add(varname, arg)
             # save the arg name so we can pop it from the symbol table 
             arg_stack.append(varname)
 
-
         # all we need to do is fetch() from the symbol table and the expression
         # will be eval'd
         s = symbol_table.fetch(var)
-#        breakpoint()
 
-        # pop the args off the symbol table in reverse order because why not
-        while 1:
-            try:
-                symbol_table.pop(arg_stack.pop())
-            except IndexError:
-                break
+        symbol_table.pop_layer()
 
         return s
 
@@ -183,16 +177,15 @@ class Foreach(FunctionWithArguments):
         # array of strings
         list_  = "".join([a.eval(symbol_table) for a in self.args[1]]).split()
 
-#        breakpoint()
-
         out_str_list = []
-        symbol_table.push(var)
+        symbol_table.push_layer()
+
         for item in list_:
             symbol_table.add(var, item, self.args[0][0].get_pos())
             text = "".join([a.eval(symbol_table) for a in self.args[2]])
             out_str_list.append(text)
 
-        symbol_table.pop(var)
+        symbol_table.pop_layer()
 
         return " ".join(out_str_list)
 

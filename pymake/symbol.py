@@ -466,20 +466,10 @@ class RuleExpression(Expression):
         # add sanity check in constructor
         Symbol.validate(token_list)
 
+        # ha ha type checking
         assert len(token_list)==3, len(token_list)
-
         assert isinstance(token_list[0], TargetList), (type(token_list[0]),)
         assert isinstance(token_list[1], RuleOp), (type(token_list[1]),)
-
-        if isinstance(token_list[2], PrerequisiteList) : 
-            # all is well
-            pass
-        elif isinstance(token_list[2], AssignmentExpression) :
-            # target specific variable assignment
-            # see: 6.11 Target-specific Variable Values  GNU Make V.4.3 Jan2020
-            raise NotImplementedError()
-        else:
-            assert 0, (type(token_list[2]),)
 
         # Start with a default empty recipe list (so this object will always
         # have a RecipeList instance)
@@ -489,7 +479,20 @@ class RuleExpression(Expression):
 
         self.targets = self.token_list[0]
         self.rule_op = self.token_list[1]
-        self.prereqs = self.token_list[2]
+        self.prereqs = []
+
+        self.assignment = None
+
+        if isinstance(token_list[2], PrerequisiteList) : 
+            # all is well
+            self.prereqs = self.token_list[2]
+        elif isinstance(token_list[2], AssignmentExpression) :
+            # target specific variable assignment
+            # see: 6.11 Target-specific Variable Values  GNU Make V.4.3 Jan2020
+            self.assignment = token_list[2]
+        else:
+            assert 0, (type(token_list[2]),)
+
 
     def makefile(self):
         # rule-targets rule-op prereq-list <CR>
@@ -509,7 +512,12 @@ class RuleExpression(Expression):
         s += self.rule_op.makefile()
 
         # prerequisite(s)
-        s += self.prereqs.makefile() + "\n"
+        if self.prereqs:
+            s += self.prereqs.makefile()
+        elif self.assignment:
+            s += self.assignment.makefile()
+
+#        s += "\n"
 
         # recipe(s)
         s += self.recipe_list.makefile()
@@ -517,6 +525,8 @@ class RuleExpression(Expression):
 
     def add_recipe( self, recipe ) : 
         assert isinstance(recipe, Recipe)
+        # assignment Rule Expressions cannot have recipes or it's a parse error
+        assert self.assignment is None
 
         logger.debug("add_recipe() rule=%s", str(self))
         self.recipe_list.append(recipe)
@@ -537,11 +547,14 @@ class RuleExpression(Expression):
         # time.
 
         targets = self.targets.eval(symbol_table).split()
-        prereqs = self.prereqs.eval(symbol_table).split()
-
         # throw away empty strings
         targets = [t for t in targets if t]
-        prereqs = [p for p in prereqs if p]
+
+        prereqs = []
+        if self.prereqs:
+            prereqs = self.prereqs.eval(symbol_table).split()
+            # throw away empty strings
+            prereqs = [p for p in prereqs if p]
 
         return targets, prereqs
 
@@ -614,6 +627,8 @@ class Recipe(Expression):
         # e.g., "echo $$PATH" becomes "echo $PATH" sent to the shell
         return s.replace("$$","$")
 
+    def makefile(self):
+        return "\t" + super().makefile()
     
 class RecipeList( Expression ) : 
     # A collection of Recipe objects
@@ -630,8 +645,7 @@ class RecipeList( Expression ) :
         # newline separated, tab prefixed
         s = ""
         if len(self.token_list):
-            s = "\t" + "\n\t".join([t.makefile() for t in self.token_list])
-            s += "\n"
+            s = "\n".join([t.makefile() for t in self.token_list])
         return s
 
 class Directive(Symbol):

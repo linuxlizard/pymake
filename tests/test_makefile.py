@@ -113,6 +113,7 @@ infilename_list = (
     "ignoreandsilent.mk",
     "rule_without_target.mk",
     "shellstatus.mk",
+    "target-specific.mk",
 
     # FIXME fails with GNU Make 4.3
 #    "env_recursion.mk",

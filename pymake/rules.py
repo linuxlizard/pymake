@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0
+# Copyright (C) 2014-2025 David Poole davep@mbuf.com david.poole@ericsson.com
 
 import logging
 import os
@@ -12,11 +13,19 @@ import pymake.constants as constants
 
 _debug = True
 
+def _rule_sanity(pos, prereq_list, assignment):
+    # if we have a prereq list, we cannot have an assignment
+    # if we have an assignment, we cannot have a prereq list
+    if prereq_list:
+        assert not assignment, pos
+    elif assignment:
+        assert not prereq_list, pos
+
 class Rule:
     # A Rule contains a target (string) and the prereqs (array of string).
     # Rule contains a RecipeList from the Symbol hierarchy but don't want to 
     # pull symbol.py in here (to keep pymake.py a little more clean).
-    def __init__(self, target, prereq_list, recipe_list, pos):
+    def __init__(self, target, prereq_list, recipe_list, assignment, pos):
         # ha ha type checking
         # target is string and prereq_list[] is array of strings
         # target can be None to handle rules without a target which GNU Make allows
@@ -30,6 +39,9 @@ class Rule:
         self.target = target
         self.prereq_list = prereq_list
         self.recipe_list = recipe_list
+        self.assignment_list = [assignment] if assignment else []
+
+        _rule_sanity(pos, prereq_list, assignment)
 
         # need to pass in an explict pos because the target is a string not a
         # Symbol.
@@ -39,12 +51,21 @@ class Rule:
         target = "" if self.target is None else self.target
         return "%s <- %s" % (target, ",".join(self.prereq_list))
 
+    def makefile(self):
+        s = "".join([ "%s:%s\n" % (self.target,a.makefile()) for a in self.assignment_list]) 
+        s += "%s : %s\n%s" % (self.target, " ".join(self.prereq_list), self.recipe_list.makefile())
+        return s
+
     def get_pos(self):
         return self.pos
 
     def add_recipe(self, recipe):
-        logger.debug("add recipe to rule=%r", self)
+        logger.debug("add recipe to rule=%r", self.target)
         self.recipe_list.append(recipe)
+
+    def add_assignment(self, assignment):
+        logger.debug("add assignment to rule=%r", self.target)
+        self.assignment_list.append(assignment)
 
     def graphviz_graph(self):
         if self.target is None:
@@ -72,28 +93,51 @@ class RuleDB:
         # first rule added becomes the default
         self.default = None
 
-    def add(self, rule):
-        # ha ha type checking
-        logger.debug("add rule=%s at %r", rule, rule.get_pos())
-        assert isinstance(rule,Rule), type(rule)
+    def add(self, target, prereq_list, recipe_list, assignment, pos):
 
-        if not rule.target:
+        # ha ha type checking
+        logger.debug("add rule target=%r at %r", target, pos)
+
+        if not target:
             # TODO
             breakpoint()
             assert rule.target
 
-        if rule.target == ".PHONY":
-            # TODO
-            return
+        if target == ".PHONY":
+            raise NotImplementedError(target)
+
+        _rule_sanity(pos, prereq_list, assignment)
+
+        # do we currently have a rule already with this target?
+        rule = self.rules.get(target,None)
+        if not rule:
+            # create new
+            rule = Rule(target, prereq_list, recipe_list, assignment, pos)
+        else:
+            # could be an update or could be an overwrite
+            #
+            # If we don't have an assignment arg, and we've already seen some recipes,
+            # then we have a new rule.
+            if not assignment and len(rule.recipe_list):
+                # overwrite
+                warning_message(pos, "overriding recipe for target '%s'" % target )
+                warning_message(rule.get_pos(), "ignoring old recipe for target '%s'" % target)
+
+                rule = Rule(target, prereq_list, recipe_list, assignment, pos)
+            else:
+                # update existing rule
+                if recipe_list:
+                    [rule.add_recipe(r) for r in recipe_list]
+                elif assignment:
+                    rule.add_assignment(assignment)
+
+        self.rules[rule.target] = rule
 
         if self.default is None:
             self.default = rule.target
-    
-        # GNU Make doesn't warn on this sort of thing but I want to see it.
-        if rule.target in self.rules and rule.prereq_list:
-            warning_message(rule.get_pos(), "overriding rule \"%s\"" % (rule.target, ))
 
-        self.rules[rule.target] = rule
+        return rule
+    
         
     def get(self, target):
         # allow KeyError to propagate

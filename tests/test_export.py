@@ -295,4 +295,18 @@ export FOO:=foo
     # use explicity assign instead of recursive assign
     run_test(makefile, expect, extra_args=("FOO:=bar",))
     
+def test_export_before_define():
+    makefile="""
+export FOO
+FOO:=foo
+@:; printenv FOO
+"""
+    run.simple_test(makefile)
+
+def test_unexpert_unknown():
+    makefile="""
+unexport FOO
+@:;@:
+"""
+    run.simple_test(makefile)
 
