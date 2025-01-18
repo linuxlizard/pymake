@@ -7,6 +7,10 @@ I want to debug my GNU Makefiles.
 
 Ultimate long-term goal is a GNU Make visual debugger. I want breakpoints on variables changing. I want to single step through the rules. I want to put a breakpoint on a rule.
 
+## Update 20250118.  The Linux Kernel Make Update III.
+
+Added the $(eval) function. Added target specific variables. Now need to add static pattern rule support.
+
 ## Update 20241228.  The Linux Kernel Make Update. Again.
 
 The tokenzparser has been successfully rewritten. We can now amost parse the Linux Kernel Makefile! (Just need to implement the $(eval) function.) I will then focus on being able to run the simple 'help' target.
