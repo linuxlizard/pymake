@@ -50,10 +50,11 @@ Options not in GNU Make:
                 Write the Rules' dependency graph as a GraphViz dot file. (Work in progress.)
     --html FILE  
                 Write the Rules' dependency graph as an HTML file. (Work in progress.)
-    --explain   Give a verbose error message for common GNU Make errors.
     --output FILE
-                Rewrite the parsed makefile to FILE.
-    -S          Print the makefile as an S-Expression. (Useful for debugging pymake itself.)
+                Rewrite the parsed makefile to FILE. Do not execute.
+    --print-rule 
+                Print the rule and recipes for the target. Do not execute.
+    -S          Print the makefile as an S-Expression. (Useful for debugging pymake itself.) Do not execute.
 """)
 
 class Args:
@@ -108,6 +109,9 @@ class Args:
         # -s
         self.silent = False
 
+        # --print-rule
+        self.print_rule = False
+
         self.warn_undefined_variables = False
         self.detailed_error_explain = False
 
@@ -143,17 +147,18 @@ Copyright (C) 2014-2024 David Poole david.poole@ericsson.com, davep@mbuf.com, te
                             "help",
                             "always-make",
                             "debug=", 
+                            "directory=",
                             "dotfile=",
-                            "html=",
                             "explain",
                             "file=", "makefile=", 
-                            "output=", 
+                            "html=",
+                            "just-print", "dry-run", "recon",
                             "no-builtin-rules",
+                            "output=", 
+                            "print-rule",
+                            "silent", "quiet"
                             "version", 
                             "warn-undefined-variables", 
-                            "directory=",
-                            "just-print", "dry-run", "recon",
-                            "silent", "quiet"
                             ]
                         )
     for opt in optlist:
@@ -194,6 +199,8 @@ Copyright (C) 2014-2024 David Poole david.poole@ericsson.com, davep@mbuf.com, te
             args.silent = True
         elif opt[0] == '--debug':
             args.debug_flags = _parse_debug_flags(opt[1])
+        elif opt[0] == '--print-rule':
+            args.print_rule = True
         else:
             # wtf?
             assert 0, opt

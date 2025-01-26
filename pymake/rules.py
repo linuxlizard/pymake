@@ -37,8 +37,8 @@ class Rule:
 
         logger.debug("create rule target=%r at %r", target, pos)
         self.target = target
-        self.prereq_list = prereq_list
-        self.recipe_list = recipe_list
+        self.prereq_list = list(prereq_list)
+        self.recipe_list = list(recipe_list)
         self.assignment_list = [assignment] if assignment else []
 
         _rule_sanity(pos, prereq_list, assignment)
@@ -49,7 +49,7 @@ class Rule:
 
     def __str__(self):
         target = "" if self.target is None else self.target
-        return "%s <- %s" % (target, ",".join(self.prereq_list))
+        return "%s : %s" % (target, " ".join(self.prereq_list))
 
     def makefile(self):
         s = "".join([ "%s:%s\n" % (self.target,a.makefile()) for a in self.assignment_list]) 
@@ -104,6 +104,8 @@ class RuleDB:
             assert rule.target
 
         if target == ".PHONY":
+            raise NotImplementedError(target)
+        elif target == ".PRECIOUS":
             raise NotImplementedError(target)
 
         _rule_sanity(pos, prereq_list, assignment)

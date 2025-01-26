@@ -44,6 +44,25 @@ def get_basename( filename ) :
 def _view(token_list):
     return "".join([str(t) for t in token_list])
 
+def print_rule_chain(rulesdb, target):
+
+    try:
+        rule = rulesdb.get(target)
+    except KeyError:
+        error_message(None, "No rule to make target '%s'" % target)
+        return -1
+
+    print("# {}\n{}".format(rule.get_pos(), rule))
+    print("{}".format(rule.recipe_list.makefile()))
+
+    for t in rule.prereq_list:
+        try:
+            print_rule_chain(rulesdb, t)
+        except KeyError:
+            error_message(rule.get_pos(), "No rule to make prerequisite target '%s'" % t)
+
+    return 0
+
 def _parse_one_vline(virt_line, vline_iter, rules):
     logger.debug("parse_vline() rules=%d", rules[0])
 
@@ -617,6 +636,7 @@ def execute(makefile, args):
         title = get_basename(makefile.get_pos()[0])
         rulesdb.html_graph(title + "_makefile", args.htmlfile)
         print("wrote %s for html" % args.htmlfile)
+        return 0
 
     try:
         if not target_list:
@@ -624,6 +644,12 @@ def execute(makefile, args):
     except IndexError:
         error_message(makefile.get_pos(), "No targets" )
         return exit_status["error"]
+
+    if args.print_rule:
+        for target in target_list:
+            print_rule_chain(rulesdb, target)
+            
+        return exit_status["success"]
 
     #
     # At this point, we start executing the makefile Rules.
@@ -651,9 +677,9 @@ def execute(makefile, args):
 
         # walk a dependency tree
         for rule in rulesdb.walk_tree(target):
-            if not rule.recipe_list:
-                # this warning catches where I fail to find an implicit rule
-                logger.warning("I didn't find a recipe to build target=\"%s\"", target)
+#            if not rule.recipe_list:
+#                # this warning catches where I fail to find an implicit rule
+#                logger.warning("I didn't find a recipe to build target=\"%s\"", target)
 
             # target specific variables
             if rule.assignment_list:

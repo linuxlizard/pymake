@@ -482,7 +482,7 @@ def tokenize_rule_RHS(vchar_scanner):
             # found a : on the Rule's right hand side
             # static pattern rule, e.g.
             # $(objects): %.o: %.c
-            raise NotImplementedError("static pattern rule")
+            raise NotImplementedError("static pattern rule at pos=%r" % (vchar.get_pos(),))
 
         elif state==state_backslash : 
             if not c in eol : 
