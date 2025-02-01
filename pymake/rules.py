@@ -34,11 +34,12 @@ class Rule:
             assert '\t' not in target
             assert target
         assert all( (isinstance(s,str) for s in prereq_list) )
+        _ = recipe_list.makefile
 
         logger.debug("create rule target=%r at %r", target, pos)
         self.target = target
         self.prereq_list = list(prereq_list)
-        self.recipe_list = list(recipe_list)
+        self.recipe_list = recipe_list
         self.assignment_list = [assignment] if assignment else []
 
         _rule_sanity(pos, prereq_list, assignment)
@@ -88,6 +89,8 @@ class Rule:
 
 class RuleDB:
     def __init__(self):
+        # key: target (python string)
+        # value: instance of class Rule
         self.rules = {}
 
         # first rule added becomes the default
@@ -96,6 +99,8 @@ class RuleDB:
     def add(self, target, prereq_list, recipe_list, assignment, pos):
 
         # ha ha type checking
+        _ = recipe_list.makefile
+
         logger.debug("add rule target=%r at %r", target, pos)
 
         if not target:

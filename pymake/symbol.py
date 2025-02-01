@@ -639,6 +639,9 @@ class RecipeList( Expression ) :
         super().__init__(recipe_list)
 
     def append(self, recipe):
+        # ha ha type checking
+        assert isinstance(recipe, Recipe), recipe
+
         self.token_list.append(recipe)
 
     def makefile(self):

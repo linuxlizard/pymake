@@ -294,13 +294,15 @@ def execute_statement_list(stmt_list, curr_rules, rulesdb, symtable):
         # corner case to handle a line with leading <tab> and a comment
         # which will be a Recipe if we're inside a Rule but is ignored 
         # before we've seen a Rule
+        tok = tok.token_list[0]
         try:
-            tok = tok.token_list[0]
             lit = tok.literal
         except AttributeError:
             # not a literal therefore definitely can't be a comment
             return False
-        return tokenizer.seek_comment(iter(tok.string))
+        s = tok.makefile().lstrip()
+        return s[0] == '#'
+#        return tokenizer.seek_comment(iter(tok.string))
 
     for statement in stmt_list:
         # sanity check; everything has to have a successful get_pos()
@@ -314,11 +316,38 @@ def execute_statement_list(stmt_list, curr_rules, rulesdb, symtable):
             # If this is just a comment line, ignore it
             # But if we haven't seen a rule, throw the infamous error.
 
-            if not curr_rules and not _is_recipe_comment(statement):
+            # use a better name
+            recipe = statement
+
+            if not curr_rules and not _is_recipe_comment(recipe):
                 # So We're confused. 
                 raise RecipeCommencesBeforeFirstTarget(pos=statement.get_pos())
 
-            [rule.add_recipe(statement) for rule in curr_rules]
+            # The RuleDB contains a Rule instance for each target.  The RuleDB
+            # is key'd by the target string. Given a rule with multiple targets
+            # such as 
+            # a b c d:  ; @echo $@
+            # there will be four separate Rule instances in the RuleDB.  
+            #
+            # Each Rule instance has a RecipeList instance (which is basically
+            # just a wrapper around a python list to automatically support the
+            # .makefile() method).  The Rule's RecipeList is created from the
+            # RuleExpression. 
+            #
+            # Here's the punchline:
+            # The Symbol class hierarchy creates one RuleExpression and one
+            # RecipeList even if there are multiple targets. But the RuleDB
+            # uses a separate Rule instance for each target. The RecipeList
+            # instance is therefore shared between each Rule (basically, all
+            # Rule instances point to the exact same RecipeList instance)
+            #
+            if curr_rules:
+                if len(curr_rules) > 1:
+                    # sanity clause
+                    id_ = id(curr_rules[0].recipe_list)
+                    assert all( id_==id(r.recipe_list) for r in curr_rules)
+                curr_rules[0].add_recipe(recipe)
+#            [rule.add_recipe(recipe) for rule in curr_rules]
 
         elif isinstance(statement,RuleExpression):
             # restart the rules list but maintain the same ref!
@@ -326,6 +355,7 @@ def execute_statement_list(stmt_list, curr_rules, rulesdb, symtable):
             # we need to track the values across calls to this function)
             curr_rules.clear()
 
+            # use a better name
             rule_expr = statement
             m = rule_expr.makefile()
 
@@ -602,7 +632,7 @@ def execute(makefile, args):
     # target" error.
     # 
     # Basically, we have context sensitive evaluation.
-    curr_rules = []
+    curr_rules = []  # array of Rule instances
 
     # For handling $(eval)  This is not my proudest moment.  I originally
     # designed my make function implementations to be truly functional (no side
