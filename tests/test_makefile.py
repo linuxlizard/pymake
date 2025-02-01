@@ -8,7 +8,8 @@ import sys
 import re
 
 import pytest
-#import pymake
+
+import run
 
 # Find file relative to tests location
 test_dir = os.path.dirname(__file__)
@@ -134,10 +135,17 @@ def test_makefile(infilename):
             outfile.write(ground_truth)
     assert ground_truth == test_output
 
+@pytest.mark.skip(reason="run manually because slow")
+@pytest.mark.parametrize("infilename", infilename_list)
+def test_pymake_options(infilename):
+    # try some pymake args on the test makefiles
+    # (sanity test code paths)
+    filepath = os.path.join(example_dir, infilename)
+    s = run.run_pymake(filepath, extra_args=("--print-rule",))
+    s = run.run_pymake(filepath, extra_args=("-S",))
+    s = run.run_pymake(filepath, extra_args=("-n",))
+    s = run.run_pymake(filepath, extra_args=("--output", "/dev/null"))
 
-    # can I run pymake w/i pytest w/o spawning an additional python?
-#    print(os.getcwd())
-#    makefile = pymake.parse_makefile(infilename)
     
 def test_value():
     # TODO need some way of testing value() function w/o running afoul of my $(P) problem
