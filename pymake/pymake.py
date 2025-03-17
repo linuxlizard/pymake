@@ -502,14 +502,14 @@ def execute_recipe(rule, recipe, symtable, args):
         s, ignore_failure, silent = check_prefixes(s)
 
         if not silent and not args.silent:
-            print(s)
+            print(s,flush=True)
 
         if args.dry_run:
-            print(s)
+            print(s, flush=True)
             continue
 
         exit_code = 0
-        ret = shell.execute(s, symtable)
+        ret = shell.execute(s, symtable, capture=False)
 
         # 
         # !!! Run a Sub-Make !!!
@@ -535,7 +535,8 @@ def execute_recipe(rule, recipe, symtable, args):
             ret.stdout = ""
 
         exit_code = ret.exit_code
-        print(ret.stdout,end="")
+#        print(ret.stderr,end="")
+#        print(ret.stdout,end="")
         if exit_code != 0:
             print("make:", ret.stderr, file=sys.stderr, end="")
             print("make: *** [%r: %s] Error %d %s" % (recipe.get_pos(), rule.target, exit_code, "(ignored)" if ignore_failure else ""), file=sys.stderr)

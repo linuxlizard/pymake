@@ -30,7 +30,7 @@ class ShellReturn:
         self.is_submake = False
 
 
-def execute(cmd_str, symbol_table, use_default_shell=True):
+def execute(cmd_str, symbol_table, use_default_shell=True, capture=True):
     """execute a string with the shell, returning a bunch of useful info"""
 
     # capture a timestamp so we can match shell debug messages
@@ -79,7 +79,7 @@ def execute(cmd_str, symbol_table, use_default_shell=True):
     if shell:
         cmd.extend(shell_list)
     if shellflags:
-        cmd.append(shellflags)
+        cmd.extend([f for f in shellflags.split()])
     cmd.append(cmd_str)
 
     env = symbol_table.get_exports()
@@ -115,21 +115,36 @@ def execute(cmd_str, symbol_table, use_default_shell=True):
 #        outfile.write(" ".join(cmd))
 #        outfile.write("\n\n\n")
 
+    # definitely need to capture stdout when we're running a sub-make because
+    # that's how we determine the shell arguments to the actual sub-make
+    if cmd_str.startswith(submake.getname()):
+        capture = True
+
+    logger.debug("cmd=>>>%s<<<", cmd)
+
     try:
-        p = subprocess.run(cmd, 
-                shell=False,
-                stdout=subprocess.PIPE, 
-                stderr=subprocess.PIPE,
-                universal_newlines=True,
-                check=False, # we'll check returncode ourselves
-                env=env
-            )
+        if capture:
+            p = subprocess.run(cmd, 
+                    shell=False,
+                    stdout=subprocess.PIPE,
+                    universal_newlines=True,
+                    check=False, # we'll check returncode ourselves
+                    env=env
+                )
+        else:
+            p = subprocess.run(cmd, 
+                    shell=False,
+                    universal_newlines=True,
+                    check=False, # we'll check returncode ourselves
+                    env=env
+                )
+
         logger.debug("shell ts=%f exit status=%r", ts, p.returncode)
 #        if p.returncode != 0:
 #            breakpoint()
         return_status.exit_code = p.returncode
         return_status.stdout = p.stdout
-        return_status.stderr = p.stderr
+#        return_status.stderr = p.stderr
     except OSError as err:
         logger.error("shell ts=%f error=\"%s\"", ts, err)
         return_status.exit_code = 127
@@ -165,9 +180,10 @@ def execute_tokens(token_list, symbol_table):
     symbol_table.allow_recursion()
 
     # GNU Make returns one whitespace separated string, no CR/LF
-    # "all other newlines are replaced by spaces." gnu_make.pdf
+    # "If the result of the execution ends in a newline, that one newline is
+    # removed; all other newlines are replaced by spaces."  GNU Make PDF
     exe_result.stdout = exe_result.stdout.strip().replace("\n", " ")
-    exe_result.stderr = exe_result.stderr.strip().replace("\n", " ")
+#    exe_result.stderr = exe_result.stderr.strip().replace("\n", " ")
 
     # save shell status
     pos = token_list[0].get_pos()
@@ -188,7 +204,7 @@ def execute_tokens(token_list, symbol_table):
         # otherwise report stderr (if any)
         if exe_result.stderr:
             logger.error("command at %r failed with exit_code=%d", pos, exe_result.exit_code)
-            error_message(pos, exe_result.stderr)
+#            error_message(pos, exe_result.stderr)
         else:
             logger.error("command at %r failed with exit_code=%d (but stderr empty)", pos, exe_result.exit_code)
 

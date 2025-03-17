@@ -84,9 +84,9 @@ class PrintingFunction(Function):
         if self.fmt:
             t = self.token_list[0]
             filename, linenumber = t.get_pos()
-            print(self.fmt.format(filename, linenumber, msg), file=self.fh)
+            print(self.fmt.format(filename, linenumber, msg), file=self.fh, flush=True)
         else:
-            print("%s" % msg, file=self.fh)
+            print("%s" % msg, file=self.fh, flush=True)
 
         return ""
 
