@@ -535,11 +535,9 @@ def execute_recipe(rule, recipe, symtable, args):
             ret.stdout = ""
 
         exit_code = ret.exit_code
-#        print(ret.stderr,end="")
-#        print(ret.stdout,end="")
         if exit_code != 0:
-            print("make:", ret.stderr, file=sys.stderr, end="")
-            print("make: *** [%r: %s] Error %d %s" % (recipe.get_pos(), rule.target, exit_code, "(ignored)" if ignore_failure else ""), file=sys.stderr)
+            print("make: *** [%r: %s] Error %d %s" % (recipe.get_pos(), rule.target, 
+                exit_code, "(ignored)" if ignore_failure else ""), file=sys.stderr)
 
             if not ignore_failure:
                 break

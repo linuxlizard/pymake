@@ -23,8 +23,8 @@ _debug = False
         
 class ShellReturn:
     def __init__(self):
+        # note: stderr is never captured
         self.stdout = None
-        self.stderr = None
         self.exit_code = None
         self.errmsg = None
         self.is_submake = False
@@ -122,35 +122,28 @@ def execute(cmd_str, symbol_table, use_default_shell=True, capture=True):
 
     logger.debug("cmd=>>>%s<<<", cmd)
 
-    try:
-        if capture:
-            p = subprocess.run(cmd, 
-                    shell=False,
-                    stdout=subprocess.PIPE,
-                    universal_newlines=True,
-                    check=False, # we'll check returncode ourselves
-                    env=env
-                )
-        else:
-            p = subprocess.run(cmd, 
-                    shell=False,
-                    universal_newlines=True,
-                    check=False, # we'll check returncode ourselves
-                    env=env
-                )
+    kwargs= {    
+             "shell":False,
+             "universal_newlines":True,
+             "check":False, # we'll check returncode ourselves
+             "env":env
+            }
+    if capture:
+        kwargs["stdout"] = subprocess.PIPE
 
+    try:
+        p = subprocess.run(cmd, **kwargs)
+#
         logger.debug("shell ts=%f exit status=%r", ts, p.returncode)
 #        if p.returncode != 0:
 #            breakpoint()
         return_status.exit_code = p.returncode
         return_status.stdout = p.stdout
-#        return_status.stderr = p.stderr
     except OSError as err:
         logger.error("shell ts=%f error=\"%s\"", ts, err)
+        # match gnu make's output
         return_status.exit_code = 127
         return_status.stdout = ""
-        # match gnu make's output
-        return_status.stderr = err.strerror
 
     if cmd_str.startswith(submake.getname()):
         return_status.is_submake = True
@@ -183,7 +176,6 @@ def execute_tokens(token_list, symbol_table):
     # "If the result of the execution ends in a newline, that one newline is
     # removed; all other newlines are replaced by spaces."  GNU Make PDF
     exe_result.stdout = exe_result.stdout.strip().replace("\n", " ")
-#    exe_result.stderr = exe_result.stderr.strip().replace("\n", " ")
 
     # save shell status
     pos = token_list[0].get_pos()
@@ -201,12 +193,8 @@ def execute_tokens(token_list, symbol_table):
     if exe_result.errmsg:
         error_message(pos, exe_result.errmsg)
     else:
-        # otherwise report stderr (if any)
-        if exe_result.stderr:
-            logger.error("command at %r failed with exit_code=%d", pos, exe_result.exit_code)
-#            error_message(pos, exe_result.stderr)
-        else:
-            logger.error("command at %r failed with exit_code=%d (but stderr empty)", pos, exe_result.exit_code)
+        # stderr already sent to the world
+        logger.error("command at %r failed with exit_code=%d", pos, exe_result.exit_code)
 
     return exe_result.stdout
 
