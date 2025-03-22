@@ -12,13 +12,13 @@ _debug = True
 #  The subprocess.run_test() will raise error on non-zero exit.
 
 def run_test(makefile, expect, extra_args=None, extra_env=None):
-    output = run.pymake_string(makefile, extra_args, extra_env)
-    if _debug:
-        print("pymake output=",output)
-    run.verify(output,expect)
     output = run.gnumake_string(makefile, extra_args, extra_env)
     if _debug:
-        print("gnumake output=",output)
+        print("gnumake output=>>>",output, "<<<")
+    run.verify(output,expect)
+    output = run.pymake_string(makefile, extra_args, extra_env)
+    if _debug:
+        print("pymake output=>>>",output, "<<<")
     run.verify(output,expect)
 
 def test1():
